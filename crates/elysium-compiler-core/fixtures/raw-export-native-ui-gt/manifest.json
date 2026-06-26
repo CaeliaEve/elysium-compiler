@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "neonei/raw-export-fixture/v1",
+  "files": {
+    "items": "items.jsonl",
+    "neiOrder": "nei-order.jsonl",
+    "browserGroups": "browser-groups.json",
+    "textures": "textures.json",
+    "recipeIndex": "recipes/recipe-index.json",
+    "neiHandlers": "recipes/handlers.jsonl",
+    "neiHandlerLayouts": "recipes/handler-layouts.json",
+    "uiTemplateCatalog": "recipes/ui-template-catalog.json",
+    "fluids": "fluids.jsonl",
+    "browserAtlasIndex": "browser-atlas-index.json"
+  },
+  "repositoryName": "raw-export-native-ui-gt",
+  "capabilities": [
+    "native-ui",
+    "compiler-fixture"
+  ]
+}

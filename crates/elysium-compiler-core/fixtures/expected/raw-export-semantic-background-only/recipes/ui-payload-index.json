@@ -1,0 +1,52 @@
+{
+  "recipes": [
+    {
+      "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
+      "handlerKey": "gt.recipe.test",
+      "machineType": "Test GT Machine",
+      "nativeLayout": {
+        "canonicalMachineFamily": "gregtech-machine",
+        "dynamicPrimitives": [],
+        "energyBars": [],
+        "fluidBars": [],
+        "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
+        "handlerKey": "gt.recipe.test",
+        "height": 90,
+        "hotspots": [],
+        "imageRegion": null,
+        "imageResource": null,
+        "layoutKind": "machine",
+        "maxRecipesPerPage": 1,
+        "nativeBackground": {
+          "kind": "gt-modular-ui",
+          "scaling": "nine-slice",
+          "status": "semantic",
+          "texture": {
+            "borderU": 2,
+            "borderV": 2,
+            "height": 64,
+            "width": 64
+          }
+        },
+        "progressBars": [
+          {
+            "height": 18,
+            "width": 20,
+            "x": 78,
+            "y": 24
+          }
+        ],
+        "slots": [],
+        "textOverlays": [],
+        "viewports": [],
+        "width": 176,
+        "yShift": 0
+      },
+      "path": "recipes/ui-payload-shards/91.json",
+      "payloadKey": "r_fixture_gt",
+      "recipeId": "r_fixture_gt",
+      "recipeType": "gt.recipe.test"
+    }
+  ],
+  "schemaVersion": "neonei/recipe-ui-payload-index/v1"
+}

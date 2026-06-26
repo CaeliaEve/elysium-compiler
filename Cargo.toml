@@ -1,0 +1,26 @@
+﻿[workspace]
+members = [
+  "crates/elysium-compiler-core",
+  "crates/elysium-compiler-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+license = "MIT"
+repository = "https://github.com/your-org/elysium-compiler"
+
+[workspace.dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+flate2 = "1.0"
+pinyin = { version = "0.11", default-features = false, features = ["plain"] }
+rayon = "1.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+walkdir = "2.5"
+tempfile = "3.10"
+elysium-compiler-core = { path = "crates/elysium-compiler-core" }

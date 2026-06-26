@@ -1,0 +1,32 @@
+{
+  "handler-layouts": [
+    {
+      "handlerKey": "gt.recipe.test",
+      "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
+      "canonicalMachineFamily": "gregtech-machine",
+      "layoutKind": "machine",
+      "width": 176,
+      "height": 90,
+      "maxRecipesPerPage": 1,
+      "nativeBackground": {
+        "status": "semantic",
+        "kind": "gt-modular-ui",
+        "scaling": "nine-slice",
+        "texture": {
+          "width": 64,
+          "height": 64,
+          "borderU": 2,
+          "borderV": 2
+        }
+      },
+      "progressBars": [
+        {
+          "x": 78,
+          "y": 24,
+          "width": 20,
+          "height": 18
+        }
+      ]
+    }
+  ]
+}

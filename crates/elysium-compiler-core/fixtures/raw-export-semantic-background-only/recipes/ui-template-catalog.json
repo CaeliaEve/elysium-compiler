@@ -1,0 +1,42 @@
+{
+  "templates": [
+    {
+      "templateKey": "gt-fixture@default",
+      "templateSignature": "gt-fixture",
+      "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
+      "canonicalMachineFamily": "gregtech-machine",
+      "layoutKind": "machine",
+      "width": 176,
+      "height": 90,
+      "maxRecipesPerPage": 1,
+      "nativeBackground": {
+        "status": "semantic",
+        "kind": "gt-modular-ui",
+        "scaling": "nine-slice",
+        "texture": {
+          "width": 64,
+          "height": 64,
+          "borderU": 2,
+          "borderV": 2
+        }
+      },
+      "slots": [
+        {
+          "role": "item-input",
+          "x": 45,
+          "y": 24,
+          "width": 16,
+          "height": 16
+        }
+      ],
+      "progressBars": [
+        {
+          "x": 78,
+          "y": 24,
+          "width": 20,
+          "height": 18
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "neonei/browser-atlas-index/v1",
+  "items": [
+    {
+      "itemId": "i~minecraft~iron_ingot~0",
+      "assetId": "nesqlpp:item/i~minecraft~iron_ingot~0",
+      "hasStaticAtlas": true,
+      "staticAtlas": {
+        "atlasFile": "textures/atlas/static-fixture.webp",
+        "atlasWidth": 64,
+        "atlasHeight": 64,
+        "x": 0,
+        "y": 0,
+        "width": 16,
+        "height": 16
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "handler-layouts": [
+    {
+      "handlerKey": "gt.recipe.test",
+      "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
+      "canonicalMachineFamily": "gregtech-machine",
+      "layoutKind": "machine",
+      "width": 176,
+      "height": 90,
+      "maxRecipesPerPage": 1,
+      "imageRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 176,
+        "height": 90
+      },
+      "nativeBackground": {
+        "status": "captured",
+        "kind": "gt-modular-ui",
+        "assetRef": "assets/ui-backgrounds/gregtech/nei_single_recipe.png",
+        "resource": "gregtech:textures/gui/background/nei_single_recipe.png",
+        "scaling": "nine-slice",
+        "texture": {
+          "width": 64,
+          "height": 64,
+          "borderU": 2,
+          "borderV": 2
+        }
+      },
+      "progressBars": [
+        {
+          "x": 78,
+          "y": 24,
+          "width": 20,
+          "height": 18
+        }
+      ]
+    }
+  ]
+}

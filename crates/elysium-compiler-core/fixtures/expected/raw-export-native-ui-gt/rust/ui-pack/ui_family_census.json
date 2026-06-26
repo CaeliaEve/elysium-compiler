@@ -1,0 +1,47 @@
+{
+  "families": [
+    {
+      "canonicalMachineFamily": "gregtech-machine",
+      "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
+      "height": 90,
+      "imageResource": "",
+      "layoutKind": "machine",
+      "maxRecipesPerPage": 1,
+      "members": [
+        {
+          "excludedModId": "",
+          "handler": "gregtech-machine|machine|176x90@0#1|unknown#0",
+          "handlerHeight": 90,
+          "handlerWidth": 176,
+          "imageResource": "",
+          "itemName": "gt-fixture@default",
+          "itemNotes": "",
+          "maxRecipesPerPage": 1,
+          "modId": "",
+          "modName": "",
+          "modRequired": false,
+          "yShift": 0
+        }
+      ],
+      "width": 176,
+      "yShift": 0
+    }
+  ],
+  "generatedAt": "deterministic-rust-compiler",
+  "schemaVersion": "neonei/ui-family-census/current",
+  "source": {
+    "classifier": "elysium-compiler",
+    "entryCount": 1,
+    "kind": "compiled-ui-template-catalog",
+    "resource": "rust/ui-pack/ui_template_catalog.json"
+  },
+  "summary": {
+    "craftingFamilyCount": 0,
+    "familyCount": 1,
+    "handlerCount": 1,
+    "layoutKindCount": 1,
+    "machineFamilyCount": 1,
+    "modCount": 0,
+    "nativeFamilyCount": 1
+  }
+}

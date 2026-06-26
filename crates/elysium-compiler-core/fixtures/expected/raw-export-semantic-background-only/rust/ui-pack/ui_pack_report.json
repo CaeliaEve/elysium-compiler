@@ -1,0 +1,51 @@
+{
+  "artifacts": {
+    "uiAssetsManifest": "rust/ui-pack/ui_assets.manifest.json",
+    "uiBindings": "rust/ui-pack/ui_bindings.bin",
+    "uiStrings": "rust/ui-pack/ui_strings.bin",
+    "uiTemplates": "rust/ui-pack/ui_templates.bin"
+  },
+  "assets": {
+    "uiBackgrounds": {
+      "copied": [],
+      "missing": [],
+      "schemaVersion": "neonei/ui-background-assets/current"
+    }
+  },
+  "format": {
+    "hotspotActionFieldNames": [
+      "action",
+      "itemId",
+      "payloadKey"
+    ],
+    "hotspotActionFields": true,
+    "rectStride": 12,
+    "slotStride": 6,
+    "templatePackMagic": "NEIUIT1_NUL",
+    "templatePackVersion": 3,
+    "templateStride": 19,
+    "textStride": 5
+  },
+  "generatedAt": "deterministic-rust-compiler",
+  "schemaVersion": "neonei/ui-pack-report/current",
+  "source": {
+    "recipeUiPayloadIndex": "recipes/ui-payload-index.json",
+    "uiTemplateCatalog": "recipes/ui-template-catalog.json"
+  },
+  "status": "ready",
+  "summary": {
+    "assetCount": 0,
+    "bindingCount": 1,
+    "boundRecipeCount": 1,
+    "hotspotActionCount": 0,
+    "hotspotCount": 0,
+    "slotCount": 1,
+    "stringCount": 11,
+    "templateCount": 1,
+    "textOverlayCount": 0,
+    "unboundRecipeCount": 0,
+    "viewportActionCount": 0,
+    "viewportCount": 0
+  },
+  "unboundRecipes": []
+}

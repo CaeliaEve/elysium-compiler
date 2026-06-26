@@ -1,0 +1,18 @@
+﻿[package]
+name = "elysium-compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "elysium-compiler"
+path = "src/main.rs"
+test = false
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+elysium-compiler-core.workspace = true
+

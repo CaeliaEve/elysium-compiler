@@ -1,0 +1,20 @@
+{
+  "counts": {
+    "actionableIssues": 0,
+    "animatedAtlasItems": 0,
+    "atlasItems": 1,
+    "invalidAtlasBounds": 0,
+    "invalidFrameBounds": 0,
+    "missingAtlasAssetFiles": 0,
+    "missingAtlasFileRefs": 0,
+    "staticAtlasItems": 1
+  },
+  "generatedAt": "deterministic-rust-compiler",
+  "invalidAtlasBounds": [],
+  "invalidFrameBounds": [],
+  "issues": [],
+  "missingAtlasAssetFiles": [],
+  "missingAtlasFileRefs": [],
+  "schemaVersion": "neonei/rust-missing-texture-report/current",
+  "status": "ok"
+}

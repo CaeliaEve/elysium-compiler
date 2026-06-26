@@ -1,0 +1,140 @@
+{
+  "capabilities": [
+    "atlas.static",
+    "atlas.animated",
+    "atlas.meta",
+    "groups.collapse",
+    "groups.semantic-nbt",
+    "recipes.lookup",
+    "recipes.native-ui-layout",
+    "search.zh-cn",
+    "strings.zh-cn",
+    "native-render.webgl2",
+    "recipes.ui-pack"
+  ],
+  "compileScope": "all",
+  "compiler": {
+    "compiledDistSchemaVersion": "1.0",
+    "name": "elysium-compiler",
+    "rawExportSchemaVersion": "1.0",
+    "schemaHash": "sha256:f038bdcf8a677b9ebac62cb3da61ef969c0969447e5ecd9fab995f4f17eff26a",
+    "version": "0.1.0"
+  },
+  "entrypoints": {
+    "animations": "rust/animations.bin",
+    "atlasMeta": "rust/atlas.meta.bin",
+    "browser": "rust/browser.bin",
+    "groups": "rust/groups.bin",
+    "recipes": "rust/recipes.bin",
+    "search": "rust/search.bin",
+    "stringsZhCn": "rust/strings.zh_cn.bin",
+    "textures": "rust/textures.bin",
+    "uiBindings": "rust/ui-pack/ui_bindings.bin",
+    "uiStrings": "rust/ui-pack/ui_strings.bin",
+    "uiTemplates": "rust/ui-pack/ui_templates.bin"
+  },
+  "files": [
+    {
+      "bytes": 181,
+      "path": "rust/browser.bin"
+    },
+    {
+      "bytes": 167,
+      "path": "rust/groups.bin"
+    },
+    {
+      "bytes": 342,
+      "path": "rust/search.bin"
+    },
+    {
+      "bytes": 410,
+      "path": "rust/recipes.bin"
+    },
+    {
+      "bytes": 196,
+      "path": "rust/textures.bin"
+    },
+    {
+      "bytes": 146,
+      "path": "rust/atlas.meta.bin"
+    },
+    {
+      "bytes": 90,
+      "path": "rust/animations.bin"
+    },
+    {
+      "bytes": 208,
+      "path": "rust/strings.zh_cn.bin"
+    },
+    {
+      "bytes": 512,
+      "path": "rust/missing-texture-report.json"
+    },
+    {
+      "bytes": 438,
+      "path": "rust/suspicious-texture-report.json"
+    },
+    {
+      "bytes": 1249,
+      "path": "rust/semantic-validation-report.json"
+    },
+    {
+      "bytes": 540,
+      "path": "rust/recipe-handler-metadata-report.json"
+    },
+    {
+      "bytes": 489,
+      "path": "rust/recipe-fragmentation-report.json"
+    },
+    {
+      "bytes": 1248,
+      "path": "rust/native-ui-layout-report.json"
+    },
+    {
+      "bytes": 203,
+      "path": "rust/ui-pack/ui_templates.bin"
+    },
+    {
+      "bytes": 118,
+      "path": "rust/ui-pack/ui_bindings.bin"
+    },
+    {
+      "bytes": 306,
+      "path": "rust/ui-pack/ui_strings.bin"
+    },
+    {
+      "bytes": 310,
+      "path": "rust/ui-pack/ui_assets.manifest.json"
+    },
+    {
+      "bytes": 1569,
+      "path": "rust/ui-pack/ui_template_catalog.json"
+    },
+    {
+      "bytes": 1082,
+      "path": "rust/ui-pack/ui_template_binding_index.json"
+    },
+    {
+      "bytes": 1225,
+      "path": "rust/ui-pack/ui_family_census.json"
+    },
+    {
+      "bytes": 1472,
+      "path": "rust/ui-pack/ui_pack_report.json"
+    },
+    {
+      "bytes": 18,
+      "path": "textures/atlas/static-fixture.webp"
+    }
+  ],
+  "generatedAt": "deterministic-rust-compiler",
+  "pathPolicy": {
+    "absolutePathsAllowed": false,
+    "portableRelativePathsOnly": true,
+    "windowsPathsAllowed": false
+  },
+  "runtimeId": "rust-bd66e81f4f9291de",
+  "schema": "neonei/runtime/current",
+  "schemaRevision": 1,
+  "schemaVersion": "neonei/rust-runtime-manifest/current"
+}

@@ -1,0 +1,22 @@
+﻿name: CI
+
+on:
+  push:
+    branches: [elysium-dev, main]
+  pull_request:
+
+jobs:
+  rust:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - run: cargo build --release -p elysium-compiler
+      - run: cargo run -p elysium-compiler -- schemas --output schemas/schema-catalog.json
+      - run: git diff --exit-code -- schemas/schema-catalog.json

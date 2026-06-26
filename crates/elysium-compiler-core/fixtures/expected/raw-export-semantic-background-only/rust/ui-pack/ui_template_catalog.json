@@ -1,0 +1,61 @@
+{
+  "generatedAt": "deterministic-rust-compiler",
+  "schemaVersion": "neonei/ui-template-catalog/current",
+  "source": {
+    "censusFamilyCount": 1,
+    "censusHandlerCount": 0,
+    "censusSchemaVersion": "neonei/ui-family-census/current",
+    "kind": "compiled-dist-data",
+    "layoutSpecProvider": "elysium-compiler",
+    "rawExportResource": "recipes/ui-template-catalog.json",
+    "resource": "rust/ui-pack/ui_template_catalog.json"
+  },
+  "summary": {
+    "familyCount": 1,
+    "handlerCount": 0,
+    "layoutKindCount": 1,
+    "overlayCount": 0,
+    "slotCount": 1,
+    "templateCount": 1
+  },
+  "templates": [
+    {
+      "canonicalMachineFamily": "gregtech-machine",
+      "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
+      "height": 90,
+      "layoutKind": "machine",
+      "maxRecipesPerPage": 1,
+      "nativeBackground": {
+        "kind": "gt-modular-ui",
+        "scaling": "nine-slice",
+        "status": "semantic",
+        "texture": {
+          "borderU": 2,
+          "borderV": 2,
+          "height": 64,
+          "width": 64
+        }
+      },
+      "progressBars": [
+        {
+          "height": 18,
+          "width": 20,
+          "x": 78,
+          "y": 24
+        }
+      ],
+      "slots": [
+        {
+          "height": 16,
+          "role": "item-input",
+          "width": 16,
+          "x": 45,
+          "y": 24
+        }
+      ],
+      "templateKey": "gt-fixture@default",
+      "templateSignature": "gt-fixture",
+      "width": 176
+    }
+  ]
+}

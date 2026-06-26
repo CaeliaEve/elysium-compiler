@@ -1,0 +1,36 @@
+{
+  "backgroundAssetGaps": [],
+  "backgroundStatus": "semantic",
+  "counts": {
+    "gregtechHandlerLayouts": 1,
+    "gregtechHandlerLayoutsWithBackgroundRegions": 0,
+    "gregtechHandlerLayoutsWithProgressBars": 1,
+    "gregtechRecipeUiPayloads": 1,
+    "gregtechRecipeUiPayloadsWithBackgroundRegions": 0,
+    "gregtechRecipeUiPayloadsWithHotspots": 0,
+    "gregtechRecipeUiPayloadsWithNativeBackgrounds": 1,
+    "gregtechRecipeUiPayloadsWithProgressBars": 1,
+    "gregtechRecipeUiPayloadsWithViewports": 0,
+    "handlerLayouts": 1,
+    "handlerLayoutsWithBackgroundRegions": 0,
+    "handlerLayoutsWithEnergyBars": 0,
+    "handlerLayoutsWithFluidBars": 0,
+    "handlerLayoutsWithHotspots": 0,
+    "handlerLayoutsWithProgressBars": 1,
+    "handlerLayoutsWithViewports": 0,
+    "recipeUiPayloads": 1
+  },
+  "failures": [],
+  "generatedAt": "deterministic-rust-compiler",
+  "geometryStatus": "ready",
+  "samples": {
+    "gregtechHandlerLayoutsMissingProgressBars": [],
+    "gregtechRecipePayloadsMissingProgressBars": []
+  },
+  "schemaVersion": "neonei/native-ui-layout-report/current",
+  "source": {
+    "handlerLayoutIndex": "recipes/handler-layout-index.json",
+    "recipeUiPayloadIndex": "recipes/ui-payload-index.json"
+  },
+  "status": "ready"
+}

@@ -1,0 +1,52 @@
+{
+  "bindings": [
+    {
+      "canonicalMachineFamily": "gregtech-machine",
+      "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
+      "layoutKind": "machine",
+      "machineType": "Test GT Machine",
+      "path": "recipes/ui-payload-shards/63.json",
+      "payloadKey": "r_fixture_shard_a",
+      "recipeId": "r_fixture_shard_a",
+      "recipeType": "gt.recipe.test",
+      "templateKey": "gt-fixture@default",
+      "templateSignature": "gt-fixture"
+    },
+    {
+      "canonicalMachineFamily": "gregtech-machine",
+      "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
+      "layoutKind": "machine",
+      "machineType": "Test GT Machine",
+      "path": "recipes/ui-payload-shards/45.json",
+      "payloadKey": "r_fixture_shard_b",
+      "recipeId": "r_fixture_shard_b",
+      "recipeType": "gt.recipe.test",
+      "templateKey": "gt-fixture@default",
+      "templateSignature": "gt-fixture"
+    }
+  ],
+  "generatedAt": "deterministic-rust-compiler",
+  "schemaVersion": "neonei/ui-template-binding-index/current",
+  "source": {
+    "recipeUiPayloadIndex": {
+      "exists": true,
+      "path": "recipes/ui-payload-index.json",
+      "recipeCount": 2
+    },
+    "uiTemplateCatalog": {
+      "exists": true,
+      "familyCount": 1,
+      "layoutKindCount": 1,
+      "path": "rust/ui-pack/ui_template_catalog.json",
+      "templateCount": 1
+    }
+  },
+  "summary": {
+    "boundRecipeCount": 2,
+    "familyCount": 1,
+    "layoutKindCount": 1,
+    "recipeCount": 2,
+    "templateCount": 1,
+    "unboundRecipeCount": 0
+  }
+}

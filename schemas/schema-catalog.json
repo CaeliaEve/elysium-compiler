@@ -1,0 +1,100 @@
+{
+  "compiler": {
+    "cli": {
+      "commands": [
+        "compile",
+        "inspect",
+        "validate",
+        "schemas"
+      ],
+      "compileScopes": [
+        "all",
+        "native-ui",
+        "search",
+        "browser",
+        "recipes",
+        "ui",
+        "textures"
+      ]
+    },
+    "currentCrate": "elysium-compiler-core",
+    "metadata": {
+      "compiledDistSchemaVersion": "1.0",
+      "name": "elysium-compiler",
+      "rawExportSchemaVersion": "1.0",
+      "schemaHash": "sha256:f038bdcf8a677b9ebac62cb3da61ef969c0969447e5ecd9fab995f4f17eff26a",
+      "version": "0.1.0"
+    },
+    "name": "elysium-compiler"
+  },
+  "distData": {
+    "manifest": "neonei/dist-data/current",
+    "recipeUiPayloadIndex": "neonei/recipe-ui-payload-index/v1",
+    "runtimeEntrypoints": [
+      "rust/browser.bin",
+      "rust/groups.bin",
+      "rust/search.bin",
+      "rust/recipes.bin",
+      "rust/textures.bin",
+      "rust/atlas.meta.bin",
+      "rust/animations.bin",
+      "rust/strings.zh_cn.bin",
+      "rust/ui-pack/ui_templates.bin",
+      "rust/ui-pack/ui_bindings.bin",
+      "rust/ui-pack/ui_strings.bin"
+    ],
+    "runtimeManifest": "neonei/rust-runtime-manifest/current",
+    "schemaVersion": "1.0",
+    "uiPack": {
+      "assetsManifest": "neonei/ui-assets-manifest/current",
+      "bindingPackSchema": "neonei/ui-binding-pack/current",
+      "report": "neonei/ui-pack-report/current",
+      "stringPackSchema": "neonei/ui-string-pack/current",
+      "templatePackSchema": "neonei/ui-template-pack/current"
+    }
+  },
+  "rawExport": {
+    "manifest": {
+      "optionalFiles": [
+        "neiOrder",
+        "browserGroups",
+        "textures",
+        "animations",
+        "nativeSprites",
+        "neiHandlers",
+        "neiHandlerLayouts",
+        "uiTemplateCatalog",
+        "exportReport",
+        "neiBrowserContract",
+        "semanticFamilyAudit",
+        "semanticNbtKeyDistribution",
+        "semanticIdentityNormalizationReport",
+        "neiHandlerAnomalies"
+      ],
+      "pathPolicy": "portable-relative-only; no drive letters, file URLs, absolute paths, '.', or '..' segments",
+      "requiredFiles": [
+        "items",
+        "fluids",
+        "recipeIndex",
+        "browserAtlasIndex"
+      ],
+      "schemaVersion": "neonei/raw-export-manifest/current"
+    },
+    "nativeBackground": {
+      "assetRoot": "assets/ui-backgrounds/",
+      "capturedStatus": "captured",
+      "requiredCapturedFields": [
+        "status",
+        "assetRef"
+      ],
+      "scaling": [
+        "nine-slice",
+        "stretch",
+        "none"
+      ],
+      "strictPolicy": "a captured nativeBackground.assetRef must point to a materialized raw-export asset"
+    },
+    "schemaVersion": "1.0"
+  },
+  "schemaVersion": "elysium-compiler/schema-catalog/v1"
+}

@@ -1,0 +1,26 @@
+﻿name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  artifacts:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64
+          - os: ubuntu-latest
+            target: linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test
+      - run: node scripts/build-release-artifact.mjs --target ${{ matrix.target }} --out-dir dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elysium-compiler-${{ matrix.target }}
+          path: dist/*
