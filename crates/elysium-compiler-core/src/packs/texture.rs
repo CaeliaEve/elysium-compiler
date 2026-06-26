@@ -578,8 +578,7 @@ pub fn build_compact_animation_payload_from_table(animation_table: &[Value]) -> 
     let mut frames = Vec::<[u32; 2]>::new();
 
     let mut sorted_animations = animation_table.to_vec();
-    sorted_animations
-        .sort_by(|left, right| value_string(left, "itemId").cmp(&value_string(right, "itemId")));
+    sorted_animations.sort_by_key(|left| value_string(left, "itemId"));
 
     for animation in &sorted_animations {
         let item_id = intern_compact_string(
@@ -665,8 +664,7 @@ pub fn build_compact_texture_payload_from_atlas_items(atlas_items: &[Value]) -> 
     let mut frames = Vec::<[u32; 5]>::new();
 
     let mut sorted_items = atlas_items.to_vec();
-    sorted_items
-        .sort_by(|left, right| value_string(left, "itemId").cmp(&value_string(right, "itemId")));
+    sorted_items.sort_by_key(|left| value_string(left, "itemId"));
 
     for item in &sorted_items {
         let item_id =

@@ -2,7 +2,7 @@
 
 on:
   push:
-    branches: [elysium-dev, main]
+    branches: [main, dev]
   pull_request:
 
 jobs:

@@ -15,8 +15,7 @@ pub fn build_compact_string_payload_from_items(items: &[Value]) -> Result<Vec<u8
     let mut rows = Vec::<[u32; 6]>::with_capacity(items.len());
 
     let mut sorted_items = items.to_vec();
-    sorted_items
-        .sort_by(|left, right| value_string(left, "itemId").cmp(&value_string(right, "itemId")));
+    sorted_items.sort_by_key(|left| value_string(left, "itemId"));
 
     for item in &sorted_items {
         rows.push([

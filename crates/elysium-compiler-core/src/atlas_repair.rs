@@ -54,9 +54,7 @@ fn parse_buildcraft_facade_target(item: &Value) -> Option<(String, String, u64)>
     let block_start = descriptor.find(block_marker)? + block_marker.len();
     let block_tail = descriptor[block_start..].trim_start();
     let block_tail = block_tail.strip_prefix('"').unwrap_or(block_tail);
-    let block_end = block_tail
-        .find(|ch| ch == '"' || ch == ',' || ch == '}')
-        .unwrap_or(block_tail.len());
+    let block_end = block_tail.find(['"', ',', '}']).unwrap_or(block_tail.len());
     let block = &block_tail[..block_end];
     let (mod_id, internal_name) = block.split_once(':')?;
     let damage = descriptor
@@ -167,10 +165,7 @@ pub fn repaired_browser_atlas(atlas: &Value, texture_rows: &[Value], item_rows: 
             );
             object.insert(
                 "sourceItemId".to_string(),
-                source_atlas
-                    .get("itemId")
-                    .cloned()
-                    .unwrap_or_else(|| Value::Null),
+                source_atlas.get("itemId").cloned().unwrap_or(Value::Null),
             );
             object.insert(
                 "semanticAtlasAlias".to_string(),
