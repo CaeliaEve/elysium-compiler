@@ -1,16 +1,8 @@
-use crate::cli::{Cli, Command, CompileScope};
+use crate::cli::{Cli, Command};
 use crate::diagnostics::{run_diagnostics_report, DiagnosticsMode};
-use crate::packs::browser::compile_browser_pack;
-use crate::packs::recipe::compile_recipe_pack;
-use crate::packs::search::compile_search_pack;
-use crate::packs::texture::compile_texture_pack;
-use crate::packs::ui::compile_ui_pack;
-use crate::recipe_domain::captured_ui_family_key;
-use crate::runtime::{compile_runtime_reports, purge_debug_json_artifacts};
 use crate::schemas::write_schema_catalog;
-use crate::validation::compile_semantic_validation_report;
-use anyhow::{Context, Result};
-use std::fs;
+use crate::stages::run_compile_kernel;
+use anyhow::Result;
 
 pub fn run_command(cli: Cli) -> Result<()> {
     match cli.command {
@@ -48,33 +40,7 @@ pub fn run_command(cli: Cli) -> Result<()> {
             debug_json,
         } => {
             configure_threads(threads);
-            fs::create_dir_all(&output)
-                .with_context(|| format!("create output directory {}", output.display()))?;
-            if !debug_json {
-                purge_debug_json_artifacts(&output)?;
-            }
-            match scope {
-                CompileScope::All => {
-                    compile_browser_pack(&input, &output, strict, debug_json)?;
-                    compile_recipe_pack(&input, &output, strict, debug_json)?;
-                    compile_ui_pack(&input, &output, strict, debug_json)?;
-                    compile_texture_pack(&input, &output, strict, debug_json)?;
-                }
-                CompileScope::NativeUi => {
-                    compile_browser_pack(&input, &output, strict, debug_json)?;
-                    compile_recipe_pack(&input, &output, strict, debug_json)?;
-                    compile_ui_pack(&input, &output, strict, debug_json)?;
-                }
-                CompileScope::Search => compile_search_pack(&input, &output, strict, debug_json)?,
-                CompileScope::Browser => compile_browser_pack(&input, &output, strict, debug_json)?,
-                CompileScope::Recipes => compile_recipe_pack(&input, &output, strict, debug_json)?,
-                CompileScope::Ui => compile_ui_pack(&input, &output, strict, debug_json)?,
-                CompileScope::Textures => {
-                    compile_texture_pack(&input, &output, strict, debug_json)?
-                }
-            }
-            compile_semantic_validation_report(&input, &output)?;
-            compile_runtime_reports(&output, scope, strict, debug_json, captured_ui_family_key)?;
+            run_compile_kernel(&input, &output, scope, strict, debug_json)?;
             run_diagnostics_report(
                 &input,
                 Some(&output),

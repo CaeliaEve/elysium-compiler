@@ -17,8 +17,11 @@
     "compiledDistSchemaVersion": "1.0",
     "name": "elysium-compiler",
     "rawExportSchemaVersion": "1.0",
-    "schemaHash": "sha256:f038bdcf8a677b9ebac62cb3da61ef969c0969447e5ecd9fab995f4f17eff26a",
-    "version": "0.1.0"
+    "schemaHash": "sha256:526ea1cab48e97206763bd251a9a8531cc3d50d550a6c83b1e3680a9f14f45e5",
+    "version": "0.1.0",
+    "exportAbiVersion": "elysium.export.v2",
+    "packAbiVersion": "elysium.pack.v1",
+    "runtimeAbiVersion": "elysium.runtime.v1"
   },
   "entrypoints": {
     "animations": "rust/animations.bin",

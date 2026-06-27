@@ -3,6 +3,9 @@ pub const COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const RAW_EXPORT_SCHEMA_VERSION: &str = "1.0";
 pub const COMPILED_DIST_SCHEMA_VERSION: &str = "1.0";
 pub const SCHEMA_CATALOG_VERSION: &str = "elysium-compiler/schema-catalog/v1";
+pub const EXPORT_ABI_VERSION: &str = "elysium.export.v2";
+pub const PACK_ABI_VERSION: &str = "elysium.pack.v1";
+pub const RUNTIME_ABI_VERSION: &str = "elysium.runtime.v1";
 
 pub fn schema_hash() -> String {
     use sha2::{Digest, Sha256};
@@ -13,6 +16,9 @@ pub fn schema_hash() -> String {
         SCHEMA_CATALOG_VERSION,
         RAW_EXPORT_SCHEMA_VERSION,
         COMPILED_DIST_SCHEMA_VERSION,
+        EXPORT_ABI_VERSION,
+        PACK_ABI_VERSION,
+        RUNTIME_ABI_VERSION,
         "commands=compile,inspect,validate,schemas",
         "scopes=all,native-ui,search,browser,recipes,ui,textures",
     ] {
@@ -28,6 +34,9 @@ pub fn metadata() -> serde_json::Value {
         "version": COMPILER_VERSION,
         "rawExportSchemaVersion": RAW_EXPORT_SCHEMA_VERSION,
         "compiledDistSchemaVersion": COMPILED_DIST_SCHEMA_VERSION,
+        "exportAbiVersion": EXPORT_ABI_VERSION,
+        "packAbiVersion": PACK_ABI_VERSION,
+        "runtimeAbiVersion": RUNTIME_ABI_VERSION,
         "schemaHash": schema_hash(),
     })
 }

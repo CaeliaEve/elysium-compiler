@@ -1063,6 +1063,23 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
     assert!(output.path().join("rust/ui-pack/ui_templates.bin").exists());
     assert!(output
         .path()
+        .join("rust/compile-kernel-trace.json")
+        .exists());
+    let kernel_trace: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(output.path().join("rust/compile-kernel-trace.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        kernel_trace["schemaVersion"],
+        json!("elysium-compiler/compile-kernel-trace/v1")
+    );
+    assert!(kernel_trace["stages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|stage| stage["stage"] == json!("emit-runtime-packs")));
+    assert!(output
+        .path()
         .join("assets/ui-backgrounds/gregtech/nei_single_recipe.png")
         .exists());
 

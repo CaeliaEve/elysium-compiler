@@ -1,3 +1,4 @@
+use crate::abi::abi_catalog;
 use crate::io::write_json_value;
 use crate::version::{
     metadata as compiler_metadata, COMPILED_DIST_SCHEMA_VERSION, RAW_EXPORT_SCHEMA_VERSION,
@@ -10,6 +11,7 @@ use std::path::Path;
 pub fn schema_catalog() -> Value {
     json!({
         "schemaVersion": "elysium-compiler/schema-catalog/v1",
+        "abi": abi_catalog(),
         "compiler": {
             "name": "elysium-compiler",
             "currentCrate": "elysium-compiler-core",

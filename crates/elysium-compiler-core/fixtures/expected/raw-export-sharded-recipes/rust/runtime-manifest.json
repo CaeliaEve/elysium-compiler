@@ -99,5 +99,11 @@
   "runtimeId": "rust-3b5b735b889d2a23",
   "schema": "neonei/runtime/current",
   "schemaRevision": 1,
-  "schemaVersion": "neonei/rust-runtime-manifest/current"
+  "schemaVersion": "neonei/rust-runtime-manifest/current",
+  "compiler": {
+    "exportAbiVersion": "elysium.export.v2",
+    "packAbiVersion": "elysium.pack.v1",
+    "runtimeAbiVersion": "elysium.runtime.v1",
+    "schemaHash": "sha256:526ea1cab48e97206763bd251a9a8531cc3d50d550a6c83b1e3680a9f14f45e5"
+  }
 }
