@@ -152,18 +152,17 @@ pub fn resolve_manifest_path(
     logical_name: &str,
 ) -> Option<PathBuf> {
     let relative_path = manifest.files.get(logical_name)?;
-    let normalized = relative_path
-        .replace('\\', "/")
-        .trim_start_matches('/')
-        .to_string();
-    Some(input.join(normalized))
+    let portable = portable_relative_path(relative_path)?;
+    Some(input.join(portable))
 }
 
 pub fn portable_relative_path(value: &str) -> Option<PathBuf> {
-    let normalized = value.replace('\\', "/").trim_start_matches('/').to_string();
+    let normalized = value.trim().replace('\\', "/");
     if normalized.is_empty()
         || normalized.contains("://")
         || normalized.contains(':')
+        || normalized.starts_with('/')
+        || normalized.starts_with("//")
         || normalized
             .split('/')
             .any(|part| part.is_empty() || part == "." || part == "..")

@@ -1,5 +1,7 @@
 use crate::io::sha256_file;
-use crate::manifest::{count_jsonl_rows, resolve_manifest_path, RawManifest};
+use crate::manifest::{
+    count_jsonl_rows, portable_relative_path, resolve_manifest_path, RawManifest,
+};
 use crate::reports::{RawExportSummary, ZeroRecipeDiagnostics};
 use anyhow::{Context, Result};
 use serde_json::Value;
@@ -19,11 +21,15 @@ pub fn summarize_raw_export(
     let mut file_hashes = BTreeMap::new();
 
     for (logical_name, relative_path) in &manifest.files {
-        let normalized = relative_path
-            .replace('\\', "/")
-            .trim_start_matches('/')
-            .to_string();
-        let path = input.join(&normalized);
+        let Some(portable_path) = portable_relative_path(relative_path) else {
+            blocked.push(format!(
+                "manifest path violates portable-relative policy: {}:{}",
+                logical_name, relative_path
+            ));
+            continue;
+        };
+        let normalized = portable_path.to_string_lossy().replace('\\', "/");
+        let path = input.join(&portable_path);
         if !path.exists() {
             missing_declared_files.push(format!("{}:{}", logical_name, normalized));
             continue;

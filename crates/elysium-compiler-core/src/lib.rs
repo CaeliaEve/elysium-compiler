@@ -12,6 +12,7 @@ mod native_ui_report;
 mod pack_abi;
 mod packs;
 mod raw_export;
+mod raw_export_abi;
 mod recipe_domain;
 mod recipe_ui_payload;
 mod reports;

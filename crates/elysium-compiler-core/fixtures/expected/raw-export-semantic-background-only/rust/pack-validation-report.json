@@ -131,6 +131,16 @@
       "status": "present"
     },
     {
+      "bytes": 3983,
+      "debugOnly": false,
+      "kind": "report",
+      "logicalName": "rustRawExportAbiValidationReport",
+      "path": "rust/raw-export-abi-validation-report.json",
+      "required": true,
+      "sha256": "8ef8e9ce9923f375c5c585246a1b1c244b4c14d081ddbd03b40a1214351cab67",
+      "status": "present"
+    },
+    {
       "bytes": 1249,
       "debugOnly": false,
       "kind": "report",
@@ -173,7 +183,7 @@
   ],
   "compileScope": "native-ui",
   "debugJson": false,
-  "expectedArtifactCount": 17,
+  "expectedArtifactCount": 18,
   "generatedAt": "deterministic-rust-compiler",
   "missingRequiredArtifacts": [],
   "packAbiVersion": "elysium.pack.v1",
@@ -183,7 +193,7 @@
     "missingRequiredArtifact": "fail-closed",
     "pathPortability": "portable-relative-runtime-paths-only; no drive letters, UNC paths, or file URLs"
   },
-  "presentArtifactCount": 17,
+  "presentArtifactCount": 18,
   "schemaVersion": "elysium-compiler/pack-abi-validation/v1",
   "status": "ok"
 }

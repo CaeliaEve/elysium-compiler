@@ -1,3 +1,4 @@
+use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::version::{
     COMPILED_DIST_SCHEMA_VERSION, EXPORT_ABI_VERSION, PACK_ABI_VERSION, RAW_EXPORT_SCHEMA_VERSION,
     RUNTIME_ABI_VERSION,
@@ -65,6 +66,11 @@ fn export_abi_catalog() -> Value {
         "fileContract": {
             "requiredMetadata": ["schemaVersion", "producer", "checksum", "rowCountOrSize"],
             "pathPolicy": "portable-relative-only; no drive letters, file URLs, absolute paths, '.', or '..' segments"
+        },
+        "validationReport": {
+            "path": "rust/raw-export-abi-validation-report.json",
+            "schemaVersion": RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
+            "policy": "missing required raw files, missing declared raw files, and path violations are compile blockers"
         }
     })
 }

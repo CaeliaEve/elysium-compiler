@@ -9,6 +9,7 @@ use crate::packs::recipe::compile_recipe_pack;
 use crate::packs::search::compile_search_pack;
 use crate::packs::texture::compile_texture_pack;
 use crate::packs::ui::compile_ui_pack;
+use crate::raw_export_abi::write_raw_export_abi_validation_report;
 use crate::recipe_domain::captured_ui_family_key;
 use crate::runtime::{compile_runtime_reports, purge_debug_json_artifacts};
 use crate::validation::compile_semantic_validation_report;
@@ -35,6 +36,15 @@ pub fn run_compile_kernel(
                 &["compiler.lifecycle.prepare"],
             ),
             prepare_output_stage,
+        ),
+        CompileStage::with_contract(
+            "validate-raw-export-abi",
+            CompileStageContract::new(
+                &["raw-export-manifest"],
+                &["rust/raw-export-abi-validation-report.json"],
+                &["compiler.raw_export_abi_validator"],
+            ),
+            raw_export_abi_validation_stage,
         ),
         CompileStage::with_contract(
             "emit-runtime-packs",
@@ -195,6 +205,11 @@ fn emit_runtime_packs_stage(context: &mut CompileKernelContext<'_>) -> Result<()
             context.debug_json,
         )?,
     }
+    Ok(())
+}
+
+fn raw_export_abi_validation_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
+    write_raw_export_abi_validation_report(context.input, context.output, context.strict)?;
     Ok(())
 }
 

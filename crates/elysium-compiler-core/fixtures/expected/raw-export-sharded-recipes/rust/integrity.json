@@ -4,6 +4,8 @@
     "rust/browser.bin": "1370cc0535251a0dd328162757bbce5516721fb2d40b7e1cdf03930f8da8c719",
     "rust/groups.bin": "325a026644239c6c2535177dcb5531810bc79ab5293b368f80f78eea9e13e0cd",
     "rust/native-ui-layout-report.json": "b2fab9a7f839cd5722dca9a2979f7b48fea3ad81f64043d36641213aa08bc979",
+    "rust/pack-validation-report.json": "f1d5cd6d04e12536643a7afa1863ca39b1acc6d393c92419388ec8c823014876",
+    "rust/raw-export-abi-validation-report.json": "85416f120a923dd5996efcde5cb279681264ea2b7b6df73e8533bb3b51167f33",
     "rust/recipe-fragmentation-report.json": "5c217db3a12cd0548f22d84a1bc1be8205e36212350681af085d6399df7ce410",
     "rust/recipe-handler-metadata-report.json": "d875adb5abc5fc820aa61355b11a248e0d1a9108b1cacde8cca7f47c9c366b98",
     "rust/recipes.bin": "72f90e0185d0c4806a2ded3c9d94314974afcc64ee083dd5c8c1eb2e92ee1695",

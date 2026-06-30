@@ -1,5 +1,6 @@
 use crate::abi::abi_catalog;
 use crate::io::write_json_value;
+use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::version::{
     metadata as compiler_metadata, COMPILED_DIST_SCHEMA_VERSION, RAW_EXPORT_SCHEMA_VERSION,
 };
@@ -44,6 +45,11 @@ pub fn schema_catalog() -> Value {
                 ],
                 "pathPolicy": "portable-relative-only; no drive letters, file URLs, absolute paths, '.', or '..' segments"
             },
+            "validationReport": {
+                "path": "rust/raw-export-abi-validation-report.json",
+                "schemaVersion": RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
+                "policy": "missing required files, missing declared files, path violations, and legacy fallback are compile blockers"
+            },
             "nativeBackground": {
                 "requiredCapturedFields": ["status", "assetRef"],
                 "capturedStatus": "captured",
@@ -56,6 +62,7 @@ pub fn schema_catalog() -> Value {
             "schemaVersion": COMPILED_DIST_SCHEMA_VERSION,
             "manifest": "neonei/dist-data/current",
             "runtimeManifest": "neonei/rust-runtime-manifest/current",
+            "rawExportAbiValidationReport": RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
             "packValidationReport": "elysium-compiler/pack-abi-validation/v1",
             "runtimeEntrypoints": [
                 "rust/browser.bin",

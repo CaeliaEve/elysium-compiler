@@ -1,6 +1,7 @@
 use crate::io::normalize_path;
 use crate::manifest::read_manifest;
 use crate::raw_export::summarize_raw_export;
+use crate::raw_export_abi::{validate_raw_export_abi, write_raw_export_abi_validation_report};
 use crate::reports::{summarize_runtime_output, write_report, CompilerReport};
 use anyhow::{anyhow, Result};
 use std::fs;
@@ -36,6 +37,28 @@ pub fn run_diagnostics_report(
     let mut warnings = Vec::new();
     let mut blocked = Vec::new();
     let summary = summarize_raw_export(input, &manifest, &mut warnings, &mut blocked)?;
+    let raw_export_abi = validate_raw_export_abi(input)?;
+    if let Some(output) = output {
+        write_raw_export_abi_validation_report(input, output, false)?;
+    }
+    blocked.extend(
+        raw_export_abi
+            .missing_required_files
+            .iter()
+            .map(|entry| format!("raw export ABI missing required file: {}", entry)),
+    );
+    blocked.extend(
+        raw_export_abi
+            .missing_declared_files
+            .iter()
+            .map(|entry| format!("raw export ABI missing declared file: {}", entry)),
+    );
+    blocked.extend(
+        raw_export_abi
+            .path_violations
+            .iter()
+            .map(|entry| format!("raw export ABI path violation: {}", entry)),
+    );
     let runtime = summarize_runtime_output(output)?;
 
     fs::create_dir_all(report.parent().unwrap_or_else(|| Path::new(".")))?;
@@ -48,6 +71,7 @@ pub fn run_diagnostics_report(
             output: output.map(normalize_path),
             elapsed_ms: started.elapsed().as_millis(),
             raw_export: summary,
+            raw_export_abi,
             runtime,
             warnings,
             blocked: blocked.clone(),

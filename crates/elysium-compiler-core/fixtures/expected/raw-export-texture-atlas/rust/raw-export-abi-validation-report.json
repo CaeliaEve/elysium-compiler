@@ -1,0 +1,130 @@
+{
+  "declaredFileCount": 10,
+  "exportAbiVersion": "elysium.export.v2",
+  "files": [
+    {
+      "bytes": 453,
+      "kind": "file",
+      "logicalName": "browserAtlasIndex",
+      "manifestPath": "browser-atlas-index.json",
+      "path": "browser-atlas-index.json",
+      "required": true,
+      "rowCount": null,
+      "sha256": "52621c9ace4f37adda514a18dd3b1cc3c9c9c2fcd73a3a4fcd1f93f4c6fe2a7d",
+      "status": "present"
+    },
+    {
+      "bytes": 236,
+      "kind": "file",
+      "logicalName": "browserGroups",
+      "manifestPath": "browser-groups.json",
+      "path": "browser-groups.json",
+      "required": false,
+      "rowCount": null,
+      "sha256": "47e61bc07a70557d34bff4d672b64e092698bd45da55586b4c11c3c8fd0e3215",
+      "status": "present"
+    },
+    {
+      "bytes": 0,
+      "kind": "file",
+      "logicalName": "fluids",
+      "manifestPath": "fluids.jsonl",
+      "path": "fluids.jsonl",
+      "required": true,
+      "rowCount": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "present"
+    },
+    {
+      "bytes": 188,
+      "kind": "file",
+      "logicalName": "items",
+      "manifestPath": "items.jsonl",
+      "path": "items.jsonl",
+      "required": true,
+      "rowCount": 1,
+      "sha256": "8c30eb072b5e22db5a5ac93ccc6b7b09558a2df348fb3b4fad50c3c5470c000c",
+      "status": "present"
+    },
+    {
+      "bytes": 987,
+      "kind": "file",
+      "logicalName": "neiHandlerLayouts",
+      "manifestPath": "recipes/handler-layouts.json",
+      "path": "recipes/handler-layouts.json",
+      "required": false,
+      "rowCount": null,
+      "sha256": "48f5362156e14b72e4e7db90eaf84536194a9e1462181b3ace769aed9c9fb3a5",
+      "status": "present"
+    },
+    {
+      "bytes": 161,
+      "kind": "file",
+      "logicalName": "neiHandlers",
+      "manifestPath": "recipes/handlers.jsonl",
+      "path": "recipes/handlers.jsonl",
+      "required": false,
+      "rowCount": 1,
+      "sha256": "44c9f2304b16fce4b901d90533f5ab2779b37b0659ccea6b75990fd432bfa53b",
+      "status": "present"
+    },
+    {
+      "bytes": 54,
+      "kind": "file",
+      "logicalName": "neiOrder",
+      "manifestPath": "nei-order.jsonl",
+      "path": "nei-order.jsonl",
+      "required": false,
+      "rowCount": 1,
+      "sha256": "d67cb7a21cccd250881c790b06cc3fed0f9ad7134a754bb426c20c9fd6a570b6",
+      "status": "present"
+    },
+    {
+      "bytes": 130,
+      "kind": "file",
+      "logicalName": "recipeIndex",
+      "manifestPath": "recipes/recipe-index.json",
+      "path": "recipes/recipe-index.json",
+      "required": true,
+      "rowCount": null,
+      "sha256": "2ea099dd11c8983f55ee7299ca737fc6e27f7b0229d78bdeb45ed48179c9837d",
+      "status": "present"
+    },
+    {
+      "bytes": 403,
+      "kind": "file",
+      "logicalName": "textures",
+      "manifestPath": "textures.json",
+      "path": "textures.json",
+      "required": false,
+      "rowCount": null,
+      "sha256": "358c1cd8616e6c171d4234a5529a253782316e6277ce6cee84d4b5d03e64c53b",
+      "status": "present"
+    },
+    {
+      "bytes": 1015,
+      "kind": "file",
+      "logicalName": "uiTemplateCatalog",
+      "manifestPath": "recipes/ui-template-catalog.json",
+      "path": "recipes/ui-template-catalog.json",
+      "required": false,
+      "rowCount": null,
+      "sha256": "1a289dbf0fce2d4aa43a53ca27a2f3d19bfa4a7893bb56655ff59a91eb9ad59d",
+      "status": "present"
+    }
+  ],
+  "generatedAt": "deterministic-rust-compiler",
+  "legacyRawExportSchemaVersion": "1.0",
+  "missingDeclaredFiles": [],
+  "missingRequiredFiles": [],
+  "pathViolations": [],
+  "policy": {
+    "legacyFallback": "forbidden",
+    "missingDeclaredFile": "fail-closed",
+    "missingRequiredFile": "fail-closed",
+    "pathPortability": "portable-relative-raw-export-paths-only; no drive letters, UNC paths, file URLs, absolute paths, '.', or '..' segments"
+  },
+  "presentFileCount": 10,
+  "schemaVersion": "elysium-compiler/raw-export-abi-validation/v1",
+  "status": "ok"
+}

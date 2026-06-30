@@ -67,6 +67,11 @@
       ],
       "root": "elysium.export.v2/",
       "status": "testing",
+      "validationReport": {
+        "path": "rust/raw-export-abi-validation-report.json",
+        "policy": "missing required raw files, missing declared raw files, and path violations are compile blockers",
+        "schemaVersion": "elysium-compiler/raw-export-abi-validation/v1"
+      },
       "version": "elysium.export.v2"
     },
     "featureMatrix": {
@@ -306,7 +311,7 @@
       "packAbiVersion": "elysium.pack.v1",
       "rawExportSchemaVersion": "1.0",
       "runtimeAbiVersion": "elysium.runtime.v1",
-      "schemaHash": "sha256:e98805d5b0e914004a31e77adadcbaf127db24ca60d6f3298bb6ef066f2f7570",
+      "schemaHash": "sha256:c8d907dd23dd0f107e5a5375bcbfc1281d9a62505b7dd7f9ad3b27a92215e7a0",
       "version": "0.1.0"
     },
     "name": "elysium-compiler"
@@ -314,6 +319,7 @@
   "distData": {
     "manifest": "neonei/dist-data/current",
     "packValidationReport": "elysium-compiler/pack-abi-validation/v1",
+    "rawExportAbiValidationReport": "elysium-compiler/raw-export-abi-validation/v1",
     "recipeUiPayloadIndex": "neonei/recipe-ui-payload-index/v1",
     "runtimeEntrypoints": [
       "rust/browser.bin",
@@ -379,7 +385,12 @@
       ],
       "strictPolicy": "a captured nativeBackground.assetRef must point to a materialized raw-export asset"
     },
-    "schemaVersion": "1.0"
+    "schemaVersion": "1.0",
+    "validationReport": {
+      "path": "rust/raw-export-abi-validation-report.json",
+      "policy": "missing required files, missing declared files, path violations, and legacy fallback are compile blockers",
+      "schemaVersion": "elysium-compiler/raw-export-abi-validation/v1"
+    }
   },
   "schemaVersion": "elysium-compiler/schema-catalog/v1"
 }

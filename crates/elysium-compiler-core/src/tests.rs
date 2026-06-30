@@ -20,6 +20,7 @@ use crate::packs::ui::{
     build_compact_ui_template_payload,
 };
 use crate::raw_export;
+use crate::raw_export_abi;
 use crate::recipe_domain::{captured_ui_family_key, public_recipe_layout, RecipeHandlerContext};
 use crate::recipe_ui_payload::rust_recipe_ui_payload_relative_path;
 use crate::reports;
@@ -978,6 +979,7 @@ fn production_manifest_entries_exclude_debug_json_packs() {
     assert!(production_entries.contains(&"rust/ui-pack/ui_assets.manifest.json"));
     assert!(production_entries.contains(&"rust/ui-pack/ui_pack_report.json"));
     assert!(production_entries.contains(&"rust/native-ui-layout-report.json"));
+    assert!(production_entries.contains(&"rust/raw-export-abi-validation-report.json"));
     assert!(production_entries.contains(&"rust/pack-validation-report.json"));
     assert!(production_entries.contains(&"rust/semantic-validation-report.json"));
     assert!(production_entries.contains(&"rust/recipe-handler-metadata-report.json"));
@@ -1005,6 +1007,7 @@ fn pack_abi_registry_is_scope_specific_and_fail_closed() {
         .collect::<Vec<_>>();
     assert!(search_paths.contains(&"rust/search.bin"));
     assert!(search_paths.contains(&"rust/strings.zh_cn.bin"));
+    assert!(search_paths.contains(&"rust/raw-export-abi-validation-report.json"));
     assert!(search_paths.contains(&"rust/semantic-validation-report.json"));
     assert!(!search_paths.contains(&"rust/browser.bin"));
     assert!(!search_paths.contains(&"rust/ui-pack/ui_templates.bin"));
@@ -1016,6 +1019,81 @@ fn pack_abi_registry_is_scope_specific_and_fail_closed() {
     assert!(report
         .missing_required_artifacts
         .contains(&"rust/search.bin".to_string()));
+}
+
+#[test]
+fn raw_export_abi_validation_blocks_nonportable_manifest_paths() {
+    let raw = tempfile::tempdir().unwrap();
+    write_json_value(
+        &raw.path().join("manifest.json"),
+        &json!({
+            "schemaVersion": "neonei/raw-export-fixture/v1",
+            "files": {
+                "items": "../items.jsonl",
+                "fluids": "fluids.jsonl",
+                "recipeIndex": "C:\\bad\\recipe-index.json",
+                "browserAtlasIndex": "textures/browser-atlas-index.json"
+            }
+        }),
+    )
+    .unwrap();
+    fs::write(raw.path().join("fluids.jsonl"), b"").unwrap();
+    fs::create_dir_all(raw.path().join("textures")).unwrap();
+    write_json_value(
+        &raw.path().join("textures/browser-atlas-index.json"),
+        &json!({"items": []}),
+    )
+    .unwrap();
+
+    let report = raw_export_abi::validate_raw_export_abi(raw.path()).unwrap();
+    assert_eq!(report.status, "blocked");
+    assert!(report.missing_required_files.contains(&"items".to_string()));
+    assert!(report
+        .missing_required_files
+        .contains(&"recipeIndex".to_string()));
+    assert_eq!(report.path_violations.len(), 2);
+    assert_eq!(report.policy.legacy_fallback, "forbidden");
+}
+
+#[test]
+fn strict_compile_validates_raw_export_abi_before_pack_emission() {
+    let raw = tempfile::tempdir().unwrap();
+    let output = tempfile::tempdir().unwrap();
+    let report = output.path().join("compiler-report.json");
+    write_json_value(
+        &raw.path().join("manifest.json"),
+        &json!({
+            "schemaVersion": "neonei/raw-export-fixture/v1",
+            "files": {
+                "fluids": "fluids.jsonl",
+                "recipeIndex": "recipes/recipe-index.json",
+                "browserAtlasIndex": "browser-atlas-index.json"
+            }
+        }),
+    )
+    .unwrap();
+
+    let error = run_command(Cli {
+        command: Command::Compile {
+            input: raw.path().to_path_buf(),
+            output: output.path().to_path_buf(),
+            report,
+            scope: CompileScope::NativeUi,
+            threads: Some(1),
+            strict: true,
+            debug_json: false,
+        },
+    })
+    .expect_err("strict compile must fail before pack emission when raw export ABI is invalid");
+
+    let message = format!("{error:#}");
+    assert!(message.contains("raw export ABI validation blocked"));
+    assert!(output
+        .path()
+        .join("rust/raw-export-abi-validation-report.json")
+        .exists());
+    assert!(!output.path().join("rust/browser.bin").exists());
+    assert!(!output.path().join("rust/runtime-manifest.json").exists());
 }
 
 #[test]
@@ -1092,6 +1170,10 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
         .path()
         .join("rust/pack-validation-report.json")
         .exists());
+    assert!(output
+        .path()
+        .join("rust/raw-export-abi-validation-report.json")
+        .exists());
     let kernel_trace: serde_json::Value = serde_json::from_str(
         &fs::read_to_string(output.path().join("rust/compile-kernel-trace.json")).unwrap(),
     )
@@ -1105,6 +1187,15 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
         .unwrap()
         .iter()
         .any(|stage| stage["stage"] == json!("emit-runtime-packs")));
+    assert!(kernel_trace["stages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|stage| stage["stage"] == json!("validate-raw-export-abi")
+            && stage["contract"]["capabilities"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("compiler.raw_export_abi_validator"))));
     assert!(kernel_trace["stages"]
         .as_array()
         .unwrap()
@@ -1152,7 +1243,27 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
         .as_array()
         .unwrap()
         .iter()
+        .any(|entry| entry["path"] == json!("rust/raw-export-abi-validation-report.json")));
+    assert!(runtime_manifest["files"]
+        .as_array()
+        .unwrap()
+        .iter()
         .any(|entry| entry["path"] == json!("rust/pack-validation-report.json")));
+
+    let raw_export_abi: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(
+            output
+                .path()
+                .join("rust/raw-export-abi-validation-report.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(raw_export_abi["status"], json!("ok"));
+    assert_eq!(
+        raw_export_abi["policy"]["legacyFallback"],
+        json!("forbidden")
+    );
 
     let pack_validation: serde_json::Value = serde_json::from_str(
         &fs::read_to_string(output.path().join("rust/pack-validation-report.json")).unwrap(),
@@ -1245,6 +1356,7 @@ fn native_ui_gt_fixture_matches_expected_reports_and_copies_background_asset() {
         "rust/ui-pack/ui_template_binding_index.json",
         "rust/ui-pack/ui_family_census.json",
         "rust/integrity.json",
+        "rust/raw-export-abi-validation-report.json",
         "rust/pack-validation-report.json",
     ] {
         assert_expected_json_matches("raw-export-native-ui-gt", output.path(), relative_path);
@@ -1283,6 +1395,7 @@ fn semantic_background_only_fixture_compiles_without_materialized_asset() {
         "rust/ui-pack/ui_template_binding_index.json",
         "rust/ui-pack/ui_family_census.json",
         "rust/integrity.json",
+        "rust/raw-export-abi-validation-report.json",
         "rust/pack-validation-report.json",
     ] {
         assert_expected_json_matches(
@@ -1319,6 +1432,7 @@ fn sharded_recipes_fixture_compiles_all_declared_shards() {
         "rust/ui-pack/ui_template_catalog.json",
         "rust/ui-pack/ui_template_binding_index.json",
         "rust/ui-pack/ui_family_census.json",
+        "rust/raw-export-abi-validation-report.json",
         "rust/pack-validation-report.json",
     ] {
         assert_expected_json_matches("raw-export-sharded-recipes", output.path(), relative_path);
@@ -1347,6 +1461,7 @@ fn texture_atlas_fixture_materializes_runtime_atlas_without_missing_refs() {
         "rust/ui-pack/ui_template_catalog.json",
         "rust/ui-pack/ui_template_binding_index.json",
         "rust/ui-pack/ui_family_census.json",
+        "rust/raw-export-abi-validation-report.json",
     ] {
         assert_expected_json_matches("raw-export-texture-atlas", output.path(), relative_path);
     }

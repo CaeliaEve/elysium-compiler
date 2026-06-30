@@ -13,6 +13,8 @@ pub struct CompilerReport {
     pub output: Option<String>,
     pub elapsed_ms: u128,
     pub raw_export: RawExportSummary,
+    #[serde(rename = "rawExportAbi")]
+    pub raw_export_abi: crate::raw_export_abi::RawExportAbiValidationReport,
     pub runtime: RuntimeSummary,
     pub warnings: Vec<String>,
     pub blocked: Vec<String>,
