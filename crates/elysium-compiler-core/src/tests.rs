@@ -4,6 +4,7 @@ use crate::commands::run_command;
 use crate::io::{normalize_path, write_json_value};
 use crate::json_ext::{value_string, value_u64};
 use crate::native_ui_report;
+use crate::pack_abi::{runtime_pack_artifact_specs, validate_runtime_pack_abi};
 use crate::packs::browser::build_compact_group_payload_from_groups;
 use crate::packs::recipe::build_compact_recipe_payload_from_pack;
 use crate::packs::search::{
@@ -977,6 +978,7 @@ fn production_manifest_entries_exclude_debug_json_packs() {
     assert!(production_entries.contains(&"rust/ui-pack/ui_assets.manifest.json"));
     assert!(production_entries.contains(&"rust/ui-pack/ui_pack_report.json"));
     assert!(production_entries.contains(&"rust/native-ui-layout-report.json"));
+    assert!(production_entries.contains(&"rust/pack-validation-report.json"));
     assert!(production_entries.contains(&"rust/semantic-validation-report.json"));
     assert!(production_entries.contains(&"rust/recipe-handler-metadata-report.json"));
     assert!(production_entries.contains(&"rust/recipe-fragmentation-report.json"));
@@ -993,6 +995,27 @@ fn production_manifest_entries_exclude_debug_json_packs() {
     assert!(debug_entries.contains(&"rust/search-pack.json"));
     assert!(debug_entries.contains(&"rust/recipe-pack.json"));
     assert!(debug_entries.contains(&"rust/texture-pack.json"));
+}
+
+#[test]
+fn pack_abi_registry_is_scope_specific_and_fail_closed() {
+    let search_paths = runtime_pack_artifact_specs(CompileScope::Search, false)
+        .into_iter()
+        .map(|spec| spec.relative_path)
+        .collect::<Vec<_>>();
+    assert!(search_paths.contains(&"rust/search.bin"));
+    assert!(search_paths.contains(&"rust/strings.zh_cn.bin"));
+    assert!(search_paths.contains(&"rust/semantic-validation-report.json"));
+    assert!(!search_paths.contains(&"rust/browser.bin"));
+    assert!(!search_paths.contains(&"rust/ui-pack/ui_templates.bin"));
+
+    let empty_output = tempfile::tempdir().unwrap();
+    let report =
+        validate_runtime_pack_abi(empty_output.path(), CompileScope::Search, false).unwrap();
+    assert_eq!(report.status, "blocked");
+    assert!(report
+        .missing_required_artifacts
+        .contains(&"rust/search.bin".to_string()));
 }
 
 #[test]
@@ -1065,6 +1088,10 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
         .path()
         .join("rust/compile-kernel-trace.json")
         .exists());
+    assert!(output
+        .path()
+        .join("rust/pack-validation-report.json")
+        .exists());
     let kernel_trace: serde_json::Value = serde_json::from_str(
         &fs::read_to_string(output.path().join("rust/compile-kernel-trace.json")).unwrap(),
     )
@@ -1078,6 +1105,15 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
         .unwrap()
         .iter()
         .any(|stage| stage["stage"] == json!("emit-runtime-packs")));
+    assert!(kernel_trace["stages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|stage| stage["stage"] == json!("validate-pack-abi")
+            && stage["contract"]["capabilities"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("compiler.pack_abi_validator"))));
     assert!(output
         .path()
         .join("assets/ui-backgrounds/gregtech/nei_single_recipe.png")
@@ -1112,6 +1148,21 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
         .unwrap()
         .iter()
         .any(|entry| entry["path"] == json!("rust/ui-pack/ui_family_census.json")));
+    assert!(runtime_manifest["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|entry| entry["path"] == json!("rust/pack-validation-report.json")));
+
+    let pack_validation: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(output.path().join("rust/pack-validation-report.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(pack_validation["status"], json!("ok"));
+    assert_eq!(
+        pack_validation["policy"]["legacyFallback"],
+        json!("forbidden")
+    );
 
     let ui_pack_report: serde_json::Value = serde_json::from_str(
         &fs::read_to_string(output.path().join("rust/ui-pack/ui_pack_report.json")).unwrap(),
@@ -1150,6 +1201,38 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
 }
 
 #[test]
+fn scoped_compile_purges_out_of_scope_runtime_artifacts() {
+    let output = tempfile::tempdir().unwrap();
+    let rust_dir = output.path().join("rust");
+    fs::create_dir_all(&rust_dir).unwrap();
+    fs::write(rust_dir.join("browser.bin"), b"stale-browser-pack").unwrap();
+    let report = output.path().join("compiler-report.json");
+
+    run_command(Cli {
+        command: Command::Compile {
+            input: compiler_fixture_path("raw-export-minimal"),
+            output: output.path().to_path_buf(),
+            report,
+            scope: CompileScope::Search,
+            threads: Some(1),
+            strict: true,
+            debug_json: false,
+        },
+    })
+    .unwrap();
+
+    assert!(output.path().join("rust/search.bin").exists());
+    assert!(!output.path().join("rust/browser.bin").exists());
+    let pack_validation = read_fixture_json(output.path().join("rust/pack-validation-report.json"));
+    assert_eq!(pack_validation["status"], json!("ok"));
+    assert!(!pack_validation["artifacts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|entry| entry["path"] == json!("rust/browser.bin")));
+}
+
+#[test]
 fn native_ui_gt_fixture_matches_expected_reports_and_copies_background_asset() {
     let output = compile_fixture("raw-export-native-ui-gt", CompileScope::NativeUi, true);
     for relative_path in [
@@ -1162,6 +1245,7 @@ fn native_ui_gt_fixture_matches_expected_reports_and_copies_background_asset() {
         "rust/ui-pack/ui_template_binding_index.json",
         "rust/ui-pack/ui_family_census.json",
         "rust/integrity.json",
+        "rust/pack-validation-report.json",
     ] {
         assert_expected_json_matches("raw-export-native-ui-gt", output.path(), relative_path);
     }
@@ -1199,6 +1283,7 @@ fn semantic_background_only_fixture_compiles_without_materialized_asset() {
         "rust/ui-pack/ui_template_binding_index.json",
         "rust/ui-pack/ui_family_census.json",
         "rust/integrity.json",
+        "rust/pack-validation-report.json",
     ] {
         assert_expected_json_matches(
             "raw-export-semantic-background-only",
@@ -1234,6 +1319,7 @@ fn sharded_recipes_fixture_compiles_all_declared_shards() {
         "rust/ui-pack/ui_template_catalog.json",
         "rust/ui-pack/ui_template_binding_index.json",
         "rust/ui-pack/ui_family_census.json",
+        "rust/pack-validation-report.json",
     ] {
         assert_expected_json_matches("raw-export-sharded-recipes", output.path(), relative_path);
     }

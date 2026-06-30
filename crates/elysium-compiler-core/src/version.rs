@@ -21,6 +21,7 @@ pub fn schema_hash() -> String {
         RUNTIME_ABI_VERSION,
         "commands=compile,inspect,validate,schemas",
         "scopes=all,native-ui,search,browser,recipes,ui,textures",
+        "pack-abi-validation=elysium-compiler/pack-abi-validation/v1",
     ] {
         hasher.update(part.as_bytes());
         hasher.update(b"\0");

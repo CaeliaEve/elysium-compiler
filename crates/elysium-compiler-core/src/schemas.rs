@@ -56,6 +56,7 @@ pub fn schema_catalog() -> Value {
             "schemaVersion": COMPILED_DIST_SCHEMA_VERSION,
             "manifest": "neonei/dist-data/current",
             "runtimeManifest": "neonei/rust-runtime-manifest/current",
+            "packValidationReport": "elysium-compiler/pack-abi-validation/v1",
             "runtimeEntrypoints": [
                 "rust/browser.bin",
                 "rust/groups.bin",

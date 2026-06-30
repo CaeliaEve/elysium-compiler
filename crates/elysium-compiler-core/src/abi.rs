@@ -84,6 +84,11 @@ fn pack_abi_catalog() -> Value {
             "packs/",
             "reports/"
         ],
+        "validationReport": {
+            "path": "rust/pack-validation-report.json",
+            "schemaVersion": "elysium-compiler/pack-abi-validation/v1",
+            "policy": "missing required runtime artifacts, path leaks, and legacy fallback are compile blockers"
+        },
         "runtimePacks": [
             "packs/items.pack",
             "packs/recipes.pack",

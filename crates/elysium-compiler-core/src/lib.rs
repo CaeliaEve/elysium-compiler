@@ -9,6 +9,7 @@ mod json_ext;
 mod kernel;
 mod manifest;
 mod native_ui_report;
+mod pack_abi;
 mod packs;
 mod raw_export;
 mod recipe_domain;

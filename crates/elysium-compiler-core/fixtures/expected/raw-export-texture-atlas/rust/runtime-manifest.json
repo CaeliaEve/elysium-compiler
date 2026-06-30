@@ -15,13 +15,13 @@
   "compileScope": "all",
   "compiler": {
     "compiledDistSchemaVersion": "1.0",
-    "name": "elysium-compiler",
-    "rawExportSchemaVersion": "1.0",
-    "schemaHash": "sha256:526ea1cab48e97206763bd251a9a8531cc3d50d550a6c83b1e3680a9f14f45e5",
-    "version": "0.1.0",
     "exportAbiVersion": "elysium.export.v2",
+    "name": "elysium-compiler",
     "packAbiVersion": "elysium.pack.v1",
-    "runtimeAbiVersion": "elysium.runtime.v1"
+    "rawExportSchemaVersion": "1.0",
+    "runtimeAbiVersion": "elysium.runtime.v1",
+    "schemaHash": "sha256:e98805d5b0e914004a31e77adadcbaf127db24ca60d6f3298bb6ef066f2f7570",
+    "version": "0.1.0"
   },
   "entrypoints": {
     "animations": "rust/animations.bin",
@@ -70,30 +70,6 @@
       "path": "rust/strings.zh_cn.bin"
     },
     {
-      "bytes": 512,
-      "path": "rust/missing-texture-report.json"
-    },
-    {
-      "bytes": 438,
-      "path": "rust/suspicious-texture-report.json"
-    },
-    {
-      "bytes": 1249,
-      "path": "rust/semantic-validation-report.json"
-    },
-    {
-      "bytes": 540,
-      "path": "rust/recipe-handler-metadata-report.json"
-    },
-    {
-      "bytes": 489,
-      "path": "rust/recipe-fragmentation-report.json"
-    },
-    {
-      "bytes": 1248,
-      "path": "rust/native-ui-layout-report.json"
-    },
-    {
       "bytes": 203,
       "path": "rust/ui-pack/ui_templates.bin"
     },
@@ -126,6 +102,34 @@
       "path": "rust/ui-pack/ui_pack_report.json"
     },
     {
+      "bytes": 1249,
+      "path": "rust/semantic-validation-report.json"
+    },
+    {
+      "bytes": 512,
+      "path": "rust/missing-texture-report.json"
+    },
+    {
+      "bytes": 438,
+      "path": "rust/suspicious-texture-report.json"
+    },
+    {
+      "bytes": 540,
+      "path": "rust/recipe-handler-metadata-report.json"
+    },
+    {
+      "bytes": 489,
+      "path": "rust/recipe-fragmentation-report.json"
+    },
+    {
+      "bytes": 1248,
+      "path": "rust/native-ui-layout-report.json"
+    },
+    {
+      "bytes": 7398,
+      "path": "rust/pack-validation-report.json"
+    },
+    {
       "bytes": 18,
       "path": "textures/atlas/static-fixture.webp"
     }
@@ -136,7 +140,7 @@
     "portableRelativePathsOnly": true,
     "windowsPathsAllowed": false
   },
-  "runtimeId": "rust-bd66e81f4f9291de",
+  "runtimeId": "rust-a3027119599a3f1c",
   "schema": "neonei/runtime/current",
   "schemaRevision": 1,
   "schemaVersion": "neonei/rust-runtime-manifest/current"

@@ -1,0 +1,189 @@
+{
+  "artifacts": [
+    {
+      "bytes": 181,
+      "debugOnly": false,
+      "kind": "binary-pack",
+      "logicalName": "rustBrowserBin",
+      "path": "rust/browser.bin",
+      "required": true,
+      "sha256": "1370cc0535251a0dd328162757bbce5516721fb2d40b7e1cdf03930f8da8c719",
+      "status": "present"
+    },
+    {
+      "bytes": 167,
+      "debugOnly": false,
+      "kind": "binary-pack",
+      "logicalName": "rustGroupsBin",
+      "path": "rust/groups.bin",
+      "required": true,
+      "sha256": "325a026644239c6c2535177dcb5531810bc79ab5293b368f80f78eea9e13e0cd",
+      "status": "present"
+    },
+    {
+      "bytes": 342,
+      "debugOnly": false,
+      "kind": "binary-pack",
+      "logicalName": "rustSearchBin",
+      "path": "rust/search.bin",
+      "required": true,
+      "sha256": "9c7029e93a93328a0bb054b1066d93fdd65a9917d6a95bf9dcfd975d5c8d2420",
+      "status": "present"
+    },
+    {
+      "bytes": 410,
+      "debugOnly": false,
+      "kind": "binary-pack",
+      "logicalName": "rustRecipeBin",
+      "path": "rust/recipes.bin",
+      "required": true,
+      "sha256": "3f989c6992749c77ce046bc87cb6f782e62cb4a1c5d76faf907a6d56b07f31f4",
+      "status": "present"
+    },
+    {
+      "bytes": 208,
+      "debugOnly": false,
+      "kind": "binary-pack",
+      "logicalName": "rustStringsZhCnBin",
+      "path": "rust/strings.zh_cn.bin",
+      "required": true,
+      "sha256": "7933b9778a30ed8c4d8d00e25934e528f373c7551de0e4ed4605939f29fc924b",
+      "status": "present"
+    },
+    {
+      "bytes": 203,
+      "debugOnly": false,
+      "kind": "binary-pack",
+      "logicalName": "rustUiTemplatesBin",
+      "path": "rust/ui-pack/ui_templates.bin",
+      "required": true,
+      "sha256": "3f6a0cc38e4062b7b0cb19e56694cb376ccaeda5cc7c191587f3417860489327",
+      "status": "present"
+    },
+    {
+      "bytes": 118,
+      "debugOnly": false,
+      "kind": "binary-pack",
+      "logicalName": "rustUiBindingsBin",
+      "path": "rust/ui-pack/ui_bindings.bin",
+      "required": true,
+      "sha256": "561d6ffe5f14ace6ed166fa43a4046469722609d007a844156d97594b1d80012",
+      "status": "present"
+    },
+    {
+      "bytes": 306,
+      "debugOnly": false,
+      "kind": "binary-pack",
+      "logicalName": "rustUiStringsBin",
+      "path": "rust/ui-pack/ui_strings.bin",
+      "required": true,
+      "sha256": "b4552991eb37aec197aafc004eef9807ebbd4fc700cf8a9d0b3c63d7b8e80bfe",
+      "status": "present"
+    },
+    {
+      "bytes": 310,
+      "debugOnly": false,
+      "kind": "manifest",
+      "logicalName": "rustUiAssetsManifest",
+      "path": "rust/ui-pack/ui_assets.manifest.json",
+      "required": true,
+      "sha256": "542881fe87414370a87e20ec1622d14906a9f2e8dbbe8a7cb02e7cf46390b9e8",
+      "status": "present"
+    },
+    {
+      "bytes": 1569,
+      "debugOnly": false,
+      "kind": "manifest",
+      "logicalName": "rustUiTemplateCatalog",
+      "path": "rust/ui-pack/ui_template_catalog.json",
+      "required": true,
+      "sha256": "c9b7c1b66d5e2571953f765831edbf22344f437fdc9d5199c72d1fc8521dbf43",
+      "status": "present"
+    },
+    {
+      "bytes": 1082,
+      "debugOnly": false,
+      "kind": "manifest",
+      "logicalName": "rustUiTemplateBindingIndex",
+      "path": "rust/ui-pack/ui_template_binding_index.json",
+      "required": true,
+      "sha256": "b68cda01740583936d42c1390d63938bb2d09aa944fab47e002155f3e5d41ed1",
+      "status": "present"
+    },
+    {
+      "bytes": 1225,
+      "debugOnly": false,
+      "kind": "report",
+      "logicalName": "rustUiFamilyCensus",
+      "path": "rust/ui-pack/ui_family_census.json",
+      "required": true,
+      "sha256": "536ca5408c0c9dbeeada0321156e402ac6b5e69efaf6cada00042806781469e4",
+      "status": "present"
+    },
+    {
+      "bytes": 1472,
+      "debugOnly": false,
+      "kind": "report",
+      "logicalName": "rustUiPackReport",
+      "path": "rust/ui-pack/ui_pack_report.json",
+      "required": true,
+      "sha256": "b3dddd6ea16f146c3550589b49f96f5286125497dfcb2536632082b8f5a79b81",
+      "status": "present"
+    },
+    {
+      "bytes": 1249,
+      "debugOnly": false,
+      "kind": "report",
+      "logicalName": "rustSemanticValidationReport",
+      "path": "rust/semantic-validation-report.json",
+      "required": true,
+      "sha256": "2c1cf6ce724eb9e6531eef55f26d5667df9c6ab9430cb9f42272d44cd191803e",
+      "status": "present"
+    },
+    {
+      "bytes": 540,
+      "debugOnly": false,
+      "kind": "report",
+      "logicalName": "rustRecipeHandlerMetadataReport",
+      "path": "rust/recipe-handler-metadata-report.json",
+      "required": true,
+      "sha256": "d875adb5abc5fc820aa61355b11a248e0d1a9108b1cacde8cca7f47c9c366b98",
+      "status": "present"
+    },
+    {
+      "bytes": 489,
+      "debugOnly": false,
+      "kind": "report",
+      "logicalName": "rustRecipeFragmentationReport",
+      "path": "rust/recipe-fragmentation-report.json",
+      "required": true,
+      "sha256": "5c217db3a12cd0548f22d84a1bc1be8205e36212350681af085d6399df7ce410",
+      "status": "present"
+    },
+    {
+      "bytes": 1248,
+      "debugOnly": false,
+      "kind": "report",
+      "logicalName": "rustNativeUiLayoutReport",
+      "path": "rust/native-ui-layout-report.json",
+      "required": true,
+      "sha256": "e070a08dc11e8edf859292b617219ac6fd143cfc48954271925537154abef2ad",
+      "status": "present"
+    }
+  ],
+  "compileScope": "native-ui",
+  "debugJson": false,
+  "expectedArtifactCount": 17,
+  "generatedAt": "deterministic-rust-compiler",
+  "missingRequiredArtifacts": [],
+  "packAbiVersion": "elysium.pack.v1",
+  "pathViolations": [],
+  "policy": {
+    "legacyFallback": "forbidden",
+    "missingRequiredArtifact": "fail-closed",
+    "pathPortability": "portable-relative-runtime-paths-only; no drive letters, UNC paths, or file URLs"
+  },
+  "presentArtifactCount": 17,
+  "schemaVersion": "elysium-compiler/pack-abi-validation/v1",
+  "status": "ok"
+}

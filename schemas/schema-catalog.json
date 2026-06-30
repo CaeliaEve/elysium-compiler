@@ -1,4 +1,285 @@
 {
+  "abi": {
+    "controlAbi": {
+      "endpoints": [
+        "/control/abi",
+        "/control/capabilities",
+        "/control/modules",
+        "/control/drivers",
+        "/control/snapshot/current",
+        "/control/health",
+        "/control/version"
+      ],
+      "name": "elysium.control",
+      "policy": "Machine-readable and intended for consumers.",
+      "status": "stable-contract-target"
+    },
+    "debugAbi": {
+      "endpoints": [
+        "/debug/trace/latest",
+        "/debug/export/timing",
+        "/debug/export/probe-failures",
+        "/debug/compiler/intermediate",
+        "/debug/runtime/readers"
+      ],
+      "name": "elysium.debug",
+      "policy": "Diagnostics only; not a stable consumer ABI.",
+      "status": "unstable-debug-only"
+    },
+    "exportAbi": {
+      "fileContract": {
+        "pathPolicy": "portable-relative-only; no drive letters, file URLs, absolute paths, '.', or '..' segments",
+        "requiredMetadata": [
+          "schemaVersion",
+          "producer",
+          "checksum",
+          "rowCountOrSize"
+        ]
+      },
+      "legacyRawExportSchemaVersion": "1.0",
+      "name": "elysium.export",
+      "nativeUi": {
+        "coordinateSpace": "source-design-pixels",
+        "fallbackPolicy": "missing required native UI capture is a validation error",
+        "requiredCapabilities": [
+          "native_ui.surface",
+          "native_ui.design_space_coordinates",
+          "native_ui.background_asset"
+        ],
+        "requiredFiles": [
+          "native-ui/families.jsonl.zst",
+          "native-ui/surfaces.jsonl.zst",
+          "native-ui/slots.bin"
+        ],
+        "runtimeTransform": "uniform-scale-to-fit-only"
+      },
+      "requiredDirectories": [
+        "raw/",
+        "native-ui/",
+        "reports/"
+      ],
+      "requiredFiles": [
+        "manifest.json",
+        "capabilities.json",
+        "modules.json",
+        "drivers.json",
+        "kconfig.json"
+      ],
+      "root": "elysium.export.v2/",
+      "status": "testing",
+      "version": "elysium.export.v2"
+    },
+    "featureMatrix": {
+      "features": [
+        {
+          "name": "CONFIG_EXPORT_NEI",
+          "provides": [
+            "nei.handler.registry"
+          ]
+        },
+        {
+          "dependsOn": [
+            "CONFIG_EXPORT_NEI"
+          ],
+          "name": "CONFIG_EXPORT_GT5U",
+          "provides": [
+            "gt5u.recipe_maps"
+          ]
+        },
+        {
+          "dependsOn": [
+            "CONFIG_EXPORT_NEI"
+          ],
+          "name": "CONFIG_EXPORT_IC2",
+          "provides": [
+            "ic2.recipe_handlers"
+          ]
+        },
+        {
+          "dependsOn": [
+            "CONFIG_EXPORT_NEI"
+          ],
+          "name": "CONFIG_EXPORT_NATIVE_UI_CAPTURE",
+          "provides": [
+            "native_ui.surface"
+          ]
+        },
+        {
+          "name": "CONFIG_EXPORT_ANGELICA_FRAMEBUFFER",
+          "provides": [
+            "render.framebuffer.capture"
+          ]
+        },
+        {
+          "name": "CONFIG_COMPILER_BINARY_PACK",
+          "provides": [
+            "compiler.binary_pack"
+          ]
+        },
+        {
+          "dependsOn": [
+            "CONFIG_COMPILER_BINARY_PACK"
+          ],
+          "name": "CONFIG_COMPILER_NATIVE_UI_PACK",
+          "provides": [
+            "compiler.native_ui_pack"
+          ]
+        },
+        {
+          "dependsOn": [
+            "CONFIG_COMPILER_NATIVE_UI_PACK"
+          ],
+          "name": "CONFIG_COMPILER_WASM_LAYOUT_PACK",
+          "provides": [
+            "compiler.wasm_layout_pack"
+          ]
+        },
+        {
+          "name": "CONFIG_RUNTIME_RCU_SNAPSHOT",
+          "provides": [
+            "runtime.rcu_snapshot"
+          ]
+        },
+        {
+          "name": "CONFIG_DEBUG_TRACEPOINTS",
+          "provides": [
+            "debug.tracepoints"
+          ]
+        }
+      ],
+      "requiredFeatureFields": [
+        "name",
+        "dependsOn",
+        "provides",
+        "owner",
+        "tests",
+        "failureMode"
+      ]
+    },
+    "packAbi": {
+      "hotPathPolicy": "JSON is for manifests, schemas, reports, and diagnostics; runtime hot paths prefer binary packs.",
+      "legacyCompiledDistSchemaVersion": "1.0",
+      "name": "elysium.pack",
+      "nativeUiPack": {
+        "encoding": "binary",
+        "layoutPolicy": "renderer consumes exported design-space coordinates; no frontend reflow",
+        "path": "packs/native-ui.pack",
+        "sections": [
+          "header",
+          "stringTable",
+          "surfaceTable",
+          "slotRectTable",
+          "interactionTable",
+          "textureRegionTable",
+          "animationTable",
+          "checksumTable"
+        ]
+      },
+      "requiredDirectories": [
+        "packs/",
+        "reports/"
+      ],
+      "requiredFiles": [
+        "manifest.json",
+        "abi.json"
+      ],
+      "root": "elysium.pack.v1/",
+      "runtimePacks": [
+        "packs/items.pack",
+        "packs/recipes.pack",
+        "packs/search.pack",
+        "packs/native-ui.pack",
+        "packs/textures.pack",
+        "packs/browser.pack",
+        "packs/bootstrap.pack"
+      ],
+      "status": "testing",
+      "validationReport": {
+        "path": "rust/pack-validation-report.json",
+        "policy": "missing required runtime artifacts, path leaks, and legacy fallback are compile blockers",
+        "schemaVersion": "elysium-compiler/pack-abi-validation/v1"
+      },
+      "version": "elysium.pack.v1"
+    },
+    "policy": {
+      "fullExportValidation": "milestone-gate-only",
+      "hotPathEncoding": "binary-pack-preferred",
+      "legacyFallback": "forbidden",
+      "missingCapability": "fail-fast"
+    },
+    "runtimeAbi": {
+      "name": "elysium.runtime",
+      "snapshot": {
+        "lifecycle": "RCU-style acquire/read/release with atomic snapshot promotion",
+        "optionalFields": [
+          "dbPath",
+          "binaryPackPaths",
+          "textureAtlasPaths",
+          "nativeUiSurfaceIndex"
+        ],
+        "requiredFields": [
+          "id",
+          "exportAbiVersion",
+          "packAbiVersion",
+          "compilerVersion",
+          "manifestPath",
+          "checksum",
+          "createdAt"
+        ]
+      },
+      "status": "testing",
+      "version": "elysium.runtime.v1"
+    },
+    "stabilityLevels": {
+      "obsolete": "The ABI or path is scheduled for removal after the replacement is authoritative.",
+      "removed": "Historical record only; implementations must not depend on it.",
+      "stable": "Consumers may depend on this ABI until a new version is declared.",
+      "testing": "The ABI is visible for fixtures and integration work but may change before stabilization."
+    },
+    "traceEvents": {
+      "events": {
+        "compiler.pack.emit.done": {
+          "fields": [
+            "pack_id",
+            "bytes",
+            "rows",
+            "duration_ms"
+          ]
+        },
+        "export.driver.probe.fail": {
+          "fields": [
+            "driver_id",
+            "device_id",
+            "reason"
+          ]
+        },
+        "export.driver.probe.start": {
+          "fields": [
+            "driver_id",
+            "device_id"
+          ]
+        },
+        "export.native_ui.capture.surface": {
+          "fields": [
+            "family",
+            "surface_id",
+            "width",
+            "height",
+            "slots",
+            "duration_ms"
+          ]
+        },
+        "runtime.snapshot.promote": {
+          "fields": [
+            "from",
+            "to",
+            "readers",
+            "duration_ms"
+          ]
+        }
+      }
+    }
+  },
   "compiler": {
     "cli": {
       "commands": [
@@ -20,15 +301,19 @@
     "currentCrate": "elysium-compiler-core",
     "metadata": {
       "compiledDistSchemaVersion": "1.0",
+      "exportAbiVersion": "elysium.export.v2",
       "name": "elysium-compiler",
+      "packAbiVersion": "elysium.pack.v1",
       "rawExportSchemaVersion": "1.0",
-      "schemaHash": "sha256:f038bdcf8a677b9ebac62cb3da61ef969c0969447e5ecd9fab995f4f17eff26a",
+      "runtimeAbiVersion": "elysium.runtime.v1",
+      "schemaHash": "sha256:e98805d5b0e914004a31e77adadcbaf127db24ca60d6f3298bb6ef066f2f7570",
       "version": "0.1.0"
     },
     "name": "elysium-compiler"
   },
   "distData": {
     "manifest": "neonei/dist-data/current",
+    "packValidationReport": "elysium-compiler/pack-abi-validation/v1",
     "recipeUiPayloadIndex": "neonei/recipe-ui-payload-index/v1",
     "runtimeEntrypoints": [
       "rust/browser.bin",

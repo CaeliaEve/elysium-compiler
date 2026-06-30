@@ -31,11 +31,22 @@ impl<'a> CompileKernelContext<'a> {
         }
     }
 
-    pub fn stage_event(&mut self, stage: &str, status: &str, duration_ms: u128) {
+    pub fn stage_event(
+        &mut self,
+        stage: &str,
+        status: &str,
+        duration_ms: u128,
+        contract: CompileStageContract,
+    ) {
         self.events.push(json!({
             "stage": stage,
             "status": status,
             "durationMs": duration_ms,
+            "contract": {
+                "inputs": contract.inputs,
+                "outputs": contract.outputs,
+                "capabilities": contract.capabilities,
+            },
         }));
     }
 
@@ -44,17 +55,44 @@ impl<'a> CompileKernelContext<'a> {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct CompileStageContract {
+    pub inputs: &'static [&'static str],
+    pub outputs: &'static [&'static str],
+    pub capabilities: &'static [&'static str],
+}
+
+impl CompileStageContract {
+    pub const fn new(
+        inputs: &'static [&'static str],
+        outputs: &'static [&'static str],
+        capabilities: &'static [&'static str],
+    ) -> Self {
+        Self {
+            inputs,
+            outputs,
+            capabilities,
+        }
+    }
+}
+
 pub struct CompileStage {
     name: &'static str,
+    contract: CompileStageContract,
     run: fn(&mut CompileKernelContext<'_>) -> anyhow::Result<()>,
 }
 
 impl CompileStage {
-    pub const fn new(
+    pub const fn with_contract(
         name: &'static str,
+        contract: CompileStageContract,
         run: fn(&mut CompileKernelContext<'_>) -> anyhow::Result<()>,
     ) -> Self {
-        Self { name, run }
+        Self {
+            name,
+            contract,
+            run,
+        }
     }
 
     pub fn run(&self, context: &mut CompileKernelContext<'_>) -> anyhow::Result<()> {
@@ -64,6 +102,7 @@ impl CompileStage {
             self.name,
             if result.is_ok() { "ok" } else { "failed" },
             start.elapsed().as_millis(),
+            self.contract,
         );
         result
     }

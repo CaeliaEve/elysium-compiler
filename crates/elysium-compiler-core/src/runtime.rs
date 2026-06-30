@@ -1,6 +1,8 @@
 use crate::cli::CompileScope;
-use crate::io::{normalize_path, sha256_file, write_json_value};
-use crate::native_ui_report::{compile_native_ui_layout_report, CapturedUiFamilyKeyFn};
+use crate::io::{sha256_file, write_json_value};
+use crate::pack_abi::{
+    collect_text_path_violations, runtime_manifest_file_entries, runtime_pack_artifact_specs,
+};
 use crate::version::metadata as compiler_metadata;
 use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
@@ -8,12 +10,6 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
-
-pub fn is_text_runtime_artifact(path: &Path) -> bool {
-    path.extension()
-        .and_then(|value| value.to_str())
-        .is_some_and(|extension| matches!(extension, "json" | "txt" | "log"))
-}
 
 pub fn purge_debug_json_artifacts(output: &Path) -> Result<()> {
     let rust_dir = output.join("rust");
@@ -45,152 +41,7 @@ pub fn rust_manifest_file_entries(
     scope: CompileScope,
     debug_json: bool,
 ) -> Vec<(&'static str, &'static str)> {
-    let mut entries = vec![
-        ("rustRuntimeManifest", "rust/runtime-manifest.json"),
-        ("rustIntegrity", "rust/integrity.json"),
-        ("rustSizeReport", "rust/size-report.json"),
-        ("rustMissingDataReport", "rust/missing-data-report.json"),
-        (
-            "rustSemanticValidationReport",
-            "rust/semantic-validation-report.json",
-        ),
-        (
-            "rustMissingTextureReport",
-            "rust/missing-texture-report.json",
-        ),
-        (
-            "rustSuspiciousTextureReport",
-            "rust/suspicious-texture-report.json",
-        ),
-        (
-            "rustRecipeHandlerMetadataReport",
-            "rust/recipe-handler-metadata-report.json",
-        ),
-        (
-            "rustRecipeFragmentationReport",
-            "rust/recipe-fragmentation-report.json",
-        ),
-        (
-            "rustNativeUiLayoutReport",
-            "rust/native-ui-layout-report.json",
-        ),
-        ("rustMigrationReadiness", "rust/migration-readiness.json"),
-        ("rustDeploymentReport", "rust/deployment-report.json"),
-    ];
-    match scope {
-        CompileScope::All => entries.extend([
-            ("rustBrowserBin", "rust/browser.bin"),
-            ("rustGroupsBin", "rust/groups.bin"),
-            ("rustSearchBin", "rust/search.bin"),
-            ("rustRecipeBin", "rust/recipes.bin"),
-            ("rustTextureBin", "rust/textures.bin"),
-            ("rustAtlasMetaBin", "rust/atlas.meta.bin"),
-            ("rustAnimationBin", "rust/animations.bin"),
-            ("rustStringsZhCnBin", "rust/strings.zh_cn.bin"),
-            ("rustUiTemplatesBin", "rust/ui-pack/ui_templates.bin"),
-            ("rustUiBindingsBin", "rust/ui-pack/ui_bindings.bin"),
-            ("rustUiStringsBin", "rust/ui-pack/ui_strings.bin"),
-            (
-                "rustUiAssetsManifest",
-                "rust/ui-pack/ui_assets.manifest.json",
-            ),
-            (
-                "rustUiTemplateCatalog",
-                "rust/ui-pack/ui_template_catalog.json",
-            ),
-            (
-                "rustUiTemplateBindingIndex",
-                "rust/ui-pack/ui_template_binding_index.json",
-            ),
-            ("rustUiFamilyCensus", "rust/ui-pack/ui_family_census.json"),
-            ("rustUiPackReport", "rust/ui-pack/ui_pack_report.json"),
-        ]),
-        CompileScope::NativeUi => entries.extend([
-            ("rustBrowserBin", "rust/browser.bin"),
-            ("rustGroupsBin", "rust/groups.bin"),
-            ("rustSearchBin", "rust/search.bin"),
-            ("rustRecipeBin", "rust/recipes.bin"),
-            ("rustStringsZhCnBin", "rust/strings.zh_cn.bin"),
-            ("rustUiTemplatesBin", "rust/ui-pack/ui_templates.bin"),
-            ("rustUiBindingsBin", "rust/ui-pack/ui_bindings.bin"),
-            ("rustUiStringsBin", "rust/ui-pack/ui_strings.bin"),
-            (
-                "rustUiAssetsManifest",
-                "rust/ui-pack/ui_assets.manifest.json",
-            ),
-            (
-                "rustUiTemplateCatalog",
-                "rust/ui-pack/ui_template_catalog.json",
-            ),
-            (
-                "rustUiTemplateBindingIndex",
-                "rust/ui-pack/ui_template_binding_index.json",
-            ),
-            ("rustUiFamilyCensus", "rust/ui-pack/ui_family_census.json"),
-            ("rustUiPackReport", "rust/ui-pack/ui_pack_report.json"),
-        ]),
-        CompileScope::Search => entries.extend([
-            ("rustSearchBin", "rust/search.bin"),
-            ("rustStringsZhCnBin", "rust/strings.zh_cn.bin"),
-        ]),
-        CompileScope::Browser => entries.extend([
-            ("rustBrowserBin", "rust/browser.bin"),
-            ("rustGroupsBin", "rust/groups.bin"),
-            ("rustSearchBin", "rust/search.bin"),
-            ("rustStringsZhCnBin", "rust/strings.zh_cn.bin"),
-        ]),
-        CompileScope::Recipes => entries.extend([("rustRecipeBin", "rust/recipes.bin")]),
-        CompileScope::Ui => entries.extend([
-            ("rustUiTemplatesBin", "rust/ui-pack/ui_templates.bin"),
-            ("rustUiBindingsBin", "rust/ui-pack/ui_bindings.bin"),
-            ("rustUiStringsBin", "rust/ui-pack/ui_strings.bin"),
-            (
-                "rustUiAssetsManifest",
-                "rust/ui-pack/ui_assets.manifest.json",
-            ),
-            (
-                "rustUiTemplateCatalog",
-                "rust/ui-pack/ui_template_catalog.json",
-            ),
-            (
-                "rustUiTemplateBindingIndex",
-                "rust/ui-pack/ui_template_binding_index.json",
-            ),
-            ("rustUiFamilyCensus", "rust/ui-pack/ui_family_census.json"),
-            ("rustUiPackReport", "rust/ui-pack/ui_pack_report.json"),
-        ]),
-        CompileScope::Textures => entries.extend([
-            ("rustTextureBin", "rust/textures.bin"),
-            ("rustAtlasMetaBin", "rust/atlas.meta.bin"),
-            ("rustAnimationBin", "rust/animations.bin"),
-        ]),
-    }
-    if debug_json {
-        match scope {
-            CompileScope::All => entries.extend([
-                ("rustBrowserPack", "rust/browser-pack.json"),
-                ("rustSearchPack", "rust/search-pack.json"),
-                ("rustRecipePack", "rust/recipe-pack.json"),
-                ("rustTexturePack", "rust/texture-pack.json"),
-            ]),
-            CompileScope::NativeUi => entries.extend([
-                ("rustBrowserPack", "rust/browser-pack.json"),
-                ("rustSearchPack", "rust/search-pack.json"),
-                ("rustRecipePack", "rust/recipe-pack.json"),
-            ]),
-            CompileScope::Search => entries.push(("rustSearchPack", "rust/search-pack.json")),
-            CompileScope::Browser => entries.extend([
-                ("rustBrowserPack", "rust/browser-pack.json"),
-                ("rustSearchPack", "rust/search-pack.json"),
-            ]),
-            CompileScope::Recipes => entries.push(("rustRecipePack", "rust/recipe-pack.json")),
-            CompileScope::Ui => {
-                entries.push(("rustUiPackReport", "rust/ui-pack/ui_pack_report.json"))
-            }
-            CompileScope::Textures => entries.push(("rustTexturePack", "rust/texture-pack.json")),
-        }
-    }
-    entries
+    runtime_manifest_file_entries(scope, debug_json)
 }
 
 pub fn runtime_id_from_integrity(integrity: &BTreeMap<String, String>) -> String {
@@ -271,148 +122,22 @@ pub fn compile_runtime_reports(
     scope: CompileScope,
     strict: bool,
     debug_json: bool,
-    captured_ui_family_key: CapturedUiFamilyKeyFn,
 ) -> Result<()> {
     let rust_dir = output.join("rust");
     fs::create_dir_all(&rust_dir)?;
-    compile_native_ui_layout_report(output, captured_ui_family_key)?;
-
-    let mut artifact_names = match scope {
-        CompileScope::All => vec![
-            "browser.bin",
-            "groups.bin",
-            "search.bin",
-            "recipes.bin",
-            "textures.bin",
-            "atlas.meta.bin",
-            "animations.bin",
-            "strings.zh_cn.bin",
-            "missing-texture-report.json",
-            "suspicious-texture-report.json",
-            "semantic-validation-report.json",
-            "recipe-handler-metadata-report.json",
-            "recipe-fragmentation-report.json",
-            "native-ui-layout-report.json",
-            "ui-pack/ui_templates.bin",
-            "ui-pack/ui_bindings.bin",
-            "ui-pack/ui_strings.bin",
-            "ui-pack/ui_assets.manifest.json",
-            "ui-pack/ui_template_catalog.json",
-            "ui-pack/ui_template_binding_index.json",
-            "ui-pack/ui_family_census.json",
-            "ui-pack/ui_pack_report.json",
-        ],
-        CompileScope::NativeUi => vec![
-            "browser.bin",
-            "groups.bin",
-            "search.bin",
-            "recipes.bin",
-            "strings.zh_cn.bin",
-            "semantic-validation-report.json",
-            "recipe-handler-metadata-report.json",
-            "recipe-fragmentation-report.json",
-            "native-ui-layout-report.json",
-            "ui-pack/ui_templates.bin",
-            "ui-pack/ui_bindings.bin",
-            "ui-pack/ui_strings.bin",
-            "ui-pack/ui_assets.manifest.json",
-            "ui-pack/ui_template_catalog.json",
-            "ui-pack/ui_template_binding_index.json",
-            "ui-pack/ui_family_census.json",
-            "ui-pack/ui_pack_report.json",
-        ],
-        CompileScope::Search => vec![
-            "search.bin",
-            "strings.zh_cn.bin",
-            "semantic-validation-report.json",
-        ],
-        CompileScope::Browser => vec![
-            "browser.bin",
-            "groups.bin",
-            "search.bin",
-            "strings.zh_cn.bin",
-            "semantic-validation-report.json",
-        ],
-        CompileScope::Recipes => vec![
-            "recipes.bin",
-            "semantic-validation-report.json",
-            "recipe-handler-metadata-report.json",
-            "recipe-fragmentation-report.json",
-            "native-ui-layout-report.json",
-        ],
-        CompileScope::Ui => vec![
-            "semantic-validation-report.json",
-            "ui-pack/ui_templates.bin",
-            "ui-pack/ui_bindings.bin",
-            "ui-pack/ui_strings.bin",
-            "ui-pack/ui_assets.manifest.json",
-            "ui-pack/ui_template_catalog.json",
-            "ui-pack/ui_template_binding_index.json",
-            "ui-pack/ui_family_census.json",
-            "ui-pack/ui_pack_report.json",
-        ],
-        CompileScope::Textures => vec![
-            "textures.bin",
-            "atlas.meta.bin",
-            "animations.bin",
-            "missing-texture-report.json",
-            "suspicious-texture-report.json",
-            "semantic-validation-report.json",
-        ],
-    };
-    if debug_json {
-        match scope {
-            CompileScope::All => artifact_names.extend([
-                "browser-pack.json",
-                "search-pack.json",
-                "recipe-pack.json",
-                "texture-pack.json",
-            ]),
-            CompileScope::NativeUi => {
-                artifact_names.extend(["browser-pack.json", "search-pack.json", "recipe-pack.json"])
-            }
-            CompileScope::Search => artifact_names.push("search-pack.json"),
-            CompileScope::Browser => {
-                artifact_names.extend(["browser-pack.json", "search-pack.json"])
-            }
-            CompileScope::Recipes => artifact_names.push("recipe-pack.json"),
-            CompileScope::Ui => {}
-            CompileScope::Textures => artifact_names.push("texture-pack.json"),
-        }
-    }
-    if !matches!(scope, CompileScope::All) {
-        for artifact_name in [
-            "browser.bin",
-            "groups.bin",
-            "search.bin",
-            "recipes.bin",
-            "textures.bin",
-            "atlas.meta.bin",
-            "animations.bin",
-            "strings.zh_cn.bin",
-            "ui-pack/ui_templates.bin",
-            "ui-pack/ui_bindings.bin",
-            "ui-pack/ui_strings.bin",
-            "ui-pack/ui_assets.manifest.json",
-            "ui-pack/ui_template_catalog.json",
-            "ui-pack/ui_template_binding_index.json",
-            "ui-pack/ui_family_census.json",
-            "native-ui-layout-report.json",
-        ] {
-            if !artifact_names.contains(&artifact_name) && rust_dir.join(artifact_name).exists() {
-                artifact_names.push(artifact_name);
-            }
-        }
-    }
     let mut files = Vec::new();
     let mut integrity = BTreeMap::new();
     let mut sizes = BTreeMap::new();
     let mut missing = Vec::new();
-    let mut path_violations = Vec::new();
 
-    for artifact_name in artifact_names {
-        let path = rust_dir.join(artifact_name);
-        let relative = format!("rust/{artifact_name}");
+    let mut artifact_paths = runtime_pack_artifact_specs(scope, debug_json)
+        .into_iter()
+        .map(|spec| spec.relative_path.to_string())
+        .collect::<Vec<_>>();
+    artifact_paths.push("rust/pack-validation-report.json".to_string());
+
+    for relative in artifact_paths {
+        let path = output.join(&relative);
         if !path.exists() {
             missing.push(relative.clone());
             continue;
@@ -422,8 +147,8 @@ pub fn compile_runtime_reports(
         integrity.insert(relative.clone(), hash);
         sizes.insert(relative.clone(), size);
         files.push(json!({
-            "path": relative,
-            "bytes": size,
+        "path": relative,
+        "bytes": size,
         }));
     }
 
@@ -452,20 +177,7 @@ pub fn compile_runtime_reports(
         }
     }
 
-    for entry in walkdir::WalkDir::new(&rust_dir)
-        .into_iter()
-        .filter_map(std::result::Result::ok)
-        .filter(|entry| entry.file_type().is_file())
-        .filter(|entry| is_text_runtime_artifact(entry.path()))
-    {
-        let path = entry.path();
-        let text = fs::read_to_string(path).unwrap_or_default();
-        for needle in ["E:\\", "C:\\", "\\\\", "file://"] {
-            if text.contains(needle) {
-                path_violations.push(format!("{} contains {}", normalize_path(path), needle));
-            }
-        }
-    }
+    let path_violations = collect_text_path_violations(&rust_dir)?;
 
     if strict && (!missing.is_empty() || !path_violations.is_empty()) {
         return Err(anyhow!(
@@ -635,8 +347,7 @@ fn update_dist_manifest_with_rust_runtime(
     }
 
     for (key, relative_path) in rust_manifest_file_entries(scope, debug_json) {
-        if integrity.contains_key(relative_path) || relative_path.ends_with("runtime-manifest.json")
-        {
+        if integrity.contains_key(relative_path) || output.join(relative_path).exists() {
             files.insert(key.to_string(), Value::String(relative_path.to_string()));
         }
     }
