@@ -21,6 +21,7 @@ mod schemas;
 mod stages;
 mod text;
 mod texture_animation;
+mod ui_pack_abi;
 mod ui_templates;
 mod validation;
 

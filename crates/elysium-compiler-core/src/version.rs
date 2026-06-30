@@ -22,6 +22,7 @@ pub fn schema_hash() -> String {
         "commands=compile,inspect,validate,schemas",
         "scopes=all,native-ui,search,browser,recipes,ui,textures",
         "raw-export-abi-validation=elysium-compiler/raw-export-abi-validation/v1",
+        "ui-pack-abi-validation=elysium-compiler/ui-pack-abi-validation/v1",
         "pack-abi-validation=elysium-compiler/pack-abi-validation/v1",
     ] {
         hasher.update(part.as_bytes());

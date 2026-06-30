@@ -178,7 +178,12 @@
           "textureRegionTable",
           "animationTable",
           "checksumTable"
-        ]
+        ],
+        "validationReport": {
+          "path": "rust/ui-pack-abi-validation-report.json",
+          "policy": "native UI binary envelope, section layout, string references, and sidecar schemaVersion are compile blockers",
+          "schemaVersion": "elysium-compiler/ui-pack-abi-validation/v1"
+        }
       },
       "requiredDirectories": [
         "packs/",
@@ -311,7 +316,7 @@
       "packAbiVersion": "elysium.pack.v1",
       "rawExportSchemaVersion": "1.0",
       "runtimeAbiVersion": "elysium.runtime.v1",
-      "schemaHash": "sha256:c8d907dd23dd0f107e5a5375bcbfc1281d9a62505b7dd7f9ad3b27a92215e7a0",
+      "schemaHash": "sha256:4857a142b997fb20fcfbffdd2d1cd5597231f99fb765448e291fe297e2a77ed0",
       "version": "0.1.0"
     },
     "name": "elysium-compiler"
@@ -337,6 +342,8 @@
     "runtimeManifest": "neonei/rust-runtime-manifest/current",
     "schemaVersion": "1.0",
     "uiPack": {
+      "abiValidationReport": "elysium-compiler/ui-pack-abi-validation/v1",
+      "abiValidationReportPath": "rust/ui-pack-abi-validation-report.json",
       "assetsManifest": "neonei/ui-assets-manifest/current",
       "bindingPackSchema": "neonei/ui-binding-pack/current",
       "report": "neonei/ui-pack-report/current",

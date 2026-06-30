@@ -108,6 +108,10 @@ pub fn summarize_runtime_output(output: Option<&Path>) -> Result<RuntimeSummary>
         ("uiStringsBin", "rust/ui-pack/ui_strings.bin"),
         ("uiAssetsManifest", "rust/ui-pack/ui_assets.manifest.json"),
         ("uiPackReport", "rust/ui-pack/ui_pack_report.json"),
+        (
+            "uiPackAbiValidationReport",
+            "rust/ui-pack-abi-validation-report.json",
+        ),
         ("nativeUiLayoutReport", "rust/native-ui-layout-report.json"),
         ("runtimeValidationReport", "validation/report.json"),
     ] {

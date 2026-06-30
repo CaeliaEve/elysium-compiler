@@ -1,0 +1,167 @@
+{
+  "artifacts": [
+    {
+      "bytes": 306,
+      "envelopeSchema": "neonei/ui-string-pack/current",
+      "kind": "binary-pack",
+      "logicalName": "rustUiStringsBin",
+      "path": "rust/ui-pack/ui_strings.bin",
+      "payloadMagic": "NEIUIS1_NUL",
+      "sections": [
+        {
+          "bytes": 44,
+          "name": "stringOffsets",
+          "rows": 11,
+          "strideU32": 1
+        },
+        {
+          "bytes": 189,
+          "name": "stringBytes",
+          "rows": 189,
+          "strideU32": 0
+        }
+      ],
+      "sha256": "b4552991eb37aec197aafc004eef9807ebbd4fc700cf8a9d0b3c63d7b8e80bfe",
+      "status": "present",
+      "version": 1
+    },
+    {
+      "bytes": 203,
+      "envelopeSchema": "neonei/ui-template-pack/current",
+      "kind": "binary-pack",
+      "logicalName": "rustUiTemplatesBin",
+      "path": "rust/ui-pack/ui_templates.bin",
+      "payloadMagic": "NEIUIT1_NUL",
+      "sections": [
+        {
+          "bytes": 76,
+          "name": "templates",
+          "rows": 1,
+          "strideU32": 19
+        },
+        {
+          "bytes": 24,
+          "name": "slots",
+          "rows": 1,
+          "strideU32": 6
+        },
+        {
+          "bytes": 0,
+          "name": "textOverlays",
+          "rows": 0,
+          "strideU32": 5
+        },
+        {
+          "bytes": 0,
+          "name": "hotspots",
+          "rows": 0,
+          "strideU32": 12
+        },
+        {
+          "bytes": 0,
+          "name": "viewports",
+          "rows": 0,
+          "strideU32": 12
+        }
+      ],
+      "sha256": "3f6a0cc38e4062b7b0cb19e56694cb376ccaeda5cc7c191587f3417860489327",
+      "status": "present",
+      "version": 3
+    },
+    {
+      "bytes": 118,
+      "envelopeSchema": "neonei/ui-binding-pack/current",
+      "kind": "binary-pack",
+      "logicalName": "rustUiBindingsBin",
+      "path": "rust/ui-pack/ui_bindings.bin",
+      "payloadMagic": "NEIUIB1_NUL",
+      "sections": [
+        {
+          "bytes": 44,
+          "name": "bindings",
+          "rows": 1,
+          "strideU32": 11
+        }
+      ],
+      "sha256": "561d6ffe5f14ace6ed166fa43a4046469722609d007a844156d97594b1d80012",
+      "status": "present",
+      "version": 1
+    },
+    {
+      "bytes": 123,
+      "envelopeSchema": null,
+      "kind": "manifest",
+      "logicalName": "rustUiAssetsManifest",
+      "path": "rust/ui-pack/ui_assets.manifest.json",
+      "payloadMagic": null,
+      "sections": [],
+      "sha256": "0be44a35213be439ab9e3591a8589d7737898bf33999d4dc69e49e3b7c276145",
+      "status": "present",
+      "version": null
+    },
+    {
+      "bytes": 1493,
+      "envelopeSchema": null,
+      "kind": "manifest",
+      "logicalName": "rustUiTemplateCatalog",
+      "path": "rust/ui-pack/ui_template_catalog.json",
+      "payloadMagic": null,
+      "sections": [],
+      "sha256": "ff752dc6a515e47e8b81cdaa8d23e0d209b8c8896b3bc0f2033a216abb78687d",
+      "status": "present",
+      "version": null
+    },
+    {
+      "bytes": 1082,
+      "envelopeSchema": null,
+      "kind": "manifest",
+      "logicalName": "rustUiTemplateBindingIndex",
+      "path": "rust/ui-pack/ui_template_binding_index.json",
+      "payloadMagic": null,
+      "sections": [],
+      "sha256": "b68cda01740583936d42c1390d63938bb2d09aa944fab47e002155f3e5d41ed1",
+      "status": "present",
+      "version": null
+    },
+    {
+      "bytes": 1225,
+      "envelopeSchema": null,
+      "kind": "report",
+      "logicalName": "rustUiFamilyCensus",
+      "path": "rust/ui-pack/ui_family_census.json",
+      "payloadMagic": null,
+      "sections": [],
+      "sha256": "536ca5408c0c9dbeeada0321156e402ac6b5e69efaf6cada00042806781469e4",
+      "status": "present",
+      "version": null
+    },
+    {
+      "bytes": 1294,
+      "envelopeSchema": null,
+      "kind": "report",
+      "logicalName": "rustUiPackReport",
+      "path": "rust/ui-pack/ui_pack_report.json",
+      "payloadMagic": null,
+      "sections": [],
+      "sha256": "8e14fc2e0f5d3395fdbd4437a87bfeba31cdf2d8a19bacfd5ab60d458bb44872",
+      "status": "present",
+      "version": null
+    }
+  ],
+  "compileScope": "native-ui",
+  "expectedArtifactCount": 8,
+  "generatedAt": "deterministic-rust-compiler",
+  "missingRequiredArtifacts": [],
+  "packAbiVersion": "elysium.pack.v1",
+  "policy": {
+    "binarySectionLayout": "UI binary sections must have exact magic, version, stride, and byte length",
+    "envelopeSchema": "NNEIBIN version 1 envelope schema must match the declared UI pack schema",
+    "legacyFallback": "forbidden",
+    "missingRequiredArtifact": "fail-closed",
+    "stringRefIntegrity": "all UI template and binding string references must resolve into ui_strings.bin"
+  },
+  "presentArtifactCount": 8,
+  "schemaVersion": "elysium-compiler/ui-pack-abi-validation/v1",
+  "sectionViolations": [],
+  "status": "ok"
+}

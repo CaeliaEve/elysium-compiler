@@ -1,4 +1,5 @@
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
+use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::version::{
     COMPILED_DIST_SCHEMA_VERSION, EXPORT_ABI_VERSION, PACK_ABI_VERSION, RAW_EXPORT_SCHEMA_VERSION,
     RUNTIME_ABI_VERSION,
@@ -107,6 +108,11 @@ fn pack_abi_catalog() -> Value {
         "nativeUiPack": {
             "path": "packs/native-ui.pack",
             "encoding": "binary",
+            "validationReport": {
+                "path": "rust/ui-pack-abi-validation-report.json",
+                "schemaVersion": UI_PACK_ABI_VALIDATION_SCHEMA_VERSION,
+                "policy": "native UI binary envelope, section layout, string references, and sidecar schemaVersion are compile blockers"
+            },
             "sections": [
                 "header",
                 "stringTable",

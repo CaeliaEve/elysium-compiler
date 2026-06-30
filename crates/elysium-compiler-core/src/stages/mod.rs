@@ -12,6 +12,7 @@ use crate::packs::ui::compile_ui_pack;
 use crate::raw_export_abi::write_raw_export_abi_validation_report;
 use crate::recipe_domain::captured_ui_family_key;
 use crate::runtime::{compile_runtime_reports, purge_debug_json_artifacts};
+use crate::ui_pack_abi::write_ui_pack_abi_validation_report;
 use crate::validation::compile_semantic_validation_report;
 use anyhow::{Context, Result};
 use serde_json::json;
@@ -83,6 +84,19 @@ pub fn run_compile_kernel(
                 &["compiler.native_ui_validator"],
             ),
             native_ui_layout_validation_stage,
+        ),
+        CompileStage::with_contract(
+            "validate-native-ui-pack-abi",
+            CompileStageContract::new(
+                &[
+                    "rust/ui-pack/ui_templates.bin",
+                    "rust/ui-pack/ui_bindings.bin",
+                    "rust/ui-pack/ui_strings.bin",
+                ],
+                &["rust/ui-pack-abi-validation-report.json"],
+                &["compiler.native_ui_pack_abi_validator"],
+            ),
+            native_ui_pack_abi_validation_stage,
         ),
         CompileStage::with_contract(
             "validate-pack-abi",
@@ -219,6 +233,11 @@ fn semantic_validation_stage(context: &mut CompileKernelContext<'_>) -> Result<(
 
 fn native_ui_layout_validation_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
     compile_native_ui_layout_report(context.output, captured_ui_family_key)?;
+    Ok(())
+}
+
+fn native_ui_pack_abi_validation_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
+    write_ui_pack_abi_validation_report(context.output, context.scope, context.strict)?;
     Ok(())
 }
 

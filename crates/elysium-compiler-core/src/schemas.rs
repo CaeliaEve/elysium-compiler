@@ -1,6 +1,7 @@
 use crate::abi::abi_catalog;
 use crate::io::write_json_value;
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
+use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::version::{
     metadata as compiler_metadata, COMPILED_DIST_SCHEMA_VERSION, RAW_EXPORT_SCHEMA_VERSION,
 };
@@ -80,6 +81,8 @@ pub fn schema_catalog() -> Value {
             "uiPack": {
                 "assetsManifest": "neonei/ui-assets-manifest/current",
                 "report": "neonei/ui-pack-report/current",
+                "abiValidationReport": UI_PACK_ABI_VALIDATION_SCHEMA_VERSION,
+                "abiValidationReportPath": "rust/ui-pack-abi-validation-report.json",
                 "templatePackSchema": "neonei/ui-template-pack/current",
                 "bindingPackSchema": "neonei/ui-binding-pack/current",
                 "stringPackSchema": "neonei/ui-string-pack/current"

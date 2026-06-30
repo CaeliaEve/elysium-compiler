@@ -28,6 +28,7 @@ use crate::runtime;
 use crate::texture_animation::{
     expected_animated_item, expected_animation_reason, promote_animation_facts_to_animated_atlas,
 };
+use crate::ui_pack_abi;
 use crate::ui_templates::{
     build_ui_assets_manifest, build_ui_template_bindings, materialize_ui_background_assets,
 };
@@ -980,6 +981,7 @@ fn production_manifest_entries_exclude_debug_json_packs() {
     assert!(production_entries.contains(&"rust/ui-pack/ui_pack_report.json"));
     assert!(production_entries.contains(&"rust/native-ui-layout-report.json"));
     assert!(production_entries.contains(&"rust/raw-export-abi-validation-report.json"));
+    assert!(production_entries.contains(&"rust/ui-pack-abi-validation-report.json"));
     assert!(production_entries.contains(&"rust/pack-validation-report.json"));
     assert!(production_entries.contains(&"rust/semantic-validation-report.json"));
     assert!(production_entries.contains(&"rust/recipe-handler-metadata-report.json"));
@@ -1008,6 +1010,7 @@ fn pack_abi_registry_is_scope_specific_and_fail_closed() {
     assert!(search_paths.contains(&"rust/search.bin"));
     assert!(search_paths.contains(&"rust/strings.zh_cn.bin"));
     assert!(search_paths.contains(&"rust/raw-export-abi-validation-report.json"));
+    assert!(search_paths.contains(&"rust/ui-pack-abi-validation-report.json"));
     assert!(search_paths.contains(&"rust/semantic-validation-report.json"));
     assert!(!search_paths.contains(&"rust/browser.bin"));
     assert!(!search_paths.contains(&"rust/ui-pack/ui_templates.bin"));
@@ -1019,6 +1022,24 @@ fn pack_abi_registry_is_scope_specific_and_fail_closed() {
     assert!(report
         .missing_required_artifacts
         .contains(&"rust/search.bin".to_string()));
+}
+
+#[test]
+fn ui_pack_abi_validation_blocks_corrupt_template_binary() {
+    let output = compile_fixture("raw-export-minimal", CompileScope::NativeUi, true);
+    let template_path = output.path().join("rust/ui-pack/ui_templates.bin");
+    let mut bytes = fs::read(&template_path).unwrap();
+    let payload_magic_offset = 24 + "neonei/ui-template-pack/current".len();
+    bytes[payload_magic_offset] = b'X';
+    fs::write(&template_path, bytes).unwrap();
+
+    let report = ui_pack_abi::validate_ui_pack_abi(output.path(), CompileScope::NativeUi).unwrap();
+    assert_eq!(report.status, "blocked");
+    assert!(report
+        .section_violations
+        .iter()
+        .any(|violation| violation.contains("ui_templates.bin")
+            && violation.contains("payload magic mismatch")));
 }
 
 #[test]
@@ -1200,6 +1221,17 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
         .as_array()
         .unwrap()
         .iter()
+        .any(
+            |stage| stage["stage"] == json!("validate-native-ui-pack-abi")
+                && stage["contract"]["capabilities"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!("compiler.native_ui_pack_abi_validator"))
+        ));
+    assert!(kernel_trace["stages"]
+        .as_array()
+        .unwrap()
+        .iter()
         .any(|stage| stage["stage"] == json!("validate-pack-abi")
             && stage["contract"]["capabilities"]
                 .as_array()
@@ -1248,6 +1280,11 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
         .as_array()
         .unwrap()
         .iter()
+        .any(|entry| entry["path"] == json!("rust/ui-pack-abi-validation-report.json")));
+    assert!(runtime_manifest["files"]
+        .as_array()
+        .unwrap()
+        .iter()
         .any(|entry| entry["path"] == json!("rust/pack-validation-report.json")));
 
     let raw_export_abi: serde_json::Value = serde_json::from_str(
@@ -1264,6 +1301,30 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
         raw_export_abi["policy"]["legacyFallback"],
         json!("forbidden")
     );
+
+    let ui_pack_abi: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(
+            output
+                .path()
+                .join("rust/ui-pack-abi-validation-report.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(ui_pack_abi["status"], json!("ok"));
+    assert_eq!(ui_pack_abi["policy"]["legacyFallback"], json!("forbidden"));
+    assert!(ui_pack_abi["artifacts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(
+            |entry| entry["path"] == json!("rust/ui-pack/ui_templates.bin")
+                && entry["sections"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|section| section["name"] == json!("templates"))
+        ));
 
     let pack_validation: serde_json::Value = serde_json::from_str(
         &fs::read_to_string(output.path().join("rust/pack-validation-report.json")).unwrap(),
@@ -1341,6 +1402,12 @@ fn scoped_compile_purges_out_of_scope_runtime_artifacts() {
         .unwrap()
         .iter()
         .any(|entry| entry["path"] == json!("rust/browser.bin")));
+    let ui_pack_validation = read_fixture_json(
+        output
+            .path()
+            .join("rust/ui-pack-abi-validation-report.json"),
+    );
+    assert_eq!(ui_pack_validation["status"], json!("skipped"));
 }
 
 #[test]
@@ -1357,6 +1424,7 @@ fn native_ui_gt_fixture_matches_expected_reports_and_copies_background_asset() {
         "rust/ui-pack/ui_family_census.json",
         "rust/integrity.json",
         "rust/raw-export-abi-validation-report.json",
+        "rust/ui-pack-abi-validation-report.json",
         "rust/pack-validation-report.json",
     ] {
         assert_expected_json_matches("raw-export-native-ui-gt", output.path(), relative_path);
@@ -1396,6 +1464,7 @@ fn semantic_background_only_fixture_compiles_without_materialized_asset() {
         "rust/ui-pack/ui_family_census.json",
         "rust/integrity.json",
         "rust/raw-export-abi-validation-report.json",
+        "rust/ui-pack-abi-validation-report.json",
         "rust/pack-validation-report.json",
     ] {
         assert_expected_json_matches(
@@ -1433,6 +1502,7 @@ fn sharded_recipes_fixture_compiles_all_declared_shards() {
         "rust/ui-pack/ui_template_binding_index.json",
         "rust/ui-pack/ui_family_census.json",
         "rust/raw-export-abi-validation-report.json",
+        "rust/ui-pack-abi-validation-report.json",
         "rust/pack-validation-report.json",
     ] {
         assert_expected_json_matches("raw-export-sharded-recipes", output.path(), relative_path);
@@ -1462,6 +1532,7 @@ fn texture_atlas_fixture_materializes_runtime_atlas_without_missing_refs() {
         "rust/ui-pack/ui_template_binding_index.json",
         "rust/ui-pack/ui_family_census.json",
         "rust/raw-export-abi-validation-report.json",
+        "rust/ui-pack-abi-validation-report.json",
     ] {
         assert_expected_json_matches("raw-export-texture-atlas", output.path(), relative_path);
     }
