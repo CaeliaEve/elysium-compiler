@@ -33,12 +33,14 @@ impl<'a> CompileKernelContext<'a> {
 
     pub fn stage_event(
         &mut self,
+        module: &str,
         stage: &str,
         status: &str,
         duration_ms: u128,
         contract: CompileStageContract,
     ) {
         self.events.push(json!({
+            "module": module,
             "stage": stage,
             "status": status,
             "durationMs": duration_ms,
@@ -77,18 +79,21 @@ impl CompileStageContract {
 }
 
 pub struct CompileStage {
+    module: &'static str,
     name: &'static str,
     contract: CompileStageContract,
     run: fn(&mut CompileKernelContext<'_>) -> anyhow::Result<()>,
 }
 
 impl CompileStage {
-    pub const fn with_contract(
+    pub const fn module_stage(
+        module: &'static str,
         name: &'static str,
         contract: CompileStageContract,
         run: fn(&mut CompileKernelContext<'_>) -> anyhow::Result<()>,
     ) -> Self {
         Self {
+            module,
             name,
             contract,
             run,
@@ -99,12 +104,50 @@ impl CompileStage {
         let start = Instant::now();
         let result = (self.run)(context);
         context.stage_event(
+            self.module,
             self.name,
             if result.is_ok() { "ok" } else { "failed" },
             start.elapsed().as_millis(),
             self.contract,
         );
         result
+    }
+}
+
+pub struct CompileStageRegistry {
+    stages: Vec<CompileStage>,
+}
+
+impl CompileStageRegistry {
+    pub fn new() -> Self {
+        Self { stages: Vec::new() }
+    }
+
+    pub fn register(&mut self, stage: CompileStage) {
+        self.stages.push(stage);
+    }
+
+    pub fn into_kernel(self) -> CompileKernel {
+        CompileKernel::new(self.stages)
+    }
+}
+
+pub struct CompileKernelModule {
+    name: &'static str,
+    register: fn(&mut CompileStageRegistry),
+}
+
+impl CompileKernelModule {
+    pub const fn new(name: &'static str, register: fn(&mut CompileStageRegistry)) -> Self {
+        Self { name, register }
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub fn register_stages(&self, registry: &mut CompileStageRegistry) {
+        (self.register)(registry);
     }
 }
 

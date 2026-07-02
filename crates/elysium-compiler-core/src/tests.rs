@@ -1212,6 +1212,12 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
         .as_array()
         .unwrap()
         .iter()
+        .any(|stage| stage["module"] == json!("compiler.runtime_packs")
+            && stage["stage"] == json!("emit-runtime-packs")));
+    assert!(kernel_trace["stages"]
+        .as_array()
+        .unwrap()
+        .iter()
         .any(|stage| stage["stage"] == json!("validate-raw-export-abi")
             && stage["contract"]["capabilities"]
                 .as_array()
