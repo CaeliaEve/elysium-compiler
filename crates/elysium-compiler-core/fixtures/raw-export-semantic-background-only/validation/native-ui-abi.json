@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "nesqlpp/raw-export/alpha1/native-ui-validation",
+  "generatedAtEpochMs": 0,
+  "status": "ok",
+  "layoutCount": 1,
+  "slotCount": 1,
+  "missingSurfaceCount": 0,
+  "slotBoundsViolationCount": 0,
+  "backgroundBoundsViolationCount": 0,
+  "coordinateContractViolationCount": 0,
+  "missingSurfaceSamples": [],
+  "slotBoundsSamples": [],
+  "backgroundBoundsSamples": [],
+  "coordinateContractSamples": []
+}

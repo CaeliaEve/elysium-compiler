@@ -17,7 +17,7 @@
     "packAbiVersion": "elysium.pack.v1",
     "rawExportSchemaVersion": "1.0",
     "runtimeAbiVersion": "elysium.runtime.v1",
-    "schemaHash": "sha256:4857a142b997fb20fcfbffdd2d1cd5597231f99fb765448e291fe297e2a77ed0",
+    "schemaHash": "sha256:d6685579638840fdb1b768e67506433da9f0948efa083bdc6421ab97ba1e3301",
     "version": "0.1.0"
   },
   "entrypoints": {
@@ -84,8 +84,12 @@
       "path": "rust/ui-pack/ui_pack_report.json"
     },
     {
-      "bytes": 3984,
+      "bytes": 4343,
       "path": "rust/raw-export-abi-validation-report.json"
+    },
+    {
+      "bytes": 1355,
+      "path": "rust/native-ui-export-abi-validation-report.json"
     },
     {
       "bytes": 4798,
@@ -108,7 +112,7 @@
       "path": "rust/native-ui-layout-report.json"
     },
     {
-      "bytes": 6535,
+      "bytes": 6881,
       "path": "rust/pack-validation-report.json"
     }
   ],
@@ -118,7 +122,7 @@
     "portableRelativePathsOnly": true,
     "windowsPathsAllowed": false
   },
-  "runtimeId": "rust-811a7a1e2e922cb4",
+  "runtimeId": "rust-988d114eca8c2563",
   "schema": "neonei/runtime/current",
   "schemaRevision": 1,
   "schemaVersion": "neonei/rust-runtime-manifest/current"

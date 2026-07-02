@@ -15,6 +15,8 @@ pub struct CompilerReport {
     pub raw_export: RawExportSummary,
     #[serde(rename = "rawExportAbi")]
     pub raw_export_abi: crate::raw_export_abi::RawExportAbiValidationReport,
+    #[serde(rename = "nativeUiExportAbi")]
+    pub native_ui_export_abi: crate::native_ui_export_abi::NativeUiExportAbiValidationReport,
     pub runtime: RuntimeSummary,
     pub warnings: Vec<String>,
     pub blocked: Vec<String>,
@@ -111,6 +113,10 @@ pub fn summarize_runtime_output(output: Option<&Path>) -> Result<RuntimeSummary>
         (
             "uiPackAbiValidationReport",
             "rust/ui-pack-abi-validation-report.json",
+        ),
+        (
+            "nativeUiExportAbiValidationReport",
+            "rust/native-ui-export-abi-validation-report.json",
         ),
         ("nativeUiLayoutReport", "rust/native-ui-layout-report.json"),
         ("runtimeValidationReport", "validation/report.json"),

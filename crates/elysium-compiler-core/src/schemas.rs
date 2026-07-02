@@ -1,5 +1,6 @@
 use crate::abi::abi_catalog;
 use crate::io::write_json_value;
+use crate::native_ui_export_abi::NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::version::{
@@ -37,6 +38,7 @@ pub fn schema_catalog() -> Value {
                     "neiHandlers",
                     "neiHandlerLayouts",
                     "uiTemplateCatalog",
+                    "nativeUiValidation",
                     "exportReport",
                     "neiBrowserContract",
                     "semanticFamilyAudit",
@@ -51,6 +53,13 @@ pub fn schema_catalog() -> Value {
                 "schemaVersion": RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
                 "policy": "missing required files, missing declared files, path violations, and legacy fallback are compile blockers"
             },
+            "nativeUiValidationReport": {
+                "rawExportPath": "validation/native-ui-abi.json",
+                "compilerReportPath": "rust/native-ui-export-abi-validation-report.json",
+                "schemaVersion": NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
+                "requiredRawSchemaVersion": "nesqlpp/raw-export/alpha1/native-ui-validation",
+                "policy": "missing native UI validation, blocked geometry reports, and schema mismatches are compile blockers"
+            },
             "nativeBackground": {
                 "requiredCapturedFields": ["status", "assetRef"],
                 "capturedStatus": "captured",
@@ -64,6 +73,7 @@ pub fn schema_catalog() -> Value {
             "manifest": "neonei/dist-data/current",
             "runtimeManifest": "neonei/rust-runtime-manifest/current",
             "rawExportAbiValidationReport": RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
+            "nativeUiExportAbiValidationReport": NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
             "packValidationReport": "elysium-compiler/pack-abi-validation/v1",
             "runtimeEntrypoints": [
                 "rust/browser.bin",

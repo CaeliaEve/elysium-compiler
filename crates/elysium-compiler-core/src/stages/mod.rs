@@ -3,6 +3,7 @@ use crate::kernel::{
     trace_report_path, CompileKernelContext, CompileKernelModule, CompileStage,
     CompileStageContract, CompileStageRegistry,
 };
+use crate::native_ui_export_abi::write_native_ui_export_abi_validation_report;
 use crate::native_ui_report::compile_native_ui_layout_report;
 use crate::pack_abi::{purge_out_of_scope_runtime_artifacts, write_pack_abi_validation_report};
 use crate::packs::browser::compile_browser_pack;
@@ -43,6 +44,10 @@ fn compile_kernel_modules() -> Vec<CompileKernelModule> {
     vec![
         CompileKernelModule::new("compiler.lifecycle", register_lifecycle_stages),
         CompileKernelModule::new("compiler.raw_export_abi", register_raw_export_abi_stages),
+        CompileKernelModule::new(
+            "compiler.native_ui_export_abi",
+            register_native_ui_export_abi_stages,
+        ),
         CompileKernelModule::new("compiler.runtime_packs", register_runtime_pack_stages),
         CompileKernelModule::new(
             "compiler.semantic_validation",
@@ -84,6 +89,19 @@ fn register_raw_export_abi_stages(registry: &mut CompileStageRegistry) {
             &["compiler.raw_export_abi_validator"],
         ),
         raw_export_abi_validation_stage,
+    ));
+}
+
+fn register_native_ui_export_abi_stages(registry: &mut CompileStageRegistry) {
+    registry.register(CompileStage::module_stage(
+        "compiler.native_ui_export_abi",
+        "validate-native-ui-export-abi",
+        CompileStageContract::new(
+            &["validation/native-ui-abi.json", "raw-export-manifest"],
+            &["rust/native-ui-export-abi-validation-report.json"],
+            &["compiler.native_ui_export_abi_validator"],
+        ),
+        native_ui_export_abi_validation_stage,
     ));
 }
 
@@ -284,6 +302,11 @@ fn emit_runtime_packs_stage(context: &mut CompileKernelContext<'_>) -> Result<()
 
 fn raw_export_abi_validation_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
     write_raw_export_abi_validation_report(context.input, context.output, context.strict)?;
+    Ok(())
+}
+
+fn native_ui_export_abi_validation_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
+    write_native_ui_export_abi_validation_report(context.input, context.output, context.strict)?;
     Ok(())
 }
 

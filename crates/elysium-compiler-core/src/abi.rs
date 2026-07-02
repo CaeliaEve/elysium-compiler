@@ -1,3 +1,4 @@
+use crate::native_ui_export_abi::NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::version::{
@@ -58,9 +59,10 @@ fn export_abi_catalog() -> Value {
             "requiredFiles": [
                 "native-ui/families.jsonl.zst",
                 "native-ui/surfaces.jsonl.zst",
-                "native-ui/slots.bin"
+                "native-ui/slots.bin",
+                "validation/native-ui-abi.json"
             ],
-            "coordinateSpace": "source-design-pixels",
+            "coordinateSpace": "nei_pixels",
             "runtimeTransform": "uniform-scale-to-fit-only",
             "fallbackPolicy": "missing required native UI capture is a validation error"
         },
@@ -72,6 +74,13 @@ fn export_abi_catalog() -> Value {
             "path": "rust/raw-export-abi-validation-report.json",
             "schemaVersion": RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
             "policy": "missing required raw files, missing declared raw files, and path violations are compile blockers"
+        },
+        "nativeUiValidationReport": {
+            "rawExportPath": "validation/native-ui-abi.json",
+            "compilerReportPath": "rust/native-ui-export-abi-validation-report.json",
+            "schemaVersion": NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
+            "rawSchemaVersion": "nesqlpp/raw-export/alpha1/native-ui-validation",
+            "policy": "compiler must consume the NESQL++ native UI ABI report before emitting runtime packs"
         }
     })
 }

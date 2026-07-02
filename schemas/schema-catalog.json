@@ -39,7 +39,7 @@
       "legacyRawExportSchemaVersion": "1.0",
       "name": "elysium.export",
       "nativeUi": {
-        "coordinateSpace": "source-design-pixels",
+        "coordinateSpace": "nei_pixels",
         "fallbackPolicy": "missing required native UI capture is a validation error",
         "requiredCapabilities": [
           "native_ui.surface",
@@ -49,9 +49,17 @@
         "requiredFiles": [
           "native-ui/families.jsonl.zst",
           "native-ui/surfaces.jsonl.zst",
-          "native-ui/slots.bin"
+          "native-ui/slots.bin",
+          "validation/native-ui-abi.json"
         ],
         "runtimeTransform": "uniform-scale-to-fit-only"
+      },
+      "nativeUiValidationReport": {
+        "compilerReportPath": "rust/native-ui-export-abi-validation-report.json",
+        "policy": "compiler must consume the NESQL++ native UI ABI report before emitting runtime packs",
+        "rawExportPath": "validation/native-ui-abi.json",
+        "rawSchemaVersion": "nesqlpp/raw-export/alpha1/native-ui-validation",
+        "schemaVersion": "elysium-compiler/native-ui-export-abi-validation/v1"
       },
       "requiredDirectories": [
         "raw/",
@@ -316,13 +324,14 @@
       "packAbiVersion": "elysium.pack.v1",
       "rawExportSchemaVersion": "1.0",
       "runtimeAbiVersion": "elysium.runtime.v1",
-      "schemaHash": "sha256:4857a142b997fb20fcfbffdd2d1cd5597231f99fb765448e291fe297e2a77ed0",
+      "schemaHash": "sha256:d6685579638840fdb1b768e67506433da9f0948efa083bdc6421ab97ba1e3301",
       "version": "0.1.0"
     },
     "name": "elysium-compiler"
   },
   "distData": {
     "manifest": "neonei/dist-data/current",
+    "nativeUiExportAbiValidationReport": "elysium-compiler/native-ui-export-abi-validation/v1",
     "packValidationReport": "elysium-compiler/pack-abi-validation/v1",
     "rawExportAbiValidationReport": "elysium-compiler/raw-export-abi-validation/v1",
     "recipeUiPayloadIndex": "neonei/recipe-ui-payload-index/v1",
@@ -362,6 +371,7 @@
         "neiHandlers",
         "neiHandlerLayouts",
         "uiTemplateCatalog",
+        "nativeUiValidation",
         "exportReport",
         "neiBrowserContract",
         "semanticFamilyAudit",
@@ -391,6 +401,13 @@
         "none"
       ],
       "strictPolicy": "a captured nativeBackground.assetRef must point to a materialized raw-export asset"
+    },
+    "nativeUiValidationReport": {
+      "compilerReportPath": "rust/native-ui-export-abi-validation-report.json",
+      "policy": "missing native UI validation, blocked geometry reports, and schema mismatches are compile blockers",
+      "rawExportPath": "validation/native-ui-abi.json",
+      "requiredRawSchemaVersion": "nesqlpp/raw-export/alpha1/native-ui-validation",
+      "schemaVersion": "elysium-compiler/native-ui-export-abi-validation/v1"
     },
     "schemaVersion": "1.0",
     "validationReport": {

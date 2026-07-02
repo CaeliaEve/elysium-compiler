@@ -1,5 +1,5 @@
 {
-  "declaredFileCount": 10,
+  "declaredFileCount": 11,
   "exportAbiVersion": "elysium.export.v2",
   "files": [
     {
@@ -44,6 +44,17 @@
       "required": true,
       "rowCount": 1,
       "sha256": "8c30eb072b5e22db5a5ac93ccc6b7b09558a2df348fb3b4fad50c3c5470c000c",
+      "status": "present"
+    },
+    {
+      "bytes": 437,
+      "kind": "file",
+      "logicalName": "nativeUiValidation",
+      "manifestPath": "validation/native-ui-abi.json",
+      "path": "validation/native-ui-abi.json",
+      "required": false,
+      "rowCount": null,
+      "sha256": "66a676e819f8a44993b56600438e5f980620b26ca15733c5a4de377c367d41cd",
       "status": "present"
     },
     {
@@ -124,7 +135,7 @@
     "missingRequiredFile": "fail-closed",
     "pathPortability": "portable-relative-raw-export-paths-only; no drive letters, UNC paths, file URLs, absolute paths, '.', or '..' segments"
   },
-  "presentFileCount": 10,
+  "presentFileCount": 11,
   "schemaVersion": "elysium-compiler/raw-export-abi-validation/v1",
   "status": "ok"
 }

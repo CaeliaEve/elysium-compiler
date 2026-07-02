@@ -1,5 +1,6 @@
 use crate::cli::CompileScope;
 use crate::io::{normalize_path, sha256_file, write_json_value};
+use crate::native_ui_export_abi::NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH;
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_REPORT_PATH;
 use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_REPORT_PATH;
 use crate::version::PACK_ABI_VERSION;
@@ -255,6 +256,13 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
     RuntimeArtifactSpec::new(
         "rustRawExportAbiValidationReport",
         RAW_EXPORT_ABI_VALIDATION_REPORT_PATH,
+        RuntimeArtifactKind::Report,
+        false,
+        SCOPE_EVERY,
+    ),
+    RuntimeArtifactSpec::new(
+        "rustNativeUiExportAbiValidationReport",
+        NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH,
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,

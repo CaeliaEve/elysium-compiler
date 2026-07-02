@@ -10,6 +10,7 @@
     "neiHandlerLayouts": "recipes/handler-layouts.json",
     "uiTemplateCatalog": "recipes/ui-template-catalog.json",
     "fluids": "fluids.jsonl",
-    "browserAtlasIndex": "browser-atlas-index.json"
+    "browserAtlasIndex": "browser-atlas-index.json",
+    "nativeUiValidation": "validation/native-ui-abi.json"
   }
 }

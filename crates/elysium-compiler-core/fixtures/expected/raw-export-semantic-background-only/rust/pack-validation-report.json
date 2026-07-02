@@ -131,13 +131,23 @@
       "status": "present"
     },
     {
-      "bytes": 3983,
+      "bytes": 4342,
       "debugOnly": false,
       "kind": "report",
       "logicalName": "rustRawExportAbiValidationReport",
       "path": "rust/raw-export-abi-validation-report.json",
       "required": true,
-      "sha256": "8ef8e9ce9923f375c5c585246a1b1c244b4c14d081ddbd03b40a1214351cab67",
+      "sha256": "8614633cf5b0ec26ab43c40cf185255cc5be6a7182cc800f2e41aae36e26671c",
+      "status": "present"
+    },
+    {
+      "bytes": 1355,
+      "debugOnly": false,
+      "kind": "report",
+      "logicalName": "rustNativeUiExportAbiValidationReport",
+      "path": "rust/native-ui-export-abi-validation-report.json",
+      "required": true,
+      "sha256": "5e335e444f6d247c9186951766896c5cdc17626d3f6d67786eff123ec89a0585",
       "status": "present"
     },
     {
@@ -193,7 +203,7 @@
   ],
   "compileScope": "native-ui",
   "debugJson": false,
-  "expectedArtifactCount": 19,
+  "expectedArtifactCount": 20,
   "generatedAt": "deterministic-rust-compiler",
   "missingRequiredArtifacts": [],
   "packAbiVersion": "elysium.pack.v1",
@@ -203,7 +213,7 @@
     "missingRequiredArtifact": "fail-closed",
     "pathPortability": "portable-relative-runtime-paths-only; no drive letters, UNC paths, or file URLs"
   },
-  "presentArtifactCount": 19,
+  "presentArtifactCount": 20,
   "schemaVersion": "elysium-compiler/pack-abi-validation/v1",
   "status": "ok"
 }
