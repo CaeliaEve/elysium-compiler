@@ -1,3 +1,6 @@
+use crate::compiler_capability_abi::{
+    SCHEMA_HASH_COMMANDS_INPUT, SCHEMA_HASH_COMPILER_CAPABILITY_INPUT, SCHEMA_HASH_SCOPES_INPUT,
+};
 use crate::native_ui_export_abi_catalog::NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_HASH_INPUT;
 
 pub const COMPILER_NAME: &str = "elysium-compiler";
@@ -21,8 +24,9 @@ pub fn schema_hash() -> String {
         EXPORT_ABI_VERSION,
         PACK_ABI_VERSION,
         RUNTIME_ABI_VERSION,
-        "commands=compile,inspect,validate,schemas",
-        "scopes=all,native-ui,search,browser,recipes,ui,textures",
+        SCHEMA_HASH_COMMANDS_INPUT,
+        SCHEMA_HASH_SCOPES_INPUT,
+        SCHEMA_HASH_COMPILER_CAPABILITY_INPUT,
         "raw-export-abi-validation=elysium-compiler/raw-export-abi-validation/v1",
         NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_HASH_INPUT,
         "ui-pack-abi-validation=elysium-compiler/ui-pack-abi-validation/v1",

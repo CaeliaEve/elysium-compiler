@@ -1,6 +1,11 @@
 use crate::atlas_repair::select_group_representative;
 use crate::cli::{Cli, Command, CompileScope};
 use crate::commands::run_command;
+use crate::compiler_capability_abi::{
+    COMPILER_COMMANDS, COMPILE_SCOPES, NATIVE_UI_COORDINATE_SPACE, NATIVE_UI_FALLBACK_POLICY,
+    NATIVE_UI_REQUIRED_CAPABILITIES, NATIVE_UI_REQUIRED_FILES, NATIVE_UI_RUNTIME_TRANSFORM,
+    REQUIRED_COMPILER_COMMANDS, SCHEMA_HASH_COMPILER_CAPABILITY_INPUT,
+};
 use crate::io::{normalize_path, write_json_value};
 use crate::json_ext::{value_string, value_u64};
 use crate::native_ui_export_abi;
@@ -1380,6 +1385,46 @@ fn stable_cli_inspect_validate_and_schemas_cover_fixture_contracts() {
         .as_array()
         .unwrap()
         .contains(&json!("schemas")));
+    assert_eq!(
+        schemas["compiler"]["cli"]["commands"],
+        json!(COMPILER_COMMANDS)
+    );
+    assert_eq!(
+        schemas["compiler"]["cli"]["compileScopes"],
+        json!(COMPILE_SCOPES)
+    );
+    assert_eq!(
+        schemas["abi"]["compilerCapabilityAbi"]["requiredCommands"],
+        json!(REQUIRED_COMPILER_COMMANDS)
+    );
+    assert_eq!(
+        schemas["abi"]["compilerCapabilityAbi"]["nativeUi"]["requiredCapabilities"],
+        json!(NATIVE_UI_REQUIRED_CAPABILITIES)
+    );
+    assert_eq!(
+        schemas["abi"]["compilerCapabilityAbi"]["nativeUi"]["requiredFiles"],
+        json!(NATIVE_UI_REQUIRED_FILES)
+    );
+    assert_eq!(
+        schemas["abi"]["exportAbi"]["nativeUi"]["requiredFiles"],
+        json!(NATIVE_UI_REQUIRED_FILES)
+    );
+    assert_eq!(
+        schemas["abi"]["compilerCapabilityAbi"]["nativeUi"]["coordinateSpace"],
+        json!(NATIVE_UI_COORDINATE_SPACE)
+    );
+    assert_eq!(
+        schemas["abi"]["compilerCapabilityAbi"]["nativeUi"]["runtimeTransform"],
+        json!(NATIVE_UI_RUNTIME_TRANSFORM)
+    );
+    assert_eq!(
+        schemas["abi"]["compilerCapabilityAbi"]["nativeUi"]["fallbackPolicy"],
+        json!(NATIVE_UI_FALLBACK_POLICY)
+    );
+    assert_eq!(
+        schemas["abi"]["compilerCapabilityAbi"]["schemaHashInputs"]["compilerCapabilityAbi"],
+        json!(SCHEMA_HASH_COMPILER_CAPABILITY_INPUT)
+    );
     assert_eq!(
         schemas["rawExport"]["nativeBackground"]["strictPolicy"],
         json!("a captured nativeBackground.assetRef must point to a materialized raw-export asset")

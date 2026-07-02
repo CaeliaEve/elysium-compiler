@@ -20,7 +20,7 @@
     "packAbiVersion": "elysium.pack.v1",
     "rawExportSchemaVersion": "1.0",
     "runtimeAbiVersion": "elysium.runtime.v1",
-    "schemaHash": "sha256:d6685579638840fdb1b768e67506433da9f0948efa083bdc6421ab97ba1e3301",
+    "schemaHash": "sha256:e2f2ddb74d2908b32f2ed84180b168ceeae61c5c564c0b8a805b5cc4cb317f50",
     "version": "0.1.0"
   },
   "entrypoints": {

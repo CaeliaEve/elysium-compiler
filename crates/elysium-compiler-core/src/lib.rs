@@ -3,6 +3,7 @@ mod atlas_repair;
 mod binary;
 pub mod cli;
 pub mod commands;
+mod compiler_capability_abi;
 mod diagnostics;
 mod io;
 mod json_ext;

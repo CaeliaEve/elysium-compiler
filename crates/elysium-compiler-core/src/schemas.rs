@@ -1,4 +1,5 @@
 use crate::abi::abi_catalog;
+use crate::compiler_capability_abi::{COMPILER_COMMANDS, COMPILE_SCOPES};
 use crate::io::write_json_value;
 use crate::native_ui_export_abi_catalog::{
     NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH, NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
@@ -23,8 +24,8 @@ pub fn schema_catalog() -> Value {
             "currentCrate": "elysium-compiler-core",
             "metadata": compiler_metadata(),
             "cli": {
-                "commands": ["compile", "inspect", "validate", "schemas"],
-                "compileScopes": ["all", "native-ui", "search", "browser", "recipes", "ui", "textures"]
+                "commands": COMPILER_COMMANDS,
+                "compileScopes": COMPILE_SCOPES
             }
         },
         "rawExport": {

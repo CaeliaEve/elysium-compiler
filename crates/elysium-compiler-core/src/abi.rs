@@ -1,3 +1,9 @@
+use crate::compiler_capability_abi::{
+    compiler_capability_abi_catalog, COMPILER_POLICY_FULL_EXPORT_VALIDATION,
+    COMPILER_POLICY_HOT_PATH_ENCODING, COMPILER_POLICY_LEGACY_FALLBACK,
+    COMPILER_POLICY_MISSING_CAPABILITY, NATIVE_UI_COORDINATE_SPACE, NATIVE_UI_FALLBACK_POLICY,
+    NATIVE_UI_REQUIRED_CAPABILITIES, NATIVE_UI_REQUIRED_FILES, NATIVE_UI_RUNTIME_TRANSFORM,
+};
 use crate::native_ui_export_abi_catalog::{
     native_ui_export_abi_catalog, NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH,
     NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION, NATIVE_UI_VALIDATION_DEFAULT_PATH,
@@ -19,6 +25,7 @@ pub fn abi_catalog() -> Value {
             "obsolete": "The ABI or path is scheduled for removal after the replacement is authoritative.",
             "removed": "Historical record only; implementations must not depend on it."
         },
+        "compilerCapabilityAbi": compiler_capability_abi_catalog(),
         "exportAbi": export_abi_catalog(),
         "nativeUiExportAbi": native_ui_export_abi_catalog(),
         "packAbi": pack_abi_catalog(),
@@ -28,10 +35,10 @@ pub fn abi_catalog() -> Value {
         "featureMatrix": feature_matrix_catalog(),
         "traceEvents": trace_event_catalog(),
         "policy": {
-            "legacyFallback": "forbidden",
-            "missingCapability": "fail-fast",
-            "hotPathEncoding": "binary-pack-preferred",
-            "fullExportValidation": "milestone-gate-only"
+            "legacyFallback": COMPILER_POLICY_LEGACY_FALLBACK,
+            "missingCapability": COMPILER_POLICY_MISSING_CAPABILITY,
+            "hotPathEncoding": COMPILER_POLICY_HOT_PATH_ENCODING,
+            "fullExportValidation": COMPILER_POLICY_FULL_EXPORT_VALIDATION
         }
     })
 }
@@ -56,20 +63,11 @@ fn export_abi_catalog() -> Value {
             "reports/"
         ],
         "nativeUi": {
-            "requiredCapabilities": [
-                "native_ui.surface",
-                "native_ui.design_space_coordinates",
-                "native_ui.background_asset"
-            ],
-            "requiredFiles": [
-                "native-ui/families.jsonl.zst",
-                "native-ui/surfaces.jsonl.zst",
-                "native-ui/slots.bin",
-                NATIVE_UI_VALIDATION_DEFAULT_PATH
-            ],
-            "coordinateSpace": "nei_pixels",
-            "runtimeTransform": "uniform-scale-to-fit-only",
-            "fallbackPolicy": "missing required native UI capture is a validation error"
+            "requiredCapabilities": NATIVE_UI_REQUIRED_CAPABILITIES,
+            "requiredFiles": NATIVE_UI_REQUIRED_FILES,
+            "coordinateSpace": NATIVE_UI_COORDINATE_SPACE,
+            "runtimeTransform": NATIVE_UI_RUNTIME_TRANSFORM,
+            "fallbackPolicy": NATIVE_UI_FALLBACK_POLICY
         },
         "fileContract": {
             "requiredMetadata": ["schemaVersion", "producer", "checksum", "rowCountOrSize"],
