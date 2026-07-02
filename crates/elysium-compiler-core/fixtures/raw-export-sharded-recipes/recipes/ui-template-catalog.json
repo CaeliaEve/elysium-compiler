@@ -27,7 +27,16 @@
           "x": 45,
           "y": 24,
           "width": 16,
-          "height": 16
+          "height": 16,
+          "startIndex": 0,
+          "columns": 1,
+          "rows": 1,
+          "coordinateSpace": "nei_pixels",
+          "anchor": "top-left",
+          "slotWidth": 18,
+          "slotHeight": 18,
+          "pitchX": 18,
+          "pitchY": 18
         }
       ],
       "progressBars": [

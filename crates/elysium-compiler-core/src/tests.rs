@@ -805,8 +805,8 @@ fn compact_ui_pack_uses_shared_native_string_table() {
         "imageResource": "textures/gui/furnace.png",
         "handlerCount": 1,
         "slots": [
-            { "role": "item-input", "startIndex": 0, "columns": 1, "rows": 1, "x": 45, "y": 24 },
-            { "role": "item-output", "startIndex": 1, "columns": 1, "rows": 1, "x": 115, "y": 24 }
+            { "role": "item-input", "startIndex": 0, "columns": 1, "rows": 1, "x": 45, "y": 24, "coordinateSpace": "nei_pixels", "anchor": "top-left", "slotWidth": 18, "slotHeight": 18, "pitchX": 18, "pitchY": 18 },
+            { "role": "item-output", "startIndex": 1, "columns": 1, "rows": 1, "x": 115, "y": 24, "coordinateSpace": "nei_pixels", "anchor": "top-left", "slotWidth": 18, "slotHeight": 18, "pitchX": 18, "pitchY": 18 }
         ],
         "textOverlays": [{ "text": "EU/t", "x": 80, "y": 10, "width": 24, "height": 8 }]
     })];
@@ -831,7 +831,7 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     assert_eq!(&template_payload[0..8], b"NEIUIT1\0");
     assert_eq!(
         u32::from_le_bytes(template_payload[8..12].try_into().unwrap()),
-        3
+        4
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[12..16].try_into().unwrap()),
@@ -856,6 +856,10 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     assert_eq!(
         u32::from_le_bytes(template_payload[32..36].try_into().unwrap()),
         19
+    );
+    assert_eq!(
+        u32::from_le_bytes(template_payload[36..40].try_into().unwrap()),
+        12
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[44..48].try_into().unwrap()),

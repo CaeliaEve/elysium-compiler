@@ -19,6 +19,14 @@ const UI_STRING_SCHEMA: &str = "neonei/ui-string-pack/current";
 const UI_TEMPLATE_MAGIC: &[u8; 8] = b"NEIUIT1\0";
 const UI_BINDING_MAGIC: &[u8; 8] = b"NEIUIB1\0";
 const UI_STRING_MAGIC: &[u8; 8] = b"NEIUIS1\0";
+const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 4;
+const UI_BINDING_PAYLOAD_VERSION: u32 = 1;
+const UI_STRING_PAYLOAD_VERSION: u32 = 1;
+const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 19;
+const UI_SLOT_ROW_STRIDE_U32: u32 = 12;
+const UI_TEXT_ROW_STRIDE_U32: u32 = 5;
+const UI_RECT_ROW_STRIDE_U32: u32 = 12;
+const UI_BINDING_ROW_STRIDE_U32: u32 = 11;
 
 #[derive(Clone, Copy, Debug)]
 enum UiPackArtifactKind {
@@ -450,11 +458,11 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
     let slot_stride = read_u32(payload, 36)?;
     let text_stride = read_u32(payload, 40)?;
     let rect_stride = read_u32(payload, 44)?;
-    if version != 3
-        || template_stride != 19
-        || slot_stride != 6
-        || text_stride != 5
-        || rect_stride != 12
+    if version != UI_TEMPLATE_PAYLOAD_VERSION
+        || template_stride != UI_TEMPLATE_ROW_STRIDE_U32
+        || slot_stride != UI_SLOT_ROW_STRIDE_U32
+        || text_stride != UI_TEXT_ROW_STRIDE_U32
+        || rect_stride != UI_RECT_ROW_STRIDE_U32
     {
         return Err(anyhow!(
             "template section contract mismatch: version={}, templateStride={}, slotStride={}, textStride={}, rectStride={}",
@@ -499,7 +507,7 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
             header_bytes + template_bytes,
             slot_count,
             slot_stride,
-            &[0],
+            &[0, 6, 7],
             string_count,
         )?;
         validate_string_refs(
@@ -546,7 +554,7 @@ fn validate_binding_payload(payload: &[u8], string_count: u32) -> Result<UiPaylo
     let version = read_u32(payload, 8)?;
     let binding_count = read_u32(payload, 12)?;
     let row_stride = read_u32(payload, 16)?;
-    if version != 1 || row_stride != 11 {
+    if version != UI_BINDING_PAYLOAD_VERSION || row_stride != UI_BINDING_ROW_STRIDE_U32 {
         return Err(anyhow!(
             "binding section contract mismatch: version={}, rowStride={}",
             version,
@@ -588,7 +596,7 @@ fn validate_string_payload(payload: &[u8]) -> Result<UiPayloadValidation> {
     let version = read_u32(payload, 8)?;
     let string_count = read_u32(payload, 12)?;
     let string_bytes_len = read_u32(payload, 16)?;
-    if version != 1 {
+    if version != UI_STRING_PAYLOAD_VERSION {
         return Err(anyhow!(
             "string section contract mismatch: version={}",
             version

@@ -1,7 +1,7 @@
 {
   "artifacts": [
     {
-      "bytes": 371,
+      "bytes": 399,
       "envelopeSchema": "neonei/ui-string-pack/current",
       "kind": "binary-pack",
       "logicalName": "rustUiStringsBin",
@@ -9,24 +9,24 @@
       "payloadMagic": "NEIUIS1_NUL",
       "sections": [
         {
-          "bytes": 52,
+          "bytes": 60,
           "name": "stringOffsets",
-          "rows": 13,
+          "rows": 15,
           "strideU32": 1
         },
         {
-          "bytes": 246,
+          "bytes": 266,
           "name": "stringBytes",
-          "rows": 246,
+          "rows": 266,
           "strideU32": 0
         }
       ],
-      "sha256": "3c1b5a23a332c7e94cfc5439513c5cda6ac700610ddce5ba8c117d08c2043391",
+      "sha256": "df7e84ac9ef6bad835fc1c24da314aa6aa2c608b58aa2ce9c84d86510d1e5f67",
       "status": "present",
       "version": 1
     },
     {
-      "bytes": 203,
+      "bytes": 227,
       "envelopeSchema": "neonei/ui-template-pack/current",
       "kind": "binary-pack",
       "logicalName": "rustUiTemplatesBin",
@@ -40,10 +40,10 @@
           "strideU32": 19
         },
         {
-          "bytes": 24,
+          "bytes": 48,
           "name": "slots",
           "rows": 1,
-          "strideU32": 6
+          "strideU32": 12
         },
         {
           "bytes": 0,
@@ -64,9 +64,9 @@
           "strideU32": 12
         }
       ],
-      "sha256": "3f6a0cc38e4062b7b0cb19e56694cb376ccaeda5cc7c191587f3417860489327",
+      "sha256": "10c14c32ca99a0d24fc236aaac26d219fe1d069d76be940bd25ed8fd6940a241",
       "status": "present",
-      "version": 3
+      "version": 4
     },
     {
       "bytes": 162,
@@ -83,7 +83,7 @@
           "strideU32": 11
         }
       ],
-      "sha256": "e728415f147fe6c46a2f6d682f53446588ea3aea909fa04b38a0f12c7378c36b",
+      "sha256": "117cedde49ebc4c15e74e12cd4428ba897b91043faa39e825e6644d1c90d33be",
       "status": "present",
       "version": 1
     },
@@ -100,14 +100,14 @@
       "version": null
     },
     {
-      "bytes": 1569,
+      "bytes": 1819,
       "envelopeSchema": null,
       "kind": "manifest",
       "logicalName": "rustUiTemplateCatalog",
       "path": "rust/ui-pack/ui_template_catalog.json",
       "payloadMagic": null,
       "sections": [],
-      "sha256": "c9b7c1b66d5e2571953f765831edbf22344f437fdc9d5199c72d1fc8521dbf43",
+      "sha256": "e8023c10088de2bf02cad0af54826c24d33c4e00080d24771bae40e253a4f040",
       "status": "present",
       "version": null
     },
@@ -136,14 +136,14 @@
       "version": null
     },
     {
-      "bytes": 1472,
+      "bytes": 1619,
       "envelopeSchema": null,
       "kind": "report",
       "logicalName": "rustUiPackReport",
       "path": "rust/ui-pack/ui_pack_report.json",
       "payloadMagic": null,
       "sections": [],
-      "sha256": "a8081716e45d171d962936ef0496e05d1bf506c6459e2d0062362d53fa5beb39",
+      "sha256": "554d5b0aa9ae86fb7108d2de3a63019a4dda4176102a266e846d2425d8483f00",
       "status": "present",
       "version": null
     }

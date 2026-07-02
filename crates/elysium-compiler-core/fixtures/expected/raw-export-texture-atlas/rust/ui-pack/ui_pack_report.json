@@ -25,9 +25,17 @@
     ],
     "hotspotActionFields": true,
     "rectStride": 12,
-    "slotStride": 6,
+    "slotGeometryFields": [
+      "coordinateSpace",
+      "anchor",
+      "slotWidth",
+      "slotHeight",
+      "pitchX",
+      "pitchY"
+    ],
+    "slotStride": 12,
     "templatePackMagic": "NEIUIT1_NUL",
-    "templatePackVersion": 3,
+    "templatePackVersion": 4,
     "templateStride": 19,
     "textStride": 5
   },
@@ -45,7 +53,7 @@
     "hotspotActionCount": 0,
     "hotspotCount": 0,
     "slotCount": 1,
-    "stringCount": 11,
+    "stringCount": 13,
     "templateCount": 1,
     "textOverlayCount": 0,
     "unboundRecipeCount": 0,

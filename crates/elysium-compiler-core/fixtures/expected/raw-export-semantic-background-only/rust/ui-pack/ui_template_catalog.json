@@ -46,8 +46,17 @@
       ],
       "slots": [
         {
+          "anchor": "top-left",
+          "columns": 1,
+          "coordinateSpace": "nei_pixels",
           "height": 16,
+          "pitchX": 18,
+          "pitchY": 18,
           "role": "item-input",
+          "rows": 1,
+          "slotHeight": 18,
+          "slotWidth": 18,
+          "startIndex": 0,
           "width": 16,
           "x": 45,
           "y": 24

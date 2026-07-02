@@ -18,6 +18,17 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 4;
+const UI_BINDING_PAYLOAD_VERSION: u32 = 1;
+const UI_STRING_PAYLOAD_VERSION: u32 = 1;
+const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 19;
+const UI_SLOT_ROW_STRIDE_U32: u32 = 12;
+const UI_TEXT_ROW_STRIDE_U32: u32 = 5;
+const UI_RECT_ROW_STRIDE_U32: u32 = 12;
+const UI_BINDING_ROW_STRIDE_U32: u32 = 11;
+const NATIVE_UI_COORDINATE_SPACE: &str = "nei_pixels";
+const NATIVE_UI_ANCHOR: &str = "top-left";
+
 pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: bool) -> Result<()> {
     let manifest = read_manifest(input)?;
     let template_catalog = read_manifest_json(input, &manifest, "uiTemplateCatalog")?;
@@ -171,13 +182,14 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
             },
             "format": {
                 "templatePackMagic": "NEIUIT1_NUL",
-                "templatePackVersion": 3,
-                "templateStride": 19,
-                "slotStride": 6,
-                "textStride": 5,
-                "rectStride": 12,
+                "templatePackVersion": UI_TEMPLATE_PAYLOAD_VERSION,
+                "templateStride": UI_TEMPLATE_ROW_STRIDE_U32,
+                "slotStride": UI_SLOT_ROW_STRIDE_U32,
+                "textStride": UI_TEXT_ROW_STRIDE_U32,
+                "rectStride": UI_RECT_ROW_STRIDE_U32,
                 "hotspotActionFields": true,
                 "hotspotActionFieldNames": ["action", "itemId", "payloadKey"],
+                "slotGeometryFields": ["coordinateSpace", "anchor", "slotWidth", "slotHeight", "pitchX", "pitchY"],
             },
             "artifacts": {
                 "uiTemplates": "rust/ui-pack/ui_templates.bin",
@@ -215,19 +227,66 @@ pub fn build_compact_ui_template_payload(
             for slot in slots {
                 push_u32(
                     &mut slot_bytes,
-                    intern_compact_string(strings, string_refs, value_string(slot, "role")),
+                    intern_compact_string(
+                        strings,
+                        string_refs,
+                        Some(required_slot_string(slot, "role")?),
+                    ),
                 );
                 push_u32(
                     &mut slot_bytes,
-                    value_u64(slot, "startIndex").unwrap_or(0) as u32,
+                    required_slot_u32(slot, "startIndex", SlotFieldPolicy::NonNegative)?,
                 );
                 push_u32(
                     &mut slot_bytes,
-                    value_u64(slot, "columns").unwrap_or(0) as u32,
+                    required_slot_u32(slot, "columns", SlotFieldPolicy::Positive)?,
                 );
-                push_u32(&mut slot_bytes, value_u64(slot, "rows").unwrap_or(0) as u32);
-                push_i32(&mut slot_bytes, value_i64(slot, "x").unwrap_or(0) as i32);
-                push_i32(&mut slot_bytes, value_i64(slot, "y").unwrap_or(0) as i32);
+                push_u32(
+                    &mut slot_bytes,
+                    required_slot_u32(slot, "rows", SlotFieldPolicy::Positive)?,
+                );
+                push_i32(&mut slot_bytes, required_slot_i32(slot, "x")?);
+                push_i32(&mut slot_bytes, required_slot_i32(slot, "y")?);
+                push_u32(
+                    &mut slot_bytes,
+                    intern_compact_string(
+                        strings,
+                        string_refs,
+                        Some(required_slot_contract_string(
+                            slot,
+                            "coordinateSpace",
+                            NATIVE_UI_COORDINATE_SPACE,
+                        )?),
+                    ),
+                );
+                push_u32(
+                    &mut slot_bytes,
+                    intern_compact_string(
+                        strings,
+                        string_refs,
+                        Some(required_slot_contract_string(
+                            slot,
+                            "anchor",
+                            NATIVE_UI_ANCHOR,
+                        )?),
+                    ),
+                );
+                push_u32(
+                    &mut slot_bytes,
+                    required_slot_u32(slot, "slotWidth", SlotFieldPolicy::Positive)?,
+                );
+                push_u32(
+                    &mut slot_bytes,
+                    required_slot_u32(slot, "slotHeight", SlotFieldPolicy::Positive)?,
+                );
+                push_u32(
+                    &mut slot_bytes,
+                    required_slot_u32(slot, "pitchX", SlotFieldPolicy::Positive)?,
+                );
+                push_u32(
+                    &mut slot_bytes,
+                    required_slot_u32(slot, "pitchY", SlotFieldPolicy::Positive)?,
+                );
                 slot_count += 1;
             }
         }
@@ -345,22 +404,70 @@ pub fn build_compact_ui_template_payload(
             + viewport_bytes.len(),
     );
     payload.extend_from_slice(b"NEIUIT1\0");
-    push_u32(&mut payload, 3);
+    push_u32(&mut payload, UI_TEMPLATE_PAYLOAD_VERSION);
     push_u32(&mut payload, templates.len() as u32);
     push_u32(&mut payload, slot_count);
     push_u32(&mut payload, text_count);
     push_u32(&mut payload, hotspot_count);
     push_u32(&mut payload, viewport_count);
-    push_u32(&mut payload, 19);
-    push_u32(&mut payload, 6);
-    push_u32(&mut payload, 5);
-    push_u32(&mut payload, 12);
+    push_u32(&mut payload, UI_TEMPLATE_ROW_STRIDE_U32);
+    push_u32(&mut payload, UI_SLOT_ROW_STRIDE_U32);
+    push_u32(&mut payload, UI_TEXT_ROW_STRIDE_U32);
+    push_u32(&mut payload, UI_RECT_ROW_STRIDE_U32);
     payload.extend_from_slice(&template_bytes);
     payload.extend_from_slice(&slot_bytes);
     payload.extend_from_slice(&text_bytes);
     payload.extend_from_slice(&hotspot_bytes);
     payload.extend_from_slice(&viewport_bytes);
     Ok(payload)
+}
+
+enum SlotFieldPolicy {
+    NonNegative,
+    Positive,
+}
+
+fn required_slot_string(slot: &Value, key: &str) -> Result<String> {
+    let value = value_string(slot, key)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow!("ui template slot missing required string field: {key}"))?;
+    Ok(value)
+}
+
+fn required_slot_contract_string(slot: &Value, key: &str, expected: &str) -> Result<String> {
+    let value = required_slot_string(slot, key)?;
+    if value != expected {
+        return Err(anyhow!(
+            "ui template slot field {key} must be {expected}, got {value}"
+        ));
+    }
+    Ok(value)
+}
+
+fn required_slot_u32(slot: &Value, key: &str, policy: SlotFieldPolicy) -> Result<u32> {
+    let value = value_u64(slot, key)
+        .ok_or_else(|| anyhow!("ui template slot missing required integer field: {key}"))?;
+    match policy {
+        SlotFieldPolicy::NonNegative => {}
+        SlotFieldPolicy::Positive if value == 0 => {
+            return Err(anyhow!("ui template slot field must be positive: {key}"));
+        }
+        SlotFieldPolicy::Positive => {}
+    }
+    if value > u32::MAX as u64 {
+        return Err(anyhow!("ui template slot field exceeds u32: {key}={value}"));
+    }
+    Ok(value as u32)
+}
+
+fn required_slot_i32(slot: &Value, key: &str) -> Result<i32> {
+    let value = value_i64(slot, key)
+        .ok_or_else(|| anyhow!("ui template slot missing required signed integer field: {key}"))?;
+    if value < i32::MIN as i64 || value > i32::MAX as i64 {
+        return Err(anyhow!("ui template slot field exceeds i32: {key}={value}"));
+    }
+    Ok(value as i32)
 }
 
 fn push_compact_ui_rect(
@@ -423,9 +530,9 @@ pub fn build_compact_ui_binding_payload(
     }
     let mut payload = Vec::with_capacity(8 + 3 * 4 + row_bytes.len());
     payload.extend_from_slice(b"NEIUIB1\0");
-    push_u32(&mut payload, 1);
+    push_u32(&mut payload, UI_BINDING_PAYLOAD_VERSION);
     push_u32(&mut payload, bindings.len() as u32);
-    push_u32(&mut payload, 11);
+    push_u32(&mut payload, UI_BINDING_ROW_STRIDE_U32);
     payload.extend_from_slice(&row_bytes);
     Ok(payload)
 }
@@ -440,7 +547,7 @@ pub fn build_compact_ui_string_payload(strings: &[String]) -> Result<Vec<u8>> {
     }
     let mut payload = Vec::with_capacity(8 + 3 * 4 + string_offsets.len() * 4 + string_bytes.len());
     payload.extend_from_slice(b"NEIUIS1\0");
-    push_u32(&mut payload, 1);
+    push_u32(&mut payload, UI_STRING_PAYLOAD_VERSION);
     push_u32(&mut payload, strings.len() as u32);
     push_u32(&mut payload, string_bytes.len() as u32);
     for offset in string_offsets {
