@@ -47,14 +47,14 @@
       "status": "present"
     },
     {
-      "bytes": 533,
+      "bytes": 694,
       "kind": "file",
       "logicalName": "nativeUiValidation",
       "manifestPath": "validation/native-ui-abi.json",
       "path": "validation/native-ui-abi.json",
       "required": false,
       "rowCount": null,
-      "sha256": "2c9fedafecb8bd53a7db48cf9f306bfe1d8d3a6974e7f3bc915868ac71e386ac",
+      "sha256": "42da724599c5d1983eb605c2c4d78eb0224730563d58401e4190f88afc620fff",
       "status": "present"
     },
     {

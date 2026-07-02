@@ -14,5 +14,10 @@
   "coordinateContractSamples": [],
   "primitiveCount": 0,
   "primitiveBoundsViolationCount": 0,
-  "primitiveBoundsSamples": []
+  "primitiveBoundsSamples": [],
+  "rectCount": 0,
+  "rectBoundsViolationCount": 0,
+  "interactionContractViolationCount": 0,
+  "rectBoundsSamples": [],
+  "interactionContractSamples": []
 }

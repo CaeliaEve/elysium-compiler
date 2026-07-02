@@ -18,19 +18,24 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 5;
+const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 6;
 const UI_BINDING_PAYLOAD_VERSION: u32 = 1;
 const UI_STRING_PAYLOAD_VERSION: u32 = 1;
-const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 19;
+const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 22;
 const UI_SLOT_ROW_STRIDE_U32: u32 = 12;
 const UI_TEXT_ROW_STRIDE_U32: u32 = 7;
-const UI_RECT_ROW_STRIDE_U32: u32 = 14;
+const UI_RECT_ROW_STRIDE_U32: u32 = 18;
 const UI_BINDING_ROW_STRIDE_U32: u32 = 11;
 const NATIVE_UI_COORDINATE_SPACE: &str = "nei_pixels";
 const NATIVE_UI_ANCHOR: &str = "top-left";
 const NATIVE_UI_SCALE_MODE: &str = "uniform-scale";
 const NATIVE_UI_GT_BACKGROUND_KIND: &str = "gt-modular-ui";
 const NATIVE_UI_BACKGROUND_SCALING_NINE_SLICE: &str = "nine-slice";
+const NATIVE_UI_INTERACTION_KIND_NONE: &str = "none";
+const NATIVE_UI_INTERACTION_KIND_ITEM_CLICK: &str = "item-click";
+const NATIVE_UI_INTERACTION_TARGET_NONE: &str = "none";
+const NATIVE_UI_INTERACTION_TARGET_ITEM: &str = "item";
+const NATIVE_UI_INTERACTION_PAYLOAD_SCHEMA: &str = "neonei/native-ui-interaction/v1";
 
 pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: bool) -> Result<()> {
     let manifest = read_manifest(input)?;
@@ -191,10 +196,12 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
                 "slotStride": UI_SLOT_ROW_STRIDE_U32,
                 "textStride": UI_TEXT_ROW_STRIDE_U32,
                 "rectStride": UI_RECT_ROW_STRIDE_U32,
-                "hotspotActionFields": true,
-                "hotspotActionFieldNames": ["action", "itemId", "payloadKey"],
+                "surfaceContractFields": ["coordinateSpace", "scaleMode", "anchor"],
+                "hotspotActionFields": false,
+                "hotspotActionFieldNames": [],
                 "slotGeometryFields": ["coordinateSpace", "anchor", "slotWidth", "slotHeight", "pitchX", "pitchY"],
                 "rectGeometryFields": ["coordinateSpace", "anchor"],
+                "interactionContractFields": ["interactionKind", "interactionTargetKind", "interactionTargetId", "interactionPayloadSchema"],
                 "backgroundContractFields": ["coordinateSpace", "scaleMode", "anchor", "status", "kind", "scaling", "texture", "recipeBackgroundOffset", "recipeBackgroundSize"],
             },
             "artifacts": {
@@ -235,7 +242,7 @@ pub fn build_compact_ui_template_payload(
         )?;
         let template_anchor =
             required_template_contract_string(template, "anchor", NATIVE_UI_ANCHOR)?;
-        let _template_scale_mode =
+        let template_scale_mode =
             required_template_contract_string(template, "scaleMode", NATIVE_UI_SCALE_MODE)?;
         let slot_start = slot_count;
         if let Some(slots) = template.get("slots").and_then(Value::as_array) {
@@ -446,6 +453,22 @@ pub fn build_compact_ui_template_payload(
         push_u32(&mut template_bytes, hotspot_total);
         push_u32(&mut template_bytes, viewport_start);
         push_u32(&mut template_bytes, viewport_total);
+        push_u32(
+            &mut template_bytes,
+            intern_compact_string(
+                strings,
+                string_refs,
+                Some(template_coordinate_space.clone()),
+            ),
+        );
+        push_u32(
+            &mut template_bytes,
+            intern_compact_string(strings, string_refs, Some(template_scale_mode.clone())),
+        );
+        push_u32(
+            &mut template_bytes,
+            intern_compact_string(strings, string_refs, Some(template_anchor.clone())),
+        );
     }
 
     let mut payload = Vec::with_capacity(
@@ -741,6 +764,58 @@ fn required_slot_i32(slot: &Value, key: &str) -> Result<i32> {
     Ok(value as i32)
 }
 
+struct UiRectInteractionContract {
+    kind: String,
+    target_kind: String,
+    target_id: String,
+    payload_schema: String,
+}
+
+fn resolve_rect_interaction_contract(rect: &Value) -> Result<UiRectInteractionContract> {
+    let kind = required_string(rect, "interactionKind", "ui template rect")?;
+    let target_kind = required_string(rect, "interactionTargetKind", "ui template rect")?;
+    let payload_schema = required_rect_contract_string(
+        rect,
+        "interactionPayloadSchema",
+        NATIVE_UI_INTERACTION_PAYLOAD_SCHEMA,
+    )?;
+    let target_id = value_string(rect, "interactionTargetId")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    match (kind.as_str(), target_kind.as_str()) {
+        (NATIVE_UI_INTERACTION_KIND_NONE, NATIVE_UI_INTERACTION_TARGET_NONE) => {
+            if !target_id.is_empty() {
+                return Err(anyhow!(
+                    "ui template rect interactionTargetId must be empty for non-interactive rects"
+                ));
+            }
+        }
+        (NATIVE_UI_INTERACTION_KIND_ITEM_CLICK, NATIVE_UI_INTERACTION_TARGET_ITEM) => {
+            if target_id.is_empty() {
+                return Err(anyhow!(
+                    "ui template rect item-click interaction requires interactionTargetId"
+                ));
+            }
+        }
+        _ => {
+            return Err(anyhow!(
+                "ui template rect unsupported interaction contract: kind={}, targetKind={}",
+                kind,
+                target_kind
+            ));
+        }
+    }
+
+    Ok(UiRectInteractionContract {
+        kind,
+        target_kind,
+        target_id,
+        payload_schema,
+    })
+}
+
 fn push_compact_ui_rect(
     bytes: &mut Vec<u8>,
     strings: &mut Vec<String>,
@@ -749,6 +824,7 @@ fn push_compact_ui_rect(
     coordinate_space: &str,
     anchor: &str,
 ) -> Result<()> {
+    let interaction = resolve_rect_interaction_contract(rect)?;
     for key in [
         "id",
         "kind",
@@ -788,6 +864,17 @@ fn push_compact_ui_rect(
             Some(required_rect_contract_string(rect, "anchor", anchor)?),
         ),
     );
+    for value in [
+        interaction.kind,
+        interaction.target_kind,
+        interaction.target_id,
+        interaction.payload_schema,
+    ] {
+        push_u32(
+            bytes,
+            intern_compact_string(strings, string_refs, Some(value)),
+        );
+    }
     Ok(())
 }
 

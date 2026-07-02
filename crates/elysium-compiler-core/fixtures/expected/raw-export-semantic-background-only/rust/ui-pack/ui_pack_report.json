@@ -24,17 +24,19 @@
       "recipeBackgroundOffset",
       "recipeBackgroundSize"
     ],
-    "hotspotActionFieldNames": [
-      "action",
-      "itemId",
-      "payloadKey"
+    "hotspotActionFieldNames": [],
+    "hotspotActionFields": false,
+    "interactionContractFields": [
+      "interactionKind",
+      "interactionTargetKind",
+      "interactionTargetId",
+      "interactionPayloadSchema"
     ],
-    "hotspotActionFields": true,
     "rectGeometryFields": [
       "coordinateSpace",
       "anchor"
     ],
-    "rectStride": 14,
+    "rectStride": 18,
     "slotGeometryFields": [
       "coordinateSpace",
       "anchor",
@@ -44,9 +46,14 @@
       "pitchY"
     ],
     "slotStride": 12,
+    "surfaceContractFields": [
+      "coordinateSpace",
+      "scaleMode",
+      "anchor"
+    ],
     "templatePackMagic": "NEIUIT1_NUL",
-    "templatePackVersion": 5,
-    "templateStride": 19,
+    "templatePackVersion": 6,
+    "templateStride": 22,
     "textStride": 7
   },
   "generatedAt": "deterministic-rust-compiler",
@@ -63,7 +70,7 @@
     "hotspotActionCount": 0,
     "hotspotCount": 0,
     "slotCount": 1,
-    "stringCount": 13,
+    "stringCount": 14,
     "templateCount": 1,
     "textOverlayCount": 0,
     "unboundRecipeCount": 0,

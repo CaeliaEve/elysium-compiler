@@ -842,7 +842,7 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     assert_eq!(&template_payload[0..8], b"NEIUIT1\0");
     assert_eq!(
         u32::from_le_bytes(template_payload[8..12].try_into().unwrap()),
-        5
+        6
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[12..16].try_into().unwrap()),
@@ -866,7 +866,7 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[32..36].try_into().unwrap()),
-        19
+        22
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[36..40].try_into().unwrap()),
@@ -878,7 +878,7 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[44..48].try_into().unwrap()),
-        14
+        18
     );
     assert_eq!(&binding_payload[0..8], b"NEIUIB1\0");
     assert_eq!(
