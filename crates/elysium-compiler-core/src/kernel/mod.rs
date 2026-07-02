@@ -3,6 +3,9 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+pub const COMPILE_KERNEL_TRACE_SCHEMA_VERSION: &str = "elysium-compiler/compile-kernel-trace/v1";
+pub const COMPILE_KERNEL_TRACE_REPORT_PATH: &str = "rust/compile-kernel-trace.json";
+
 #[derive(Debug)]
 pub struct CompileKernelContext<'a> {
     pub input: &'a Path,
@@ -100,6 +103,10 @@ impl CompileStage {
         }
     }
 
+    pub fn from_descriptor(module: &'static str, descriptor: CompileStageDescriptor) -> Self {
+        Self::module_stage(module, descriptor.name, descriptor.contract, descriptor.run)
+    }
+
     pub fn run(&self, context: &mut CompileKernelContext<'_>) -> anyhow::Result<()> {
         let start = Instant::now();
         let result = (self.run)(context);
@@ -111,6 +118,35 @@ impl CompileStage {
             self.contract,
         );
         result
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct CompileStageDescriptor {
+    name: &'static str,
+    contract: CompileStageContract,
+    run: fn(&mut CompileKernelContext<'_>) -> anyhow::Result<()>,
+}
+
+impl CompileStageDescriptor {
+    pub const fn new(
+        name: &'static str,
+        contract: CompileStageContract,
+        run: fn(&mut CompileKernelContext<'_>) -> anyhow::Result<()>,
+    ) -> Self {
+        Self {
+            name,
+            contract,
+            run,
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub fn contract(&self) -> CompileStageContract {
+        self.contract
     }
 }
 
@@ -127,27 +163,34 @@ impl CompileStageRegistry {
         self.stages.push(stage);
     }
 
+    pub fn register_module(&mut self, module: CompileKernelModule) {
+        for descriptor in module.stages {
+            self.register(CompileStage::from_descriptor(module.name, *descriptor));
+        }
+    }
+
     pub fn into_kernel(self) -> CompileKernel {
         CompileKernel::new(self.stages)
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct CompileKernelModule {
     name: &'static str,
-    register: fn(&mut CompileStageRegistry),
+    stages: &'static [CompileStageDescriptor],
 }
 
 impl CompileKernelModule {
-    pub const fn new(name: &'static str, register: fn(&mut CompileStageRegistry)) -> Self {
-        Self { name, register }
+    pub const fn new(name: &'static str, stages: &'static [CompileStageDescriptor]) -> Self {
+        Self { name, stages }
     }
 
     pub fn name(&self) -> &'static str {
         self.name
     }
 
-    pub fn register_stages(&self, registry: &mut CompileStageRegistry) {
-        (self.register)(registry);
+    pub fn stages(&self) -> &'static [CompileStageDescriptor] {
+        self.stages
     }
 }
 
@@ -169,5 +212,5 @@ impl CompileKernel {
 }
 
 pub fn trace_report_path(output: &Path) -> PathBuf {
-    output.join("rust").join("compile-kernel-trace.json")
+    output.join(COMPILE_KERNEL_TRACE_REPORT_PATH)
 }

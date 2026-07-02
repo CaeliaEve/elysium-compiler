@@ -7,6 +7,7 @@ use crate::native_ui_export_abi_catalog::{
 };
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::runtime_manifest_abi::RUST_RUNTIME_MANIFEST_SCHEMA_VERSION;
+use crate::stages::compile_kernel_catalog;
 use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::version::{
     metadata as compiler_metadata, COMPILED_DIST_SCHEMA_VERSION, RAW_EXPORT_SCHEMA_VERSION,
@@ -27,7 +28,8 @@ pub fn schema_catalog() -> Value {
             "cli": {
                 "commands": COMPILER_COMMANDS,
                 "compileScopes": COMPILE_SCOPES
-            }
+            },
+            "compileKernel": compile_kernel_catalog()
         },
         "rawExport": {
             "schemaVersion": RAW_EXPORT_SCHEMA_VERSION,

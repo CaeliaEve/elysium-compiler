@@ -8,6 +8,7 @@ use crate::compiler_capability_abi::{
 };
 use crate::io::{normalize_path, write_json_value};
 use crate::json_ext::{value_string, value_u64};
+use crate::kernel::{COMPILE_KERNEL_TRACE_REPORT_PATH, COMPILE_KERNEL_TRACE_SCHEMA_VERSION};
 use crate::native_ui_export_abi;
 use crate::native_ui_pack_abi::{
     UI_BINDING_MAGIC, UI_BINDING_PAYLOAD_VERSION, UI_PRIMITIVE_ROW_STRIDE_U32,
@@ -40,6 +41,7 @@ use crate::runtime_manifest_abi::{
     RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION, RUST_RUNTIME_SCHEMA,
     RUST_RUNTIME_SCHEMA_REVISION, SCHEMA_HASH_RUNTIME_MANIFEST_INPUT,
 };
+use crate::stages::{compile_kernel_catalog, compile_kernel_modules};
 use crate::texture_animation::{
     expected_animated_item, expected_animation_reason, promote_animation_facts_to_animated_atlas,
 };
@@ -1398,6 +1400,42 @@ fn stable_cli_inspect_validate_and_schemas_cover_fixture_contracts() {
         json!(COMPILE_SCOPES)
     );
     assert_eq!(
+        schemas["compiler"]["compileKernel"]["schemaVersion"],
+        json!("elysium-compiler/compile-kernel-catalog/v1")
+    );
+    assert_eq!(
+        schemas["compiler"]["compileKernel"]["trace"]["schemaVersion"],
+        json!(COMPILE_KERNEL_TRACE_SCHEMA_VERSION)
+    );
+    assert_eq!(
+        schemas["compiler"]["compileKernel"]["trace"]["path"],
+        json!(COMPILE_KERNEL_TRACE_REPORT_PATH)
+    );
+    assert_eq!(
+        schemas["compiler"]["compileKernel"]["moduleCount"],
+        json!(compile_kernel_modules().len())
+    );
+    let catalog_stage_count: usize = compile_kernel_modules()
+        .iter()
+        .map(|module| module.stages().len())
+        .sum();
+    assert_eq!(
+        schemas["compiler"]["compileKernel"]["stageCount"],
+        json!(catalog_stage_count)
+    );
+    assert!(schemas["compiler"]["compileKernel"]["modules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|module| module["name"] == json!("compiler.runtime_packs")
+            && module["stages"].as_array().unwrap().iter().any(|stage| {
+                stage["name"] == json!("emit-runtime-packs")
+                    && stage["contract"]["capabilities"]
+                        .as_array()
+                        .unwrap()
+                        .contains(&json!("compiler.native_ui_pack"))
+            })));
+    assert_eq!(
         schemas["abi"]["compilerCapabilityAbi"]["requiredCommands"],
         json!(REQUIRED_COMPILER_COMMANDS)
     );
@@ -1698,6 +1736,54 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
         ui_family_census["schemaVersion"],
         json!("neonei/ui-family-census/current")
     );
+}
+
+#[test]
+fn compile_kernel_catalog_is_authoritative_for_trace_contracts() {
+    let catalog = compile_kernel_catalog();
+    let modules = catalog["modules"].as_array().unwrap();
+    let descriptor_count: usize = compile_kernel_modules()
+        .iter()
+        .map(|module| module.stages().len())
+        .sum();
+
+    assert_eq!(catalog["stageCount"], json!(descriptor_count));
+    assert_eq!(
+        catalog["trace"]["schemaVersion"],
+        json!(COMPILE_KERNEL_TRACE_SCHEMA_VERSION)
+    );
+    assert_eq!(
+        catalog["trace"]["path"],
+        json!(COMPILE_KERNEL_TRACE_REPORT_PATH)
+    );
+
+    let stage_pairs = modules
+        .iter()
+        .flat_map(|module| {
+            module["stages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(move |stage| (module["name"].clone(), stage.clone()))
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(stage_pairs.len(), descriptor_count);
+    assert!(stage_pairs.iter().any(|(module, stage)| {
+        module == &json!("compiler.native_ui_export_abi")
+            && stage["name"] == json!("validate-native-ui-export-abi")
+            && stage["contract"]["outputs"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("rust/native-ui-export-abi-validation-report.json"))
+    }));
+    assert!(stage_pairs.iter().any(|(module, stage)| {
+        module == &json!("compiler.trace")
+            && stage["name"] == json!("emit-kernel-trace")
+            && stage["contract"]["outputs"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(COMPILE_KERNEL_TRACE_REPORT_PATH))
+    }));
 }
 
 #[test]

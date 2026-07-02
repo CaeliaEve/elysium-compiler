@@ -1,5 +1,56 @@
 {
   "abi": {
+    "compilerCapabilityAbi": {
+      "commands": [
+        "compile",
+        "inspect",
+        "validate",
+        "schemas"
+      ],
+      "compileScopes": [
+        "all",
+        "native-ui",
+        "search",
+        "browser",
+        "recipes",
+        "ui",
+        "textures"
+      ],
+      "name": "elysium.compiler.capability",
+      "nativeUi": {
+        "coordinateSpace": "nei_pixels",
+        "fallbackPolicy": "missing required native UI capture is a validation error",
+        "requiredCapabilities": [
+          "native_ui.surface",
+          "native_ui.design_space_coordinates",
+          "native_ui.background_asset"
+        ],
+        "requiredFiles": [
+          "native-ui/families.jsonl.zst",
+          "native-ui/surfaces.jsonl.zst",
+          "native-ui/slots.bin",
+          "validation/native-ui-abi.json"
+        ],
+        "runtimeTransform": "uniform-scale-to-fit-only"
+      },
+      "policy": {
+        "fullExportValidation": "milestone-gate-only",
+        "hotPathEncoding": "binary-pack-preferred",
+        "legacyFallback": "forbidden",
+        "missingCapability": "fail-fast"
+      },
+      "requiredCommands": [
+        "schemas",
+        "validate",
+        "compile"
+      ],
+      "schemaHashInputs": {
+        "commands": "commands=compile,inspect,validate,schemas",
+        "compilerCapabilityAbi": "compiler-capability-abi=elysium.compiler.capability.v1",
+        "scopes": "scopes=all,native-ui,search,browser,recipes,ui,textures"
+      },
+      "version": "elysium.compiler.capability.v1"
+    },
     "controlAbi": {
       "endpoints": [
         "/control/abi",
@@ -169,6 +220,45 @@
         "failureMode"
       ]
     },
+    "nativeUiExportAbi": {
+      "policy": {
+        "blockedRawReport": "fail-closed",
+        "geometryContract": "layouts, slots, and rect primitives must be bounded, surface-complete, and use NEI pixel coordinates with uniform scaling",
+        "legacyFallback": "forbidden",
+        "missingReport": "fail-closed",
+        "pathPortability": "portable-relative raw-export path only; expected validation/native-ui-abi.json",
+        "schemaMismatch": "fail-closed"
+      },
+      "requiredPositiveCounters": [
+        "layoutCount",
+        "slotCount"
+      ],
+      "sampleFields": [
+        "missingSurfaceSamples",
+        "slotBoundsSamples",
+        "rectBoundsSamples",
+        "primitiveBoundsSamples",
+        "backgroundBoundsSamples",
+        "coordinateContractSamples",
+        "interactionContractSamples"
+      ],
+      "validationReport": {
+        "manifestKey": "nativeUiValidation",
+        "path": "rust/native-ui-export-abi-validation-report.json",
+        "rawExportPath": "validation/native-ui-abi.json",
+        "rawSchemaVersion": "nesqlpp/raw-export/alpha1/native-ui-validation",
+        "schemaVersion": "elysium-compiler/native-ui-export-abi-validation/v1"
+      },
+      "zeroViolationCounters": [
+        "missingSurfaceCount",
+        "slotBoundsViolationCount",
+        "rectBoundsViolationCount",
+        "primitiveBoundsViolationCount",
+        "backgroundBoundsViolationCount",
+        "coordinateContractViolationCount",
+        "interactionContractViolationCount"
+      ]
+    },
     "packAbi": {
       "hotPathPolicy": "JSON is for manifests, schemas, reports, and diagnostics; runtime hot paths prefer binary packs.",
       "legacyCompiledDistSchemaVersion": "1.0",
@@ -248,6 +338,130 @@
       "status": "testing",
       "version": "elysium.runtime.v1"
     },
+    "runtimeManifestAbi": {
+      "capabilitiesByScope": {
+        "all": [
+          "atlas.static",
+          "atlas.animated",
+          "atlas.meta",
+          "groups.collapse",
+          "groups.semantic-nbt",
+          "recipes.lookup",
+          "recipes.native-ui-layout",
+          "search.zh-cn",
+          "strings.zh-cn",
+          "native-render.webgl2",
+          "recipes.ui-pack"
+        ],
+        "browser": [
+          "groups.collapse",
+          "groups.semantic-nbt",
+          "search.zh-cn",
+          "strings.zh-cn",
+          "native-render.webgl2"
+        ],
+        "native-ui": [
+          "groups.collapse",
+          "groups.semantic-nbt",
+          "recipes.lookup",
+          "recipes.native-ui-layout",
+          "recipes.ui-pack",
+          "search.zh-cn",
+          "strings.zh-cn",
+          "native-render.webgl2"
+        ],
+        "recipes": [
+          "recipes.lookup",
+          "recipes.native-ui-layout"
+        ],
+        "search": [
+          "search.zh-cn",
+          "strings.zh-cn"
+        ],
+        "textures": [
+          "atlas.static",
+          "atlas.animated",
+          "atlas.meta"
+        ],
+        "ui": [
+          "recipes.ui-pack",
+          "native-render.webgl2"
+        ]
+      },
+      "entrypoints": [
+        {
+          "key": "browser",
+          "path": "rust/browser.bin"
+        },
+        {
+          "key": "groups",
+          "path": "rust/groups.bin"
+        },
+        {
+          "key": "search",
+          "path": "rust/search.bin"
+        },
+        {
+          "key": "recipes",
+          "path": "rust/recipes.bin"
+        },
+        {
+          "key": "textures",
+          "path": "rust/textures.bin"
+        },
+        {
+          "key": "atlasMeta",
+          "path": "rust/atlas.meta.bin"
+        },
+        {
+          "key": "animations",
+          "path": "rust/animations.bin"
+        },
+        {
+          "key": "stringsZhCn",
+          "path": "rust/strings.zh_cn.bin"
+        },
+        {
+          "key": "uiTemplates",
+          "path": "rust/ui-pack/ui_templates.bin"
+        },
+        {
+          "key": "uiBindings",
+          "path": "rust/ui-pack/ui_bindings.bin"
+        },
+        {
+          "key": "uiStrings",
+          "path": "rust/ui-pack/ui_strings.bin"
+        }
+      ],
+      "name": "neonei.runtime.manifest",
+      "nativeRuntimeDistSchemaVersion": "neonei/native-runtime-dist/current",
+      "pathPolicy": {
+        "absolutePathsAllowed": false,
+        "name": "portable-relative-runtime-paths-only; no drive letters, UNC paths, or file URLs",
+        "portableRelativePathsOnly": true,
+        "windowsPathsAllowed": false
+      },
+      "paths": {
+        "deploymentReport": "rust/deployment-report.json",
+        "integrity": "rust/integrity.json",
+        "migrationReadiness": "rust/migration-readiness.json",
+        "missingDataReport": "rust/missing-data-report.json",
+        "runtimeManifest": "rust/runtime-manifest.json",
+        "sizeReport": "rust/size-report.json"
+      },
+      "reportSchemas": {
+        "deploymentReport": "neonei/rust-deployment-report/current",
+        "integrity": "neonei/rust-integrity/current",
+        "migrationReadiness": "neonei/rust-migration-readiness/current",
+        "missingDataReport": "neonei/rust-missing-data-report/current",
+        "sizeReport": "neonei/rust-size-report/current"
+      },
+      "runtimeSchema": "neonei/runtime/current",
+      "schemaHashInput": "runtime-manifest-abi=neonei/rust-runtime-manifest/current;revision=1",
+      "schemaRevision": 1,
+      "schemaVersion": "neonei/rust-runtime-manifest/current"
+    },
     "stabilityLevels": {
       "obsolete": "The ABI or path is scheduled for removal after the replacement is authoritative.",
       "removed": "Historical record only; implementations must not depend on it.",
@@ -316,6 +530,232 @@
         "textures"
       ]
     },
+    "compileKernel": {
+      "moduleCount": 9,
+      "modules": [
+        {
+          "name": "compiler.lifecycle",
+          "stageCount": 1,
+          "stages": [
+            {
+              "contract": {
+                "capabilities": [
+                  "compiler.lifecycle.prepare"
+                ],
+                "inputs": [
+                  "compile-options"
+                ],
+                "outputs": [
+                  "output-directory",
+                  "debug-json-policy"
+                ]
+              },
+              "name": "prepare-output"
+            }
+          ]
+        },
+        {
+          "name": "compiler.raw_export_abi",
+          "stageCount": 1,
+          "stages": [
+            {
+              "contract": {
+                "capabilities": [
+                  "compiler.raw_export_abi_validator"
+                ],
+                "inputs": [
+                  "raw-export-manifest"
+                ],
+                "outputs": [
+                  "rust/raw-export-abi-validation-report.json"
+                ]
+              },
+              "name": "validate-raw-export-abi"
+            }
+          ]
+        },
+        {
+          "name": "compiler.native_ui_export_abi",
+          "stageCount": 1,
+          "stages": [
+            {
+              "contract": {
+                "capabilities": [
+                  "compiler.native_ui_export_abi_validator"
+                ],
+                "inputs": [
+                  "validation/native-ui-abi.json",
+                  "raw-export-manifest"
+                ],
+                "outputs": [
+                  "rust/native-ui-export-abi-validation-report.json"
+                ]
+              },
+              "name": "validate-native-ui-export-abi"
+            }
+          ]
+        },
+        {
+          "name": "compiler.runtime_packs",
+          "stageCount": 1,
+          "stages": [
+            {
+              "contract": {
+                "capabilities": [
+                  "compiler.binary_pack",
+                  "compiler.native_ui_pack"
+                ],
+                "inputs": [
+                  "raw-export-manifest",
+                  "raw-fact-streams",
+                  "native-ui-capture-facts"
+                ],
+                "outputs": [
+                  "binary-runtime-packs",
+                  "ui-pack-assets",
+                  "optional-debug-json"
+                ]
+              },
+              "name": "emit-runtime-packs"
+            }
+          ]
+        },
+        {
+          "name": "compiler.semantic_validation",
+          "stageCount": 1,
+          "stages": [
+            {
+              "contract": {
+                "capabilities": [
+                  "compiler.semantic_validator"
+                ],
+                "inputs": [
+                  "raw-export-reports",
+                  "browser-contract",
+                  "semantic-reports"
+                ],
+                "outputs": [
+                  "rust/semantic-validation-report.json"
+                ]
+              },
+              "name": "validate-semantic-contract"
+            }
+          ]
+        },
+        {
+          "name": "compiler.native_ui_validation",
+          "stageCount": 2,
+          "stages": [
+            {
+              "contract": {
+                "capabilities": [
+                  "compiler.native_ui_validator"
+                ],
+                "inputs": [
+                  "recipes/handler-layout-index.json",
+                  "recipes/ui-payload-index.json"
+                ],
+                "outputs": [
+                  "rust/native-ui-layout-report.json"
+                ]
+              },
+              "name": "validate-native-ui-layout"
+            },
+            {
+              "contract": {
+                "capabilities": [
+                  "compiler.native_ui_pack_abi_validator"
+                ],
+                "inputs": [
+                  "rust/ui-pack/ui_templates.bin",
+                  "rust/ui-pack/ui_bindings.bin",
+                  "rust/ui-pack/ui_strings.bin"
+                ],
+                "outputs": [
+                  "rust/ui-pack-abi-validation-report.json"
+                ]
+              },
+              "name": "validate-native-ui-pack-abi"
+            }
+          ]
+        },
+        {
+          "name": "compiler.pack_abi_validation",
+          "stageCount": 1,
+          "stages": [
+            {
+              "contract": {
+                "capabilities": [
+                  "compiler.pack_abi_validator"
+                ],
+                "inputs": [
+                  "binary-runtime-packs",
+                  "runtime-report-inputs"
+                ],
+                "outputs": [
+                  "rust/pack-validation-report.json"
+                ]
+              },
+              "name": "validate-pack-abi"
+            }
+          ]
+        },
+        {
+          "name": "compiler.runtime_reports",
+          "stageCount": 1,
+          "stages": [
+            {
+              "contract": {
+                "capabilities": [
+                  "compiler.runtime_manifest"
+                ],
+                "inputs": [
+                  "pack-abi-validation-report",
+                  "runtime-artifact-registry"
+                ],
+                "outputs": [
+                  "runtime-manifest",
+                  "integrity-report",
+                  "dist-manifest"
+                ]
+              },
+              "name": "emit-runtime-reports"
+            }
+          ]
+        },
+        {
+          "name": "compiler.trace",
+          "stageCount": 1,
+          "stages": [
+            {
+              "contract": {
+                "capabilities": [
+                  "compiler.tracepoints"
+                ],
+                "inputs": [
+                  "compile-stage-events"
+                ],
+                "outputs": [
+                  "rust/compile-kernel-trace.json"
+                ]
+              },
+              "name": "emit-kernel-trace"
+            }
+          ]
+        }
+      ],
+      "policy": {
+        "execution": "ordered-fail-closed-stage-pipeline",
+        "registration": "static-module-descriptor-table",
+        "scope": "stage catalog is stable; individual stage emitters gate artifacts by CompileScope"
+      },
+      "schemaVersion": "elysium-compiler/compile-kernel-catalog/v1",
+      "stageCount": 10,
+      "trace": {
+        "path": "rust/compile-kernel-trace.json",
+        "schemaVersion": "elysium-compiler/compile-kernel-trace/v1"
+      }
+    },
     "currentCrate": "elysium-compiler-core",
     "metadata": {
       "compiledDistSchemaVersion": "1.0",
@@ -324,7 +764,7 @@
       "packAbiVersion": "elysium.pack.v1",
       "rawExportSchemaVersion": "1.0",
       "runtimeAbiVersion": "elysium.runtime.v1",
-      "schemaHash": "sha256:d6685579638840fdb1b768e67506433da9f0948efa083bdc6421ab97ba1e3301",
+      "schemaHash": "sha256:f271d874bb29500e15488c3b5a814d916503c0889c1cb7e28ae60e8c2c23ae66",
       "version": "0.1.0"
     },
     "name": "elysium-compiler"
