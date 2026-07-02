@@ -6,6 +6,7 @@ use crate::native_ui_export_abi_catalog::{
     NATIVE_UI_VALIDATION_DEFAULT_PATH, NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
 };
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
+use crate::runtime_manifest_abi::RUST_RUNTIME_MANIFEST_SCHEMA_VERSION;
 use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::version::{
     metadata as compiler_metadata, COMPILED_DIST_SCHEMA_VERSION, RAW_EXPORT_SCHEMA_VERSION,
@@ -75,7 +76,7 @@ pub fn schema_catalog() -> Value {
         "distData": {
             "schemaVersion": COMPILED_DIST_SCHEMA_VERSION,
             "manifest": "neonei/dist-data/current",
-            "runtimeManifest": "neonei/rust-runtime-manifest/current",
+            "runtimeManifest": RUST_RUNTIME_MANIFEST_SCHEMA_VERSION,
             "rawExportAbiValidationReport": RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
             "nativeUiExportAbiValidationReport": NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
             "packValidationReport": "elysium-compiler/pack-abi-validation/v1",

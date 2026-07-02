@@ -2,6 +2,11 @@ use crate::cli::CompileScope;
 use crate::io::{normalize_path, sha256_file, write_json_value};
 use crate::native_ui_export_abi_catalog::NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH;
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_REPORT_PATH;
+use crate::runtime_manifest_abi::{
+    PATH_POLICY_PORTABLE_RELATIVE_ONLY, RUST_DEPLOYMENT_REPORT_PATH, RUST_INTEGRITY_REPORT_PATH,
+    RUST_MIGRATION_READINESS_REPORT_PATH, RUST_MISSING_DATA_REPORT_PATH,
+    RUST_RUNTIME_MANIFEST_PATH, RUST_SIZE_REPORT_PATH,
+};
 use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_REPORT_PATH;
 use crate::version::PACK_ABI_VERSION;
 use anyhow::{anyhow, Result};
@@ -91,28 +96,28 @@ impl RuntimeArtifactSpec {
 pub const RUNTIME_FINAL_REPORT_SPECS: &[RuntimeArtifactSpec] = &[
     RuntimeArtifactSpec::new(
         "rustRuntimeManifest",
-        "rust/runtime-manifest.json",
+        RUST_RUNTIME_MANIFEST_PATH,
         RuntimeArtifactKind::Manifest,
         false,
         SCOPE_EVERY,
     ),
     RuntimeArtifactSpec::new(
         "rustIntegrity",
-        "rust/integrity.json",
+        RUST_INTEGRITY_REPORT_PATH,
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
     ),
     RuntimeArtifactSpec::new(
         "rustSizeReport",
-        "rust/size-report.json",
+        RUST_SIZE_REPORT_PATH,
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
     ),
     RuntimeArtifactSpec::new(
         "rustMissingDataReport",
-        "rust/missing-data-report.json",
+        RUST_MISSING_DATA_REPORT_PATH,
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
@@ -126,14 +131,14 @@ pub const RUNTIME_FINAL_REPORT_SPECS: &[RuntimeArtifactSpec] = &[
     ),
     RuntimeArtifactSpec::new(
         "rustMigrationReadiness",
-        "rust/migration-readiness.json",
+        RUST_MIGRATION_READINESS_REPORT_PATH,
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
     ),
     RuntimeArtifactSpec::new(
         "rustDeploymentReport",
-        "rust/deployment-report.json",
+        RUST_DEPLOYMENT_REPORT_PATH,
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
@@ -520,8 +525,7 @@ pub fn validate_runtime_pack_abi(
         artifacts,
         policy: PackAbiPolicy {
             missing_required_artifact: "fail-closed",
-            path_portability:
-                "portable-relative-runtime-paths-only; no drive letters, UNC paths, or file URLs",
+            path_portability: PATH_POLICY_PORTABLE_RELATIVE_ONLY,
             legacy_fallback: "forbidden",
         },
     })

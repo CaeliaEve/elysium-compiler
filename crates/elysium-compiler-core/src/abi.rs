@@ -10,6 +10,7 @@ use crate::native_ui_export_abi_catalog::{
     NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
 };
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
+use crate::runtime_manifest_abi::runtime_manifest_abi_catalog;
 use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::version::{
     COMPILED_DIST_SCHEMA_VERSION, EXPORT_ABI_VERSION, PACK_ABI_VERSION, RAW_EXPORT_SCHEMA_VERSION,
@@ -30,6 +31,7 @@ pub fn abi_catalog() -> Value {
         "nativeUiExportAbi": native_ui_export_abi_catalog(),
         "packAbi": pack_abi_catalog(),
         "runtimeAbi": runtime_abi_catalog(),
+        "runtimeManifestAbi": runtime_manifest_abi_catalog(),
         "controlAbi": control_abi_catalog(),
         "debugAbi": debug_abi_catalog(),
         "featureMatrix": feature_matrix_catalog(),

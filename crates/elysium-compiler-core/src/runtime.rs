@@ -3,6 +3,15 @@ use crate::io::{sha256_file, write_json_value};
 use crate::pack_abi::{
     collect_text_path_violations, runtime_manifest_file_entries, runtime_pack_artifact_specs,
 };
+use crate::runtime_manifest_abi::{
+    runtime_capabilities, NATIVE_RUNTIME_DIST_SCHEMA_VERSION, RUST_DEPLOYMENT_REPORT_PATH,
+    RUST_DEPLOYMENT_REPORT_SCHEMA_VERSION, RUST_INTEGRITY_REPORT_PATH,
+    RUST_INTEGRITY_SCHEMA_VERSION, RUST_MIGRATION_READINESS_REPORT_PATH,
+    RUST_MIGRATION_READINESS_SCHEMA_VERSION, RUST_MISSING_DATA_REPORT_PATH,
+    RUST_MISSING_DATA_REPORT_SCHEMA_VERSION, RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_PATH,
+    RUST_RUNTIME_MANIFEST_SCHEMA_VERSION, RUST_RUNTIME_SCHEMA, RUST_RUNTIME_SCHEMA_REVISION,
+    RUST_SIZE_REPORT_PATH, RUST_SIZE_REPORT_SCHEMA_VERSION,
+};
 use crate::version::metadata as compiler_metadata;
 use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
@@ -58,63 +67,16 @@ pub fn runtime_id_from_integrity(integrity: &BTreeMap<String, String>) -> String
 
 pub fn rust_entrypoints_from_integrity(integrity: &BTreeMap<String, String>) -> Value {
     let mut entrypoints = serde_json::Map::new();
-    for (key, path) in [
-        ("browser", "rust/browser.bin"),
-        ("groups", "rust/groups.bin"),
-        ("search", "rust/search.bin"),
-        ("recipes", "rust/recipes.bin"),
-        ("textures", "rust/textures.bin"),
-        ("atlasMeta", "rust/atlas.meta.bin"),
-        ("animations", "rust/animations.bin"),
-        ("stringsZhCn", "rust/strings.zh_cn.bin"),
-        ("uiTemplates", "rust/ui-pack/ui_templates.bin"),
-        ("uiBindings", "rust/ui-pack/ui_bindings.bin"),
-        ("uiStrings", "rust/ui-pack/ui_strings.bin"),
-    ] {
-        if integrity.contains_key(path) {
-            entrypoints.insert(key.to_string(), Value::String(path.to_string()));
+    for spec in RUST_RUNTIME_ENTRYPOINTS {
+        if integrity.contains_key(spec.path) {
+            entrypoints.insert(spec.key.to_string(), Value::String(spec.path.to_string()));
         }
     }
     Value::Object(entrypoints)
 }
 
 pub fn rust_capabilities(scope: CompileScope) -> Value {
-    match scope {
-        CompileScope::All => json!([
-            "atlas.static",
-            "atlas.animated",
-            "atlas.meta",
-            "groups.collapse",
-            "groups.semantic-nbt",
-            "recipes.lookup",
-            "recipes.native-ui-layout",
-            "search.zh-cn",
-            "strings.zh-cn",
-            "native-render.webgl2",
-            "recipes.ui-pack",
-        ]),
-        CompileScope::NativeUi => json!([
-            "groups.collapse",
-            "groups.semantic-nbt",
-            "recipes.lookup",
-            "recipes.native-ui-layout",
-            "recipes.ui-pack",
-            "search.zh-cn",
-            "strings.zh-cn",
-            "native-render.webgl2"
-        ]),
-        CompileScope::Search => json!(["search.zh-cn", "strings.zh-cn"]),
-        CompileScope::Browser => json!([
-            "groups.collapse",
-            "groups.semantic-nbt",
-            "search.zh-cn",
-            "strings.zh-cn",
-            "native-render.webgl2"
-        ]),
-        CompileScope::Recipes => json!(["recipes.lookup", "recipes.native-ui-layout"]),
-        CompileScope::Ui => json!(["recipes.ui-pack", "native-render.webgl2"]),
-        CompileScope::Textures => json!(["atlas.static", "atlas.animated", "atlas.meta"]),
-    }
+    json!(runtime_capabilities(scope))
 }
 
 pub fn compile_runtime_reports(
@@ -192,11 +154,11 @@ pub fn compile_runtime_reports(
     let generated_at = "deterministic-rust-compiler";
     let capabilities = rust_capabilities(scope);
     write_json_value(
-        &rust_dir.join("runtime-manifest.json"),
+        &output.join(RUST_RUNTIME_MANIFEST_PATH),
         &json!({
-            "schema": "neonei/runtime/current",
-            "schemaVersion": "neonei/rust-runtime-manifest/current",
-            "schemaRevision": 1,
+            "schema": RUST_RUNTIME_SCHEMA,
+            "schemaVersion": RUST_RUNTIME_MANIFEST_SCHEMA_VERSION,
+            "schemaRevision": RUST_RUNTIME_SCHEMA_REVISION,
             "runtimeId": runtime_id,
             "generatedAt": generated_at,
             "compiler": compiler_metadata(),
@@ -212,32 +174,32 @@ pub fn compile_runtime_reports(
         }),
     )?;
     write_json_value(
-        &rust_dir.join("integrity.json"),
+        &output.join(RUST_INTEGRITY_REPORT_PATH),
         &json!({
-            "schemaVersion": "neonei/rust-integrity/current",
+            "schemaVersion": RUST_INTEGRITY_SCHEMA_VERSION,
             "algorithm": "sha256",
             "files": integrity,
         }),
     )?;
     write_json_value(
-        &rust_dir.join("size-report.json"),
+        &output.join(RUST_SIZE_REPORT_PATH),
         &json!({
-            "schemaVersion": "neonei/rust-size-report/current",
+            "schemaVersion": RUST_SIZE_REPORT_SCHEMA_VERSION,
             "totalBytes": total_bytes,
             "files": sizes,
         }),
     )?;
     write_json_value(
-        &rust_dir.join("missing-data-report.json"),
+        &output.join(RUST_MISSING_DATA_REPORT_PATH),
         &json!({
-            "schemaVersion": "neonei/rust-missing-data-report/current",
+            "schemaVersion": RUST_MISSING_DATA_REPORT_SCHEMA_VERSION,
             "missingFiles": missing,
         }),
     )?;
     write_json_value(
-        &rust_dir.join("migration-readiness.json"),
+        &output.join(RUST_MIGRATION_READINESS_REPORT_PATH),
         &json!({
-            "schemaVersion": "neonei/rust-migration-readiness/current",
+            "schemaVersion": RUST_MIGRATION_READINESS_SCHEMA_VERSION,
             "ready": missing.is_empty() && path_violations.is_empty(),
             "checks": {
                 "requiredArtifactsPresent": missing.is_empty(),
@@ -249,9 +211,9 @@ pub fn compile_runtime_reports(
         }),
     )?;
     write_json_value(
-        &rust_dir.join("deployment-report.json"),
+        &output.join(RUST_DEPLOYMENT_REPORT_PATH),
         &json!({
-            "schemaVersion": "neonei/rust-deployment-report/current",
+            "schemaVersion": RUST_DEPLOYMENT_REPORT_SCHEMA_VERSION,
             "runtimeId": runtime_id,
             "generatedAt": generated_at,
             "compileScope": scope.as_str(),
@@ -272,8 +234,8 @@ pub fn compile_runtime_reports(
                 "missingFileCount": missing.len(),
             },
             "schema": {
-                "runtime": "neonei/runtime/current",
-                "schemaRevision": 1,
+                "runtime": RUST_RUNTIME_SCHEMA,
+                "schemaRevision": RUST_RUNTIME_SCHEMA_REVISION,
                 "capabilities": capabilities,
             },
             "deploymentChecks": {
@@ -354,12 +316,12 @@ fn update_dist_manifest_with_rust_runtime(
 
     manifest["compiler"] = compiler_metadata();
     manifest["nativeRuntime"] = json!({
-        "schemaVersion": "neonei/native-runtime-dist/current",
+        "schemaVersion": NATIVE_RUNTIME_DIST_SCHEMA_VERSION,
         "runtimeId": runtime_id,
         "compileScope": scope.as_str(),
         "status": "ready",
         "authority": "rust",
-        "runtimeManifest": "rust/runtime-manifest.json",
+        "runtimeManifest": RUST_RUNTIME_MANIFEST_PATH,
         "totalBytes": total_bytes,
         "files": sizes,
         "hashes": integrity,

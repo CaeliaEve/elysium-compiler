@@ -21,6 +21,7 @@ mod recipe_domain;
 mod recipe_ui_payload;
 mod reports;
 mod runtime;
+mod runtime_manifest_abi;
 mod schemas;
 mod stages;
 mod text;

@@ -36,6 +36,10 @@ use crate::recipe_domain::{captured_ui_family_key, public_recipe_layout, RecipeH
 use crate::recipe_ui_payload::rust_recipe_ui_payload_relative_path;
 use crate::reports;
 use crate::runtime;
+use crate::runtime_manifest_abi::{
+    RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION, RUST_RUNTIME_SCHEMA,
+    RUST_RUNTIME_SCHEMA_REVISION, SCHEMA_HASH_RUNTIME_MANIFEST_INPUT,
+};
 use crate::texture_animation::{
     expected_animated_item, expected_animation_reason, promote_animation_facts_to_animated_atlas,
 };
@@ -1426,6 +1430,25 @@ fn stable_cli_inspect_validate_and_schemas_cover_fixture_contracts() {
         json!(SCHEMA_HASH_COMPILER_CAPABILITY_INPUT)
     );
     assert_eq!(
+        schemas["abi"]["runtimeManifestAbi"]["schemaVersion"],
+        json!(RUST_RUNTIME_MANIFEST_SCHEMA_VERSION)
+    );
+    assert_eq!(
+        schemas["abi"]["runtimeManifestAbi"]["runtimeSchema"],
+        json!(RUST_RUNTIME_SCHEMA)
+    );
+    assert_eq!(
+        schemas["abi"]["runtimeManifestAbi"]["schemaRevision"],
+        json!(RUST_RUNTIME_SCHEMA_REVISION)
+    );
+    assert_eq!(
+        schemas["abi"]["runtimeManifestAbi"]["schemaHashInput"],
+        json!(SCHEMA_HASH_RUNTIME_MANIFEST_INPUT)
+    );
+    assert!(RUST_RUNTIME_ENTRYPOINTS
+        .iter()
+        .any(|spec| spec.key == "uiTemplates" && spec.path == "rust/ui-pack/ui_templates.bin"));
+    assert_eq!(
         schemas["rawExport"]["nativeBackground"]["strictPolicy"],
         json!("a captured nativeBackground.assetRef must point to a materialized raw-export asset")
     );
@@ -1529,7 +1552,12 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
     assert_eq!(runtime_manifest["compileScope"], json!("native-ui"));
     assert_eq!(
         runtime_manifest["schemaVersion"],
-        json!("neonei/rust-runtime-manifest/current")
+        json!(RUST_RUNTIME_MANIFEST_SCHEMA_VERSION)
+    );
+    assert_eq!(runtime_manifest["schema"], json!(RUST_RUNTIME_SCHEMA));
+    assert_eq!(
+        runtime_manifest["schemaRevision"],
+        json!(RUST_RUNTIME_SCHEMA_REVISION)
     );
     assert!(runtime_manifest["files"]
         .as_array()
