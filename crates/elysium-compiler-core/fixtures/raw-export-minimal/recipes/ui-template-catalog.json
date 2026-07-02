@@ -10,16 +10,37 @@
       "height": 90,
       "maxRecipesPerPage": 1,
       "nativeBackground": {
+        "schemaVersion": "nesqlpp/raw-export/alpha1/ui-family-census/native-ui-background",
         "status": "captured",
         "kind": "gt-modular-ui",
+        "coordinateSpace": "nei_pixels",
+        "scaleMode": "uniform-scale",
+        "anchor": "top-left",
         "assetRef": "assets/ui-backgrounds/gregtech/nei_single_recipe.png",
+        "resource": "gregtech:textures/gui/background/nei_single_recipe.png",
+        "source": "GTNEIDefaultHandler.drawUI(ModularWindow.getBackground)",
+        "drawable": "GTUITextures.BACKGROUND_NEI_SINGLE_RECIPE",
         "scaling": "nine-slice",
+        "canonicalMachineFamily": "gregtech-machine",
+        "layoutKind": "machine",
+        "width": 176,
+        "height": 90,
+        "yShift": 0,
         "texture": {
           "width": 64,
           "height": 64,
           "borderU": 2,
           "borderV": 2
-        }
+        },
+        "recipeBackgroundOffset": {
+          "x": 3,
+          "y": 3
+        },
+        "recipeBackgroundSize": {
+          "width": 170,
+          "height": 84
+        },
+        "captureRequired": false
       },
       "slots": [
         {
@@ -51,7 +72,8 @@
       ],
       "coordinateSpace": "nei_pixels",
       "scaleMode": "uniform-scale",
-      "anchor": "top-left"
+      "anchor": "top-left",
+      "yShift": 0
     }
   ]
 }

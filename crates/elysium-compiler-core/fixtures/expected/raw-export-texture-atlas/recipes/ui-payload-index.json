@@ -23,17 +23,37 @@
         "layoutKind": "machine",
         "maxRecipesPerPage": 1,
         "nativeBackground": {
+          "anchor": "top-left",
           "assetRef": "assets/ui-backgrounds/gregtech/nei_single_recipe.png",
+          "canonicalMachineFamily": "gregtech-machine",
+          "captureRequired": false,
+          "coordinateSpace": "nei_pixels",
+          "drawable": "GTUITextures.BACKGROUND_NEI_SINGLE_RECIPE",
+          "height": 90,
           "kind": "gt-modular-ui",
+          "layoutKind": "machine",
+          "recipeBackgroundOffset": {
+            "x": 3,
+            "y": 3
+          },
+          "recipeBackgroundSize": {
+            "height": 84,
+            "width": 170
+          },
           "resource": "gregtech:textures/gui/background/nei_single_recipe.png",
+          "scaleMode": "uniform-scale",
           "scaling": "nine-slice",
+          "schemaVersion": "nesqlpp/raw-export/alpha1/ui-family-census/native-ui-background",
+          "source": "GTNEIDefaultHandler.drawUI(ModularWindow.getBackground)",
           "status": "captured",
           "texture": {
             "borderU": 2,
             "borderV": 2,
             "height": 64,
             "width": 64
-          }
+          },
+          "width": 176,
+          "yShift": 0
         },
         "progressBars": [
           {

@@ -13,6 +13,17 @@
     }
   },
   "format": {
+    "backgroundContractFields": [
+      "coordinateSpace",
+      "scaleMode",
+      "anchor",
+      "status",
+      "kind",
+      "scaling",
+      "texture",
+      "recipeBackgroundOffset",
+      "recipeBackgroundSize"
+    ],
     "hotspotActionFieldNames": [
       "action",
       "itemId",

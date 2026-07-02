@@ -68,7 +68,7 @@
       "path": "rust/ui-pack/ui_assets.manifest.json"
     },
     {
-      "bytes": 1921,
+      "bytes": 2721,
       "path": "rust/ui-pack/ui_template_catalog.json"
     },
     {
@@ -80,11 +80,11 @@
       "path": "rust/ui-pack/ui_family_census.json"
     },
     {
-      "bytes": 1516,
+      "bytes": 1742,
       "path": "rust/ui-pack/ui_pack_report.json"
     },
     {
-      "bytes": 4343,
+      "bytes": 4344,
       "path": "rust/raw-export-abi-validation-report.json"
     },
     {
@@ -122,7 +122,7 @@
     "portableRelativePathsOnly": true,
     "windowsPathsAllowed": false
   },
-  "runtimeId": "rust-9143de5e3f14b776",
+  "runtimeId": "rust-537e4fff297a57d8",
   "schema": "neonei/runtime/current",
   "schemaRevision": 1,
   "schemaVersion": "neonei/rust-runtime-manifest/current"

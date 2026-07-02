@@ -28,6 +28,9 @@ const UI_RECT_ROW_STRIDE_U32: u32 = 14;
 const UI_BINDING_ROW_STRIDE_U32: u32 = 11;
 const NATIVE_UI_COORDINATE_SPACE: &str = "nei_pixels";
 const NATIVE_UI_ANCHOR: &str = "top-left";
+const NATIVE_UI_SCALE_MODE: &str = "uniform-scale";
+const NATIVE_UI_GT_BACKGROUND_KIND: &str = "gt-modular-ui";
+const NATIVE_UI_BACKGROUND_SCALING_NINE_SLICE: &str = "nine-slice";
 
 pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: bool) -> Result<()> {
     let manifest = read_manifest(input)?;
@@ -46,6 +49,7 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
             "ui-pack compiler blocked: uiTemplateCatalog has no templates"
         ));
     }
+    validate_ui_template_background_contracts(&templates)?;
 
     let recipe_ui_index = match read_compiled_recipe_ui_payload_index(output)? {
         Some(entries) => entries,
@@ -191,6 +195,7 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
                 "hotspotActionFieldNames": ["action", "itemId", "payloadKey"],
                 "slotGeometryFields": ["coordinateSpace", "anchor", "slotWidth", "slotHeight", "pitchX", "pitchY"],
                 "rectGeometryFields": ["coordinateSpace", "anchor"],
+                "backgroundContractFields": ["coordinateSpace", "scaleMode", "anchor", "status", "kind", "scaling", "texture", "recipeBackgroundOffset", "recipeBackgroundSize"],
             },
             "artifacts": {
                 "uiTemplates": "rust/ui-pack/ui_templates.bin",
@@ -230,6 +235,8 @@ pub fn build_compact_ui_template_payload(
         )?;
         let template_anchor =
             required_template_contract_string(template, "anchor", NATIVE_UI_ANCHOR)?;
+        let _template_scale_mode =
+            required_template_contract_string(template, "scaleMode", NATIVE_UI_SCALE_MODE)?;
         let slot_start = slot_count;
         if let Some(slots) = template.get("slots").and_then(Value::as_array) {
             for slot in slots {
@@ -471,6 +478,192 @@ pub fn build_compact_ui_template_payload(
 enum SlotFieldPolicy {
     NonNegative,
     Positive,
+}
+
+fn validate_ui_template_background_contracts(templates: &[Value]) -> Result<()> {
+    for template in templates {
+        let template_key = value_string(template, "templateKey").unwrap_or("<unknown>".to_string());
+        let label = format!("ui template background {template_key}");
+        let coordinate_space = required_template_contract_string(
+            template,
+            "coordinateSpace",
+            NATIVE_UI_COORDINATE_SPACE,
+        )?;
+        let scale_mode =
+            required_template_contract_string(template, "scaleMode", NATIVE_UI_SCALE_MODE)?;
+        let anchor = required_template_contract_string(template, "anchor", NATIVE_UI_ANCHOR)?;
+        let surface_width = required_template_u32(template, "width", &label)?;
+        let surface_height = required_template_u32(template, "height", &label)?;
+        let background = required_object(template, "nativeBackground", &label)?;
+
+        required_contract_string(
+            background,
+            "coordinateSpace",
+            &coordinate_space,
+            &format!("{label}.nativeBackground"),
+        )?;
+        required_contract_string(
+            background,
+            "scaleMode",
+            &scale_mode,
+            &format!("{label}.nativeBackground"),
+        )?;
+        required_contract_string(
+            background,
+            "anchor",
+            &anchor,
+            &format!("{label}.nativeBackground"),
+        )?;
+        let status = required_string(background, "status", &label)?;
+        if status != "captured" && status != "semantic" {
+            return Err(anyhow!(
+                "{label}.nativeBackground status must be captured or semantic, got {status}"
+            ));
+        }
+        required_contract_string(
+            background,
+            "kind",
+            NATIVE_UI_GT_BACKGROUND_KIND,
+            &format!("{label}.nativeBackground"),
+        )?;
+        required_contract_string(
+            background,
+            "scaling",
+            NATIVE_UI_BACKGROUND_SCALING_NINE_SLICE,
+            &format!("{label}.nativeBackground"),
+        )?;
+        if status == "captured" {
+            required_string(background, "assetRef", &format!("{label}.nativeBackground"))?;
+        }
+        let background_width =
+            required_u32(background, "width", &format!("{label}.nativeBackground"))?;
+        let background_height =
+            required_u32(background, "height", &format!("{label}.nativeBackground"))?;
+        if background_width != surface_width || background_height != surface_height {
+            return Err(anyhow!(
+                "{label}.nativeBackground surface mismatch: background={}x{}, template={}x{}",
+                background_width,
+                background_height,
+                surface_width,
+                surface_height
+            ));
+        }
+
+        let texture = required_object(background, "texture", &format!("{label}.nativeBackground"))?;
+        required_u32(
+            texture,
+            "width",
+            &format!("{label}.nativeBackground.texture"),
+        )?;
+        required_u32(
+            texture,
+            "height",
+            &format!("{label}.nativeBackground.texture"),
+        )?;
+        required_u32(
+            texture,
+            "borderU",
+            &format!("{label}.nativeBackground.texture"),
+        )?;
+        required_u32(
+            texture,
+            "borderV",
+            &format!("{label}.nativeBackground.texture"),
+        )?;
+
+        let offset = required_object(
+            background,
+            "recipeBackgroundOffset",
+            &format!("{label}.nativeBackground"),
+        )?;
+        let size = required_object(
+            background,
+            "recipeBackgroundSize",
+            &format!("{label}.nativeBackground"),
+        )?;
+        let x = required_u32(
+            offset,
+            "x",
+            &format!("{label}.nativeBackground.recipeBackgroundOffset"),
+        )?;
+        let y = required_u32(
+            offset,
+            "y",
+            &format!("{label}.nativeBackground.recipeBackgroundOffset"),
+        )?;
+        let width = required_u32(
+            size,
+            "width",
+            &format!("{label}.nativeBackground.recipeBackgroundSize"),
+        )?;
+        let height = required_u32(
+            size,
+            "height",
+            &format!("{label}.nativeBackground.recipeBackgroundSize"),
+        )?;
+        if width == 0
+            || height == 0
+            || x > surface_width.saturating_sub(width)
+            || y > surface_height.saturating_sub(height)
+        {
+            return Err(anyhow!(
+                "{label}.nativeBackground target rect out of bounds: {},{} {}x{} surface={}x{}",
+                x,
+                y,
+                width,
+                height,
+                surface_width,
+                surface_height
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn required_object<'a>(value: &'a Value, key: &str, label: &str) -> Result<&'a Value> {
+    value
+        .get(key)
+        .filter(|value| value.is_object())
+        .ok_or_else(|| anyhow!("{label} missing required object field: {key}"))
+}
+
+fn required_string(value: &Value, key: &str, label: &str) -> Result<String> {
+    value_string(value, key)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow!("{label} missing required string field: {key}"))
+}
+
+fn required_contract_string(
+    value: &Value,
+    key: &str,
+    expected: &str,
+    label: &str,
+) -> Result<String> {
+    let value = required_string(value, key, label)?;
+    if value != expected {
+        return Err(anyhow!(
+            "{label} field {key} must be {expected}, got {value}"
+        ));
+    }
+    Ok(value)
+}
+
+fn required_template_u32(value: &Value, key: &str, label: &str) -> Result<u32> {
+    let value = required_u32(value, key, label)?;
+    if value == 0 {
+        return Err(anyhow!("{label} field must be positive: {key}"));
+    }
+    Ok(value)
+}
+
+fn required_u32(value: &Value, key: &str, label: &str) -> Result<u32> {
+    let value =
+        value_u64(value, key).ok_or_else(|| anyhow!("{label} missing integer field: {key}"))?;
+    if value > u32::MAX as u64 {
+        return Err(anyhow!("{label} field exceeds u32: {key}={value}"));
+    }
+    Ok(value as u32)
 }
 
 fn required_slot_string(slot: &Value, key: &str) -> Result<String> {
