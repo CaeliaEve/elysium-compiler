@@ -1,5 +1,15 @@
 use crate::cli::CompileScope;
 use crate::io::{sha256_file, write_json_value};
+use crate::native_ui_pack_abi::{
+    UI_BINDING_MAGIC, UI_BINDING_MAGIC_REPORT, UI_BINDING_PAYLOAD_VERSION,
+    UI_BINDING_ROW_STRIDE_U32, UI_BINDING_SCHEMA, UI_BINDING_STRING_REF_COLUMNS,
+    UI_PRIMITIVE_ROW_STRIDE_U32, UI_PRIMITIVE_STRING_REF_COLUMNS, UI_RECT_ROW_STRIDE_U32,
+    UI_RECT_STRING_REF_COLUMNS, UI_SLOT_ROW_STRIDE_U32, UI_SLOT_STRING_REF_COLUMNS,
+    UI_STRING_MAGIC, UI_STRING_MAGIC_REPORT, UI_STRING_PAYLOAD_VERSION, UI_STRING_SCHEMA,
+    UI_TEMPLATE_MAGIC, UI_TEMPLATE_MAGIC_REPORT, UI_TEMPLATE_PAYLOAD_VERSION,
+    UI_TEMPLATE_ROW_STRIDE_U32, UI_TEMPLATE_SCHEMA, UI_TEMPLATE_STRING_REF_COLUMNS,
+    UI_TEXT_ROW_STRIDE_U32, UI_TEXT_STRING_REF_COLUMNS,
+};
 use crate::version::PACK_ABI_VERSION;
 use anyhow::{anyhow, Result};
 use serde::Serialize;
@@ -12,22 +22,6 @@ pub const UI_PACK_ABI_VALIDATION_REPORT_PATH: &str = "rust/ui-pack-abi-validatio
 
 const NATIVE_BINARY_PACK_MAGIC: &[u8; 8] = b"NNEIBIN\0";
 const NATIVE_BINARY_PACK_HEADER_BYTES: usize = 24;
-const UI_TEMPLATE_SCHEMA: &str = "neonei/ui-template-pack/current";
-const UI_BINDING_SCHEMA: &str = "neonei/ui-binding-pack/current";
-const UI_STRING_SCHEMA: &str = "neonei/ui-string-pack/current";
-
-const UI_TEMPLATE_MAGIC: &[u8; 8] = b"NEIUIT1\0";
-const UI_BINDING_MAGIC: &[u8; 8] = b"NEIUIB1\0";
-const UI_STRING_MAGIC: &[u8; 8] = b"NEIUIS1\0";
-const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 9;
-const UI_BINDING_PAYLOAD_VERSION: u32 = 1;
-const UI_STRING_PAYLOAD_VERSION: u32 = 1;
-const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 25;
-const UI_SLOT_ROW_STRIDE_U32: u32 = 12;
-const UI_TEXT_ROW_STRIDE_U32: u32 = 7;
-const UI_PRIMITIVE_ROW_STRIDE_U32: u32 = 13;
-const UI_RECT_ROW_STRIDE_U32: u32 = 15;
-const UI_BINDING_ROW_STRIDE_U32: u32 = 11;
 
 #[derive(Clone, Copy, Debug)]
 enum UiPackArtifactKind {
@@ -506,7 +500,7 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
             header_bytes,
             template_count,
             template_stride,
-            &[0, 1, 2, 3, 4, 9, 19, 20, 21, 22],
+            UI_TEMPLATE_STRING_REF_COLUMNS,
             string_count,
         )?;
         validate_string_refs(
@@ -514,7 +508,7 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
             header_bytes + template_bytes,
             slot_count,
             slot_stride,
-            &[0, 6, 7],
+            UI_SLOT_STRING_REF_COLUMNS,
             string_count,
         )?;
         validate_string_refs(
@@ -522,7 +516,7 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
             header_bytes + template_bytes + slot_bytes,
             text_count,
             text_stride,
-            &[0, 5, 6],
+            UI_TEXT_STRING_REF_COLUMNS,
             string_count,
         )?;
         validate_string_refs(
@@ -530,7 +524,7 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
             header_bytes + template_bytes + slot_bytes + text_bytes,
             primitive_count,
             primitive_stride,
-            &[0, 1, 6, 7, 8, 9, 10, 11, 12],
+            UI_PRIMITIVE_STRING_REF_COLUMNS,
             string_count,
         )?;
         validate_string_refs(
@@ -538,7 +532,7 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
             header_bytes + template_bytes + slot_bytes + text_bytes + primitive_bytes,
             hotspot_count,
             rect_stride,
-            &[0, 1, 2, 3, 4, 9, 10, 11, 12, 13, 14],
+            UI_RECT_STRING_REF_COLUMNS,
             string_count,
         )?;
         validate_string_refs(
@@ -551,12 +545,12 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
                 + hotspot_bytes,
             viewport_count,
             rect_stride,
-            &[0, 1, 2, 3, 4, 9, 10, 11, 12, 13, 14],
+            UI_RECT_STRING_REF_COLUMNS,
             string_count,
         )?;
     }
     Ok(UiPayloadValidation {
-        magic: "NEIUIT1_NUL".to_string(),
+        magic: UI_TEMPLATE_MAGIC_REPORT.to_string(),
         version,
         string_count: None,
         sections: vec![
@@ -600,12 +594,12 @@ fn validate_binding_payload(payload: &[u8], string_count: u32) -> Result<UiPaylo
             header_bytes,
             binding_count,
             row_stride,
-            &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+            UI_BINDING_STRING_REF_COLUMNS,
             string_count,
         )?;
     }
     Ok(UiPayloadValidation {
-        magic: "NEIUIB1_NUL".to_string(),
+        magic: UI_BINDING_MAGIC_REPORT.to_string(),
         version,
         string_count: None,
         sections: vec![section_record("bindings", binding_count, row_stride)],
@@ -655,7 +649,7 @@ fn validate_string_payload(payload: &[u8]) -> Result<UiPayloadValidation> {
         }
     }
     Ok(UiPayloadValidation {
-        magic: "NEIUIS1_NUL".to_string(),
+        magic: UI_STRING_MAGIC_REPORT.to_string(),
         version,
         string_count: Some(string_count),
         sections: vec![

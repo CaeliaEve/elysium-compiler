@@ -4,6 +4,11 @@ use crate::commands::run_command;
 use crate::io::{normalize_path, write_json_value};
 use crate::json_ext::{value_string, value_u64};
 use crate::native_ui_export_abi;
+use crate::native_ui_pack_abi::{
+    UI_BINDING_MAGIC, UI_BINDING_PAYLOAD_VERSION, UI_PRIMITIVE_ROW_STRIDE_U32,
+    UI_RECT_ROW_STRIDE_U32, UI_SLOT_ROW_STRIDE_U32, UI_STRING_MAGIC, UI_TEMPLATE_MAGIC,
+    UI_TEMPLATE_PAYLOAD_VERSION, UI_TEMPLATE_ROW_STRIDE_U32, UI_TEXT_ROW_STRIDE_U32,
+};
 use crate::native_ui_report;
 use crate::pack_abi::{runtime_pack_artifact_specs, validate_runtime_pack_abi};
 use crate::packs::browser::build_compact_group_payload_from_groups;
@@ -847,10 +852,10 @@ fn compact_ui_pack_uses_shared_native_string_table() {
         build_compact_ui_binding_payload(&bindings, &mut strings, &mut string_refs).unwrap();
     let string_payload = build_compact_ui_string_payload(&strings).unwrap();
 
-    assert_eq!(&template_payload[0..8], b"NEIUIT1\0");
+    assert_eq!(&template_payload[0..8], UI_TEMPLATE_MAGIC);
     assert_eq!(
         u32::from_le_bytes(template_payload[8..12].try_into().unwrap()),
-        9
+        UI_TEMPLATE_PAYLOAD_VERSION
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[12..16].try_into().unwrap()),
@@ -878,30 +883,30 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[36..40].try_into().unwrap()),
-        25
+        UI_TEMPLATE_ROW_STRIDE_U32
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[40..44].try_into().unwrap()),
-        12
+        UI_SLOT_ROW_STRIDE_U32
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[44..48].try_into().unwrap()),
-        7
+        UI_TEXT_ROW_STRIDE_U32
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[48..52].try_into().unwrap()),
-        13
+        UI_PRIMITIVE_ROW_STRIDE_U32
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[52..56].try_into().unwrap()),
-        15
+        UI_RECT_ROW_STRIDE_U32
     );
-    assert_eq!(&binding_payload[0..8], b"NEIUIB1\0");
+    assert_eq!(&binding_payload[0..8], UI_BINDING_MAGIC);
     assert_eq!(
         u32::from_le_bytes(binding_payload[12..16].try_into().unwrap()),
-        1
+        UI_BINDING_PAYLOAD_VERSION
     );
-    assert_eq!(&string_payload[0..8], b"NEIUIS1\0");
+    assert_eq!(&string_payload[0..8], UI_STRING_MAGIC);
     assert!(u32::from_le_bytes(string_payload[12..16].try_into().unwrap()) > 8);
     assert_eq!(bindings[0]["templateKey"], json!("furnace@default"));
 }

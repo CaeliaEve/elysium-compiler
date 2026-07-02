@@ -2,6 +2,17 @@ use crate::binary::{intern_compact_string, push_i32, push_u32, write_binary_pack
 use crate::io::write_json_value;
 use crate::json_ext::{value_i64, value_string, value_u64};
 use crate::manifest::{read_manifest, read_manifest_json};
+use crate::native_ui_pack_abi::{
+    ui_pack_format_report, NATIVE_UI_ANCHOR, NATIVE_UI_BACKGROUND_SCALING_NINE_SLICE,
+    NATIVE_UI_COORDINATE_SPACE, NATIVE_UI_GT_BACKGROUND_KIND,
+    NATIVE_UI_INTERACTION_KIND_ITEM_CLICK, NATIVE_UI_INTERACTION_KIND_NONE,
+    NATIVE_UI_INTERACTION_PAYLOAD_SCHEMA, NATIVE_UI_INTERACTION_TARGET_ITEM,
+    NATIVE_UI_INTERACTION_TARGET_NONE, NATIVE_UI_SCALE_MODE, UI_BINDING_MAGIC,
+    UI_BINDING_PAYLOAD_VERSION, UI_BINDING_ROW_STRIDE_U32, UI_BINDING_SCHEMA,
+    UI_PRIMITIVE_ROW_STRIDE_U32, UI_RECT_ROW_STRIDE_U32, UI_SLOT_ROW_STRIDE_U32, UI_STRING_MAGIC,
+    UI_STRING_PAYLOAD_VERSION, UI_STRING_SCHEMA, UI_TEMPLATE_MAGIC, UI_TEMPLATE_PAYLOAD_VERSION,
+    UI_TEMPLATE_ROW_STRIDE_U32, UI_TEMPLATE_SCHEMA, UI_TEXT_ROW_STRIDE_U32,
+};
 use crate::recipe_ui_payload::{
     build_raw_recipe_ui_payload_index, read_compiled_recipe_ui_payload_index,
 };
@@ -17,26 +28,6 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-
-const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 9;
-const UI_BINDING_PAYLOAD_VERSION: u32 = 1;
-const UI_STRING_PAYLOAD_VERSION: u32 = 1;
-const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 25;
-const UI_SLOT_ROW_STRIDE_U32: u32 = 12;
-const UI_TEXT_ROW_STRIDE_U32: u32 = 7;
-const UI_PRIMITIVE_ROW_STRIDE_U32: u32 = 13;
-const UI_RECT_ROW_STRIDE_U32: u32 = 15;
-const UI_BINDING_ROW_STRIDE_U32: u32 = 11;
-const NATIVE_UI_COORDINATE_SPACE: &str = "nei_pixels";
-const NATIVE_UI_ANCHOR: &str = "top-left";
-const NATIVE_UI_SCALE_MODE: &str = "uniform-scale";
-const NATIVE_UI_GT_BACKGROUND_KIND: &str = "gt-modular-ui";
-const NATIVE_UI_BACKGROUND_SCALING_NINE_SLICE: &str = "nine-slice";
-const NATIVE_UI_INTERACTION_KIND_NONE: &str = "none";
-const NATIVE_UI_INTERACTION_KIND_ITEM_CLICK: &str = "item-click";
-const NATIVE_UI_INTERACTION_TARGET_NONE: &str = "none";
-const NATIVE_UI_INTERACTION_TARGET_ITEM: &str = "item";
-const NATIVE_UI_INTERACTION_PAYLOAD_SCHEMA: &str = "neonei/native-ui-interaction/v1";
 
 pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: bool) -> Result<()> {
     let manifest = read_manifest(input)?;
@@ -137,17 +128,17 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
 
     write_binary_pack_payload(
         &ui_pack_dir.join("ui_templates.bin"),
-        "neonei/ui-template-pack/current",
+        UI_TEMPLATE_SCHEMA,
         &template_payload,
     )?;
     write_binary_pack_payload(
         &ui_pack_dir.join("ui_bindings.bin"),
-        "neonei/ui-binding-pack/current",
+        UI_BINDING_SCHEMA,
         &binding_payload,
     )?;
     write_binary_pack_payload(
         &ui_pack_dir.join("ui_strings.bin"),
-        "neonei/ui-string-pack/current",
+        UI_STRING_SCHEMA,
         &string_payload,
     )?;
     write_json_value(
@@ -191,25 +182,7 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
                 "stringCount": strings.len(),
                 "assetCount": assets_manifest.get("assets").and_then(Value::as_array).map(|items| items.len()).unwrap_or(0),
             },
-            "format": {
-                "templatePackMagic": "NEIUIT1_NUL",
-                "templatePackVersion": UI_TEMPLATE_PAYLOAD_VERSION,
-                "templateStride": UI_TEMPLATE_ROW_STRIDE_U32,
-                "slotStride": UI_SLOT_ROW_STRIDE_U32,
-                "textStride": UI_TEXT_ROW_STRIDE_U32,
-                "primitiveStride": UI_PRIMITIVE_ROW_STRIDE_U32,
-                "rectStride": UI_RECT_ROW_STRIDE_U32,
-                "surfaceContractFields": ["coordinateSpace", "scaleMode", "anchor"],
-                "legacyRectActionFields": false,
-                "legacyRectActionFieldNames": [],
-                "slotGeometryFields": ["coordinateSpace", "anchor", "slotWidth", "slotHeight", "pitchX", "pitchY"],
-                "templateDynamicPrimitiveFields": ["dynamicPrimitives"],
-                "dynamicPrimitiveGeometryFields": ["kind", "role", "x", "y", "width", "height", "coordinateSpace", "anchor", "orientation", "source", "trackColor", "fillColor", "borderColor"],
-                "rectGeometryFields": ["coordinateSpace", "anchor"],
-                "interactionContractFields": ["interactionKind", "interactionTargetKind", "interactionTargetId", "interactionPayloadSchema"],
-                "backgroundContractFields": ["coordinateSpace", "scaleMode", "anchor", "status", "kind", "scaling", "texture", "recipeBackgroundOffset", "recipeBackgroundSize"],
-                "templateBackgroundField": "nativeBackground",
-            },
+            "format": ui_pack_format_report(),
             "artifacts": {
                 "uiTemplates": "rust/ui-pack/ui_templates.bin",
                 "uiBindings": "rust/ui-pack/ui_bindings.bin",
@@ -519,7 +492,7 @@ pub fn build_compact_ui_template_payload(
             + hotspot_bytes.len()
             + viewport_bytes.len(),
     );
-    payload.extend_from_slice(b"NEIUIT1\0");
+    payload.extend_from_slice(UI_TEMPLATE_MAGIC);
     push_u32(&mut payload, UI_TEMPLATE_PAYLOAD_VERSION);
     push_u32(&mut payload, templates.len() as u32);
     push_u32(&mut payload, slot_count);
@@ -1078,7 +1051,7 @@ pub fn build_compact_ui_binding_payload(
         push_u32(&mut row_bytes, flags);
     }
     let mut payload = Vec::with_capacity(8 + 3 * 4 + row_bytes.len());
-    payload.extend_from_slice(b"NEIUIB1\0");
+    payload.extend_from_slice(UI_BINDING_MAGIC);
     push_u32(&mut payload, UI_BINDING_PAYLOAD_VERSION);
     push_u32(&mut payload, bindings.len() as u32);
     push_u32(&mut payload, UI_BINDING_ROW_STRIDE_U32);
@@ -1095,7 +1068,7 @@ pub fn build_compact_ui_string_payload(strings: &[String]) -> Result<Vec<u8>> {
         string_bytes.push(0);
     }
     let mut payload = Vec::with_capacity(8 + 3 * 4 + string_offsets.len() * 4 + string_bytes.len());
-    payload.extend_from_slice(b"NEIUIS1\0");
+    payload.extend_from_slice(UI_STRING_MAGIC);
     push_u32(&mut payload, UI_STRING_PAYLOAD_VERSION);
     push_u32(&mut payload, strings.len() as u32);
     push_u32(&mut payload, string_bytes.len() as u32);
