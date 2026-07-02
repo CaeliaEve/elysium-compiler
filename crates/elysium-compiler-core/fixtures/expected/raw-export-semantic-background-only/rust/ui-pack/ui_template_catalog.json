@@ -20,7 +20,9 @@
   },
   "templates": [
     {
+      "anchor": "top-left",
       "canonicalMachineFamily": "gregtech-machine",
+      "coordinateSpace": "nei_pixels",
       "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
       "height": 90,
       "layoutKind": "machine",
@@ -38,12 +40,15 @@
       },
       "progressBars": [
         {
+          "anchor": "top-left",
+          "coordinateSpace": "nei_pixels",
           "height": 18,
           "width": 20,
           "x": 78,
           "y": 24
         }
       ],
+      "scaleMode": "uniform-scale",
       "slots": [
         {
           "anchor": "top-left",

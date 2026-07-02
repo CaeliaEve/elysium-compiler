@@ -47,14 +47,14 @@
       "status": "present"
     },
     {
-      "bytes": 437,
+      "bytes": 533,
       "kind": "file",
       "logicalName": "nativeUiValidation",
       "manifestPath": "validation/native-ui-abi.json",
       "path": "validation/native-ui-abi.json",
       "required": false,
       "rowCount": null,
-      "sha256": "66a676e819f8a44993b56600438e5f980620b26ca15733c5a4de377c367d41cd",
+      "sha256": "2c9fedafecb8bd53a7db48cf9f306bfe1d8d3a6974e7f3bc915868ac71e386ac",
       "status": "present"
     },
     {
@@ -113,14 +113,14 @@
       "status": "present"
     },
     {
-      "bytes": 1197,
+      "bytes": 1380,
       "kind": "file",
       "logicalName": "uiTemplateCatalog",
       "manifestPath": "recipes/ui-template-catalog.json",
       "path": "recipes/ui-template-catalog.json",
       "required": false,
       "rowCount": null,
-      "sha256": "8b39bda79f9cc6eff1b66c23898e7193b710442fe1b2a2d202d4656fa18721bc",
+      "sha256": "9d4b176a5a875ad3e29273494f60fcc12a38ffb7afc7495f3d842aaf489019e8",
       "status": "present"
     }
   ],

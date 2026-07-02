@@ -24,7 +24,11 @@
       "payloadKey"
     ],
     "hotspotActionFields": true,
-    "rectStride": 12,
+    "rectGeometryFields": [
+      "coordinateSpace",
+      "anchor"
+    ],
+    "rectStride": 14,
     "slotGeometryFields": [
       "coordinateSpace",
       "anchor",
@@ -35,9 +39,9 @@
     ],
     "slotStride": 12,
     "templatePackMagic": "NEIUIT1_NUL",
-    "templatePackVersion": 4,
+    "templatePackVersion": 5,
     "templateStride": 19,
-    "textStride": 5
+    "textStride": 7
   },
   "generatedAt": "deterministic-rust-compiler",
   "schemaVersion": "neonei/ui-pack-report/current",

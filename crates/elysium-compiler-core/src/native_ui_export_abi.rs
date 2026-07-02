@@ -33,8 +33,10 @@ pub struct NativeUiExportAbiValidationReport {
     pub raw_report_status: Option<String>,
     pub layout_count: u64,
     pub slot_count: u64,
+    pub primitive_count: u64,
     pub missing_surface_count: u64,
     pub slot_bounds_violation_count: u64,
+    pub primitive_bounds_violation_count: u64,
     pub background_bounds_violation_count: u64,
     pub coordinate_contract_violation_count: u64,
     pub missing_report: bool,
@@ -50,6 +52,7 @@ pub struct NativeUiExportAbiValidationReport {
 pub struct NativeUiExportAbiSamples {
     pub missing_surface: Vec<String>,
     pub slot_bounds: Vec<String>,
+    pub primitive_bounds: Vec<String>,
     pub background_bounds: Vec<String>,
     pub coordinate_contract: Vec<String>,
 }
@@ -164,9 +167,12 @@ pub fn validate_native_ui_export_abi(input: &Path) -> Result<NativeUiExportAbiVa
     state.raw_report_status = value_string(&raw_report, "status");
     state.layout_count = value_u64(&raw_report, "layoutCount").unwrap_or(0);
     state.slot_count = value_u64(&raw_report, "slotCount").unwrap_or(0);
+    state.primitive_count = value_u64(&raw_report, "primitiveCount").unwrap_or(0);
     state.missing_surface_count = value_u64(&raw_report, "missingSurfaceCount").unwrap_or(0);
     state.slot_bounds_violation_count =
         value_u64(&raw_report, "slotBoundsViolationCount").unwrap_or(0);
+    state.primitive_bounds_violation_count =
+        value_u64(&raw_report, "primitiveBoundsViolationCount").unwrap_or(0);
     state.background_bounds_violation_count =
         value_u64(&raw_report, "backgroundBoundsViolationCount").unwrap_or(0);
     state.coordinate_contract_violation_count =
@@ -212,6 +218,11 @@ pub fn validate_native_ui_export_abi(input: &Path) -> Result<NativeUiExportAbiVa
     );
     push_counter_violation(
         &mut state.contract_violations,
+        "primitiveBoundsViolationCount",
+        state.primitive_bounds_violation_count,
+    );
+    push_counter_violation(
+        &mut state.contract_violations,
         "backgroundBoundsViolationCount",
         state.background_bounds_violation_count,
     );
@@ -234,8 +245,10 @@ struct NativeUiExportAbiState {
     raw_report_status: Option<String>,
     layout_count: u64,
     slot_count: u64,
+    primitive_count: u64,
     missing_surface_count: u64,
     slot_bounds_violation_count: u64,
+    primitive_bounds_violation_count: u64,
     background_bounds_violation_count: u64,
     coordinate_contract_violation_count: u64,
     missing_report: bool,
@@ -270,8 +283,10 @@ impl NativeUiExportAbiState {
             raw_report_status: self.raw_report_status,
             layout_count: self.layout_count,
             slot_count: self.slot_count,
+            primitive_count: self.primitive_count,
             missing_surface_count: self.missing_surface_count,
             slot_bounds_violation_count: self.slot_bounds_violation_count,
+            primitive_bounds_violation_count: self.primitive_bounds_violation_count,
             background_bounds_violation_count: self.background_bounds_violation_count,
             coordinate_contract_violation_count: self.coordinate_contract_violation_count,
             missing_report: self.missing_report,
@@ -284,7 +299,7 @@ impl NativeUiExportAbiState {
                 schema_mismatch: "fail-closed",
                 blocked_raw_report: "fail-closed",
                 geometry_contract:
-                    "layouts and slots must be bounded, surface-complete, and use NEI pixel coordinates with uniform scaling",
+                    "layouts, slots, and rect primitives must be bounded, surface-complete, and use NEI pixel coordinates with uniform scaling",
                 path_portability:
                     "portable-relative raw-export path only; expected validation/native-ui-abi.json",
                 legacy_fallback: "forbidden",
@@ -297,6 +312,7 @@ fn read_samples(raw_report: &Value) -> NativeUiExportAbiSamples {
     NativeUiExportAbiSamples {
         missing_surface: read_string_array(raw_report, "missingSurfaceSamples"),
         slot_bounds: read_string_array(raw_report, "slotBoundsSamples"),
+        primitive_bounds: read_string_array(raw_report, "primitiveBoundsSamples"),
         background_bounds: read_string_array(raw_report, "backgroundBoundsSamples"),
         coordinate_contract: read_string_array(raw_report, "coordinateContractSamples"),
     }

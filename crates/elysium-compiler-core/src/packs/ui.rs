@@ -18,13 +18,13 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 4;
+const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 5;
 const UI_BINDING_PAYLOAD_VERSION: u32 = 1;
 const UI_STRING_PAYLOAD_VERSION: u32 = 1;
 const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 19;
 const UI_SLOT_ROW_STRIDE_U32: u32 = 12;
-const UI_TEXT_ROW_STRIDE_U32: u32 = 5;
-const UI_RECT_ROW_STRIDE_U32: u32 = 12;
+const UI_TEXT_ROW_STRIDE_U32: u32 = 7;
+const UI_RECT_ROW_STRIDE_U32: u32 = 14;
 const UI_BINDING_ROW_STRIDE_U32: u32 = 11;
 const NATIVE_UI_COORDINATE_SPACE: &str = "nei_pixels";
 const NATIVE_UI_ANCHOR: &str = "top-left";
@@ -190,6 +190,7 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
                 "hotspotActionFields": true,
                 "hotspotActionFieldNames": ["action", "itemId", "payloadKey"],
                 "slotGeometryFields": ["coordinateSpace", "anchor", "slotWidth", "slotHeight", "pitchX", "pitchY"],
+                "rectGeometryFields": ["coordinateSpace", "anchor"],
             },
             "artifacts": {
                 "uiTemplates": "rust/ui-pack/ui_templates.bin",
@@ -222,6 +223,13 @@ pub fn build_compact_ui_template_payload(
     let mut viewport_count = 0u32;
 
     for template in templates {
+        let template_coordinate_space = required_template_contract_string(
+            template,
+            "coordinateSpace",
+            NATIVE_UI_COORDINATE_SPACE,
+        )?;
+        let template_anchor =
+            required_template_contract_string(template, "anchor", NATIVE_UI_ANCHOR)?;
         let slot_start = slot_count;
         if let Some(slots) = template.get("slots").and_then(Value::as_array) {
             for slot in slots {
@@ -308,6 +316,30 @@ pub fn build_compact_ui_template_payload(
                     &mut text_bytes,
                     value_u64(overlay, "height").unwrap_or(0) as u32,
                 );
+                push_u32(
+                    &mut text_bytes,
+                    intern_compact_string(
+                        strings,
+                        string_refs,
+                        Some(required_rect_contract_string(
+                            overlay,
+                            "coordinateSpace",
+                            &template_coordinate_space,
+                        )?),
+                    ),
+                );
+                push_u32(
+                    &mut text_bytes,
+                    intern_compact_string(
+                        strings,
+                        string_refs,
+                        Some(required_rect_contract_string(
+                            overlay,
+                            "anchor",
+                            &template_anchor,
+                        )?),
+                    ),
+                );
                 text_count += 1;
             }
         }
@@ -315,7 +347,14 @@ pub fn build_compact_ui_template_payload(
         let hotspot_start = hotspot_count;
         if let Some(hotspots) = template.get("hotspots").and_then(Value::as_array) {
             for hotspot in hotspots {
-                push_compact_ui_rect(&mut hotspot_bytes, strings, string_refs, hotspot);
+                push_compact_ui_rect(
+                    &mut hotspot_bytes,
+                    strings,
+                    string_refs,
+                    hotspot,
+                    &template_coordinate_space,
+                    &template_anchor,
+                )?;
                 hotspot_count += 1;
             }
         }
@@ -323,7 +362,14 @@ pub fn build_compact_ui_template_payload(
         let viewport_start = viewport_count;
         if let Some(viewports) = template.get("viewports").and_then(Value::as_array) {
             for viewport in viewports {
-                push_compact_ui_rect(&mut viewport_bytes, strings, string_refs, viewport);
+                push_compact_ui_rect(
+                    &mut viewport_bytes,
+                    strings,
+                    string_refs,
+                    viewport,
+                    &template_coordinate_space,
+                    &template_anchor,
+                )?;
                 viewport_count += 1;
             }
         }
@@ -445,6 +491,38 @@ fn required_slot_contract_string(slot: &Value, key: &str, expected: &str) -> Res
     Ok(value)
 }
 
+fn required_template_contract_string(
+    template: &Value,
+    key: &str,
+    expected: &str,
+) -> Result<String> {
+    let value = value_string(template, key)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow!("ui template missing required geometry contract field: {key}"))?;
+    if value != expected {
+        return Err(anyhow!(
+            "ui template geometry contract field {key} must be {expected}, got {value}"
+        ));
+    }
+    Ok(value)
+}
+
+fn required_rect_contract_string(rect: &Value, key: &str, expected: &str) -> Result<String> {
+    let value = value_string(rect, key)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            anyhow!("ui template rect missing required geometry contract field: {key}")
+        })?;
+    if value != expected {
+        return Err(anyhow!(
+            "ui template rect field {key} must be {expected}, got {value}"
+        ));
+    }
+    Ok(value)
+}
+
 fn required_slot_u32(slot: &Value, key: &str, policy: SlotFieldPolicy) -> Result<u32> {
     let value = value_u64(slot, key)
         .ok_or_else(|| anyhow!("ui template slot missing required integer field: {key}"))?;
@@ -475,7 +553,9 @@ fn push_compact_ui_rect(
     strings: &mut Vec<String>,
     string_refs: &mut HashMap<String, u32>,
     rect: &Value,
-) {
+    coordinate_space: &str,
+    anchor: &str,
+) -> Result<()> {
     for key in [
         "id",
         "kind",
@@ -495,6 +575,27 @@ fn push_compact_ui_rect(
     push_i32(bytes, value_i64(rect, "y").unwrap_or(0) as i32);
     push_u32(bytes, value_u64(rect, "width").unwrap_or(0) as u32);
     push_u32(bytes, value_u64(rect, "height").unwrap_or(0) as u32);
+    push_u32(
+        bytes,
+        intern_compact_string(
+            strings,
+            string_refs,
+            Some(required_rect_contract_string(
+                rect,
+                "coordinateSpace",
+                coordinate_space,
+            )?),
+        ),
+    );
+    push_u32(
+        bytes,
+        intern_compact_string(
+            strings,
+            string_refs,
+            Some(required_rect_contract_string(rect, "anchor", anchor)?),
+        ),
+    );
+    Ok(())
 }
 
 pub fn build_compact_ui_binding_payload(

@@ -12,21 +12,24 @@
   "pathViolations": [],
   "policy": {
     "blockedRawReport": "fail-closed",
-    "geometryContract": "layouts and slots must be bounded, surface-complete, and use NEI pixel coordinates with uniform scaling",
+    "geometryContract": "layouts, slots, and rect primitives must be bounded, surface-complete, and use NEI pixel coordinates with uniform scaling",
     "legacyFallback": "forbidden",
     "missingReport": "fail-closed",
     "pathPortability": "portable-relative raw-export path only; expected validation/native-ui-abi.json",
     "schemaMismatch": "fail-closed"
   },
+  "primitiveBoundsViolationCount": 0,
+  "primitiveCount": 0,
   "rawReportSchemaVersion": "nesqlpp/raw-export/alpha1/native-ui-validation",
   "rawReportStatus": "ok",
-  "reportBytes": 437,
+  "reportBytes": 533,
   "reportPath": "validation/native-ui-abi.json",
-  "reportSha256": "66a676e819f8a44993b56600438e5f980620b26ca15733c5a4de377c367d41cd",
+  "reportSha256": "2c9fedafecb8bd53a7db48cf9f306bfe1d8d3a6974e7f3bc915868ac71e386ac",
   "samples": {
     "backgroundBounds": [],
     "coordinateContract": [],
     "missingSurface": [],
+    "primitiveBounds": [],
     "slotBounds": []
   },
   "schemaVersion": "elysium-compiler/native-ui-export-abi-validation/v1",

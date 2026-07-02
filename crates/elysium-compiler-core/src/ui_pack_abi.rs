@@ -19,13 +19,13 @@ const UI_STRING_SCHEMA: &str = "neonei/ui-string-pack/current";
 const UI_TEMPLATE_MAGIC: &[u8; 8] = b"NEIUIT1\0";
 const UI_BINDING_MAGIC: &[u8; 8] = b"NEIUIB1\0";
 const UI_STRING_MAGIC: &[u8; 8] = b"NEIUIS1\0";
-const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 4;
+const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 5;
 const UI_BINDING_PAYLOAD_VERSION: u32 = 1;
 const UI_STRING_PAYLOAD_VERSION: u32 = 1;
 const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 19;
 const UI_SLOT_ROW_STRIDE_U32: u32 = 12;
-const UI_TEXT_ROW_STRIDE_U32: u32 = 5;
-const UI_RECT_ROW_STRIDE_U32: u32 = 12;
+const UI_TEXT_ROW_STRIDE_U32: u32 = 7;
+const UI_RECT_ROW_STRIDE_U32: u32 = 14;
 const UI_BINDING_ROW_STRIDE_U32: u32 = 11;
 
 #[derive(Clone, Copy, Debug)]
@@ -515,7 +515,7 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
             header_bytes + template_bytes + slot_bytes,
             text_count,
             text_stride,
-            &[0],
+            &[0, 5, 6],
             string_count,
         )?;
         validate_string_refs(
@@ -523,7 +523,7 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
             header_bytes + template_bytes + slot_bytes + text_bytes,
             hotspot_count,
             rect_stride,
-            &[0, 1, 2, 3, 4, 5, 6, 7],
+            &[0, 1, 2, 3, 4, 5, 6, 7, 12, 13],
             string_count,
         )?;
         validate_string_refs(
@@ -531,7 +531,7 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
             header_bytes + template_bytes + slot_bytes + text_bytes + hotspot_bytes,
             viewport_count,
             rect_stride,
-            &[0, 1, 2, 3, 4, 5, 6, 7],
+            &[0, 1, 2, 3, 4, 5, 6, 7, 12, 13],
             string_count,
         )?;
     }

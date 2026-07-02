@@ -57,7 +57,7 @@
       "logicalName": "rustUiTemplatesBin",
       "path": "rust/ui-pack/ui_templates.bin",
       "required": true,
-      "sha256": "10c14c32ca99a0d24fc236aaac26d219fe1d069d76be940bd25ed8fd6940a241",
+      "sha256": "c1e357a035865b93346b4e63f2d4909998abf6700a2ed443c70d6a58f65b78ef",
       "status": "present"
     },
     {
@@ -91,13 +91,13 @@
       "status": "present"
     },
     {
-      "bytes": 1819,
+      "bytes": 1997,
       "debugOnly": false,
       "kind": "manifest",
       "logicalName": "rustUiTemplateCatalog",
       "path": "rust/ui-pack/ui_template_catalog.json",
       "required": true,
-      "sha256": "e8023c10088de2bf02cad0af54826c24d33c4e00080d24771bae40e253a4f040",
+      "sha256": "592663391dc94b0bc5b52df0eee2ea541ed54fc2b593871ec97151f54b400876",
       "status": "present"
     },
     {
@@ -121,13 +121,13 @@
       "status": "present"
     },
     {
-      "bytes": 1619,
+      "bytes": 1694,
       "debugOnly": false,
       "kind": "report",
       "logicalName": "rustUiPackReport",
       "path": "rust/ui-pack/ui_pack_report.json",
       "required": true,
-      "sha256": "f04f2c55988e6a235ea7ef8c2d0efea16b9df3f39b4f4a30efaf2aba80b6e2af",
+      "sha256": "814f7232616d005cbca8f8e25a55870e2ef40d06eee57ed41d3b9dc6481f1ad1",
       "status": "present"
     },
     {
@@ -137,17 +137,17 @@
       "logicalName": "rustRawExportAbiValidationReport",
       "path": "rust/raw-export-abi-validation-report.json",
       "required": true,
-      "sha256": "347aea63dc7e2a60ef0720fa11f343e9ac16d8b12cde7e9cea4aea3b09af434c",
+      "sha256": "a9b24ea1796f0dc1ce24606bb6e24ef1b368419778b4daaa1bb918ac62184a99",
       "status": "present"
     },
     {
-      "bytes": 1355,
+      "bytes": 1461,
       "debugOnly": false,
       "kind": "report",
       "logicalName": "rustNativeUiExportAbiValidationReport",
       "path": "rust/native-ui-export-abi-validation-report.json",
       "required": true,
-      "sha256": "5e335e444f6d247c9186951766896c5cdc17626d3f6d67786eff123ec89a0585",
+      "sha256": "e028f143dfaf4d6ecd1007e391734321b15b83a4870f0376bf71783dd3144e19",
       "status": "present"
     },
     {
@@ -157,7 +157,7 @@
       "logicalName": "rustUiPackAbiValidationReport",
       "path": "rust/ui-pack-abi-validation-report.json",
       "required": true,
-      "sha256": "7718e8d701a976f2829968526b61611ac560d49730352b4f28346c4a11a43955",
+      "sha256": "c8681b7d1577650a2316ccfc8d508470acd12d5dc772186fa4b6fee8339b115f",
       "status": "present"
     },
     {

@@ -11,5 +11,8 @@
   "missingSurfaceSamples": [],
   "slotBoundsSamples": [],
   "backgroundBoundsSamples": [],
-  "coordinateContractSamples": []
+  "coordinateContractSamples": [],
+  "primitiveCount": 0,
+  "primitiveBoundsViolationCount": 0,
+  "primitiveBoundsSamples": []
 }
