@@ -611,8 +611,7 @@ fn runtime_recipe_type_ids_resolve_to_nei_handler_keys() {
         "layoutKind": "machine",
         "width": 166,
         "height": 135,
-        "maxRecipesPerPage": 2,
-        "progressBars": [{ "x": 78, "y": 24, "width": 20, "height": 18 }]
+        "maxRecipesPerPage": 2
     })];
     let recipe = json!({
         "family": "gregtech",
@@ -639,7 +638,7 @@ fn runtime_recipe_type_ids_resolve_to_nei_handler_keys() {
 }
 
 #[test]
-fn public_recipe_layout_preserves_native_background_and_dynamic_primitives() {
+fn public_recipe_layout_preserves_static_surface_fields_only() {
     let layout = json!({
         "handlerKey": "gt.recipe.assemblyline",
         "canonicalMachineFamily": "gregtech-machine",
@@ -654,21 +653,6 @@ fn public_recipe_layout_preserves_native_background_and_dynamic_primitives() {
             "assetRef": "assets/ui-backgrounds/gregtech/nei_single_recipe.png",
             "scaling": "nine-slice"
         },
-        "progressBars": [{
-            "kind": "progress-bar",
-            "role": "gt-progress",
-            "x": 78,
-            "y": 24,
-            "width": 20,
-            "height": 18
-        }],
-        "dynamicPrimitives": [{
-            "kind": "progress-bar",
-            "x": 78,
-            "y": 24,
-            "width": 20,
-            "height": 18
-        }],
         "hotspots": [{
             "id": "machine-info",
             "label": "Machine info",
@@ -702,14 +686,10 @@ fn public_recipe_layout_preserves_native_background_and_dynamic_primitives() {
         public_layout["nativeBackground"]["assetRef"],
         json!("assets/ui-backgrounds/gregtech/nei_single_recipe.png")
     );
-    assert_eq!(
-        public_layout["progressBars"].as_array().unwrap()[0]["role"],
-        json!("gt-progress")
-    );
-    assert_eq!(
-        public_layout["dynamicPrimitives"].as_array().unwrap()[0]["width"],
-        json!(20)
-    );
+    assert!(public_layout.get("progressBars").is_none());
+    assert!(public_layout.get("fluidBars").is_none());
+    assert!(public_layout.get("energyBars").is_none());
+    assert!(public_layout.get("dynamicPrimitives").is_none());
     assert_eq!(
         public_layout["hotspots"].as_array().unwrap()[0]["label"],
         json!("Machine info")
@@ -835,6 +815,18 @@ fn compact_ui_pack_uses_shared_native_string_table() {
             "height": 8,
             "coordinateSpace": "nei_pixels",
             "anchor": "top-left"
+        }],
+        "dynamicPrimitives": [{
+            "kind": "progress-bar",
+            "role": "gt-progress",
+            "x": 78,
+            "y": 24,
+            "width": 20,
+            "height": 18,
+            "coordinateSpace": "nei_pixels",
+            "anchor": "top-left",
+            "orientation": "horizontal",
+            "source": "test-fixture"
         }]
     })];
     let recipe_index = vec![json!({
@@ -858,7 +850,7 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     assert_eq!(&template_payload[0..8], b"NEIUIT1\0");
     assert_eq!(
         u32::from_le_bytes(template_payload[8..12].try_into().unwrap()),
-        8
+        9
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[12..16].try_into().unwrap()),
@@ -874,7 +866,7 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[24..28].try_into().unwrap()),
-        0
+        1
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[28..32].try_into().unwrap()),
@@ -882,18 +874,26 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[32..36].try_into().unwrap()),
-        23
+        0
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[36..40].try_into().unwrap()),
-        12
+        25
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[40..44].try_into().unwrap()),
-        7
+        12
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[44..48].try_into().unwrap()),
+        7
+    );
+    assert_eq!(
+        u32::from_le_bytes(template_payload[48..52].try_into().unwrap()),
+        13
+    );
+    assert_eq!(
+        u32::from_le_bytes(template_payload[52..56].try_into().unwrap()),
         15
     );
     assert_eq!(&binding_payload[0..8], b"NEIUIB1\0");
@@ -925,6 +925,7 @@ fn compact_ui_pack_rejects_legacy_rect_action_fields() {
         "handlerCount": 1,
         "slots": [],
         "textOverlays": [],
+        "dynamicPrimitives": [],
         "hotspots": [{
             "id": "legacy-hotspot",
             "kind": "hotspot",
@@ -978,7 +979,7 @@ fn zero_recipe_diagnostics_distinguish_legal_and_suspicious_handlers() {
 }
 
 #[test]
-fn native_ui_layout_report_counts_gregtech_progress_and_backgrounds() {
+fn native_ui_layout_report_tracks_gregtech_backgrounds_without_inline_primitives() {
     let temp = tempfile::tempdir().unwrap();
     let recipes_dir = temp.path().join("recipes");
     fs::create_dir_all(&recipes_dir).unwrap();
@@ -1002,8 +1003,7 @@ fn native_ui_layout_report_counts_gregtech_progress_and_backgrounds() {
                     "resource": "gregtech:textures/gui/background/nei_single_recipe.png",
                     "scaling": "nine-slice",
                     "texture": { "width": 64, "height": 64, "borderU": 2, "borderV": 2 }
-                },
-                "progressBars": [{ "x": 78, "y": 24, "width": 20, "height": 18 }]
+                }
             }]
         }),
     )
@@ -1017,8 +1017,7 @@ fn native_ui_layout_report_counts_gregtech_progress_and_backgrounds() {
                 "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
                 "nativeLayout": {
                     "canonicalMachineFamily": "gregtech-machine",
-                    "imageRegion": { "x": 0, "y": 0, "width": 176, "height": 90 },
-                    "progressBars": [{ "x": 78, "y": 24, "width": 20, "height": 18 }]
+                    "imageRegion": { "x": 0, "y": 0, "width": 176, "height": 90 }
                 }
             }]
         }),
@@ -1032,10 +1031,12 @@ fn native_ui_layout_report_counts_gregtech_progress_and_backgrounds() {
 
     assert_eq!(report["status"], json!("ready"));
     assert_eq!(report["counts"]["gregtechHandlerLayouts"], json!(1));
-    assert_eq!(
-        report["counts"]["gregtechRecipeUiPayloadsWithProgressBars"],
-        json!(1)
-    );
+    assert!(report["counts"]
+        .get("gregtechRecipeUiPayloadsWithProgressBars")
+        .is_none());
+    assert!(report["samples"]
+        .get("gregtechRecipePayloadsMissingProgressBars")
+        .is_none());
     assert_eq!(report["backgroundStatus"], json!("captured"));
     assert_eq!(
         report["counts"]["gregtechRecipeUiPayloadsWithNativeBackgrounds"],
@@ -1740,9 +1741,10 @@ fn sharded_recipes_fixture_compiles_all_declared_shards() {
         .any(|entry| entry["recipeId"] == json!("r_fixture_shard_b")));
     assert!(recipes
         .iter()
-        .all(|entry| entry["nativeLayout"]["progressBars"]
-            .as_array()
-            .is_some_and(|bars| !bars.is_empty())));
+        .all(|entry| entry["nativeLayout"].get("progressBars").is_none()
+            && entry["nativeLayout"].get("dynamicPrimitives").is_none()
+            && entry["nativeLayout"].get("fluidBars").is_none()
+            && entry["nativeLayout"].get("energyBars").is_none()));
     assert_expected_json_matches(
         "raw-export-sharded-recipes",
         output.path(),

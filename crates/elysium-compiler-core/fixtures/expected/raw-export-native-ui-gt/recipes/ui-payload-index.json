@@ -6,9 +6,6 @@
       "machineType": "Test GT Machine",
       "nativeLayout": {
         "canonicalMachineFamily": "gregtech-machine",
-        "dynamicPrimitives": [],
-        "energyBars": [],
-        "fluidBars": [],
         "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
         "handlerKey": "gt.recipe.test",
         "height": 90,
@@ -55,14 +52,6 @@
           "width": 176,
           "yShift": 0
         },
-        "progressBars": [
-          {
-            "height": 18,
-            "width": 20,
-            "x": 78,
-            "y": 24
-          }
-        ],
         "slots": [],
         "textOverlays": [],
         "viewports": [],

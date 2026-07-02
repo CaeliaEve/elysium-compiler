@@ -4,19 +4,14 @@
   "counts": {
     "gregtechHandlerLayouts": 1,
     "gregtechHandlerLayoutsWithBackgroundRegions": 1,
-    "gregtechHandlerLayoutsWithProgressBars": 1,
     "gregtechRecipeUiPayloads": 1,
     "gregtechRecipeUiPayloadsWithBackgroundRegions": 1,
     "gregtechRecipeUiPayloadsWithHotspots": 0,
     "gregtechRecipeUiPayloadsWithNativeBackgrounds": 1,
-    "gregtechRecipeUiPayloadsWithProgressBars": 1,
     "gregtechRecipeUiPayloadsWithViewports": 0,
     "handlerLayouts": 1,
     "handlerLayoutsWithBackgroundRegions": 1,
-    "handlerLayoutsWithEnergyBars": 0,
-    "handlerLayoutsWithFluidBars": 0,
     "handlerLayoutsWithHotspots": 0,
-    "handlerLayoutsWithProgressBars": 1,
     "handlerLayoutsWithViewports": 0,
     "recipeUiPayloads": 1
   },
@@ -24,8 +19,13 @@
   "generatedAt": "deterministic-rust-compiler",
   "geometryStatus": "ready",
   "samples": {
-    "gregtechHandlerLayoutsMissingProgressBars": [],
-    "gregtechRecipePayloadsMissingProgressBars": []
+    "gregtechHandlerLayoutsRelyingOnTemplatePrimitives": [
+      {
+        "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
+        "handlerKey": "gt.recipe.test",
+        "layoutKind": "machine"
+      }
+    ]
   },
   "schemaVersion": "neonei/native-ui-layout-report/current",
   "source": {

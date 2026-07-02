@@ -47,14 +47,6 @@
         },
         "captureRequired": false
       },
-      "progressBars": [
-        {
-          "x": 78,
-          "y": 24,
-          "width": 20,
-          "height": 18
-        }
-      ],
       "coordinateSpace": "nei_pixels",
       "scaleMode": "uniform-scale",
       "anchor": "top-left"

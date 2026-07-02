@@ -50,25 +50,6 @@ pub fn compile_native_ui_layout_report(
     if layouts.is_empty() {
         failures.push("handler layout index is empty".to_string());
     }
-    if !gt_layouts.is_empty()
-        && gt_layouts
-            .iter()
-            .filter(|layout| primitive_count(layout, "progressBars") > 0)
-            .count()
-            == 0
-    {
-        failures.push("gregtech-machine handler layouts have no drawable progressBars".to_string());
-    }
-    if !gt_recipe_layouts.is_empty()
-        && gt_recipe_layouts
-            .iter()
-            .filter(|layout| primitive_count(layout, "progressBars") > 0)
-            .count()
-            == 0
-    {
-        failures
-            .push("gregtech-machine recipe UI payloads have no drawable progressBars".to_string());
-    }
     let gt_recipe_entries_with_background_regions = gt_recipe_layouts
         .iter()
         .filter(|layout| has_image_region(layout))
@@ -111,42 +92,24 @@ pub fn compile_native_ui_layout_report(
         "counts": {
             "handlerLayouts": layouts.len(),
             "handlerLayoutsWithBackgroundRegions": layouts.iter().filter(|layout| has_image_region(layout)).count(),
-            "handlerLayoutsWithProgressBars": layouts.iter().filter(|layout| primitive_count(layout, "progressBars") > 0).count(),
-            "handlerLayoutsWithFluidBars": layouts.iter().filter(|layout| primitive_count(layout, "fluidBars") > 0).count(),
-            "handlerLayoutsWithEnergyBars": layouts.iter().filter(|layout| primitive_count(layout, "energyBars") > 0).count(),
             "handlerLayoutsWithHotspots": layouts.iter().filter(|layout| primitive_count(layout, "hotspots") > 0).count(),
             "handlerLayoutsWithViewports": layouts.iter().filter(|layout| primitive_count(layout, "viewports") > 0).count(),
             "gregtechHandlerLayouts": gt_layouts.len(),
             "gregtechHandlerLayoutsWithBackgroundRegions": gt_layouts.iter().filter(|layout| has_image_region(layout)).count(),
-            "gregtechHandlerLayoutsWithProgressBars": gt_layouts.iter().filter(|layout| primitive_count(layout, "progressBars") > 0).count(),
             "recipeUiPayloads": recipes.len(),
             "gregtechRecipeUiPayloads": gt_recipe_entries.len(),
             "gregtechRecipeUiPayloadsWithBackgroundRegions": gt_recipe_entries_with_background_regions,
             "gregtechRecipeUiPayloadsWithNativeBackgrounds": gt_recipe_entries_with_native_backgrounds,
-            "gregtechRecipeUiPayloadsWithProgressBars": gt_recipe_layouts.iter().filter(|layout| primitive_count(layout, "progressBars") > 0).count(),
             "gregtechRecipeUiPayloadsWithHotspots": gt_recipe_layouts.iter().filter(|layout| primitive_count(layout, "hotspots") > 0).count(),
             "gregtechRecipeUiPayloadsWithViewports": gt_recipe_layouts.iter().filter(|layout| primitive_count(layout, "viewports") > 0).count(),
         },
         "samples": {
-            "gregtechHandlerLayoutsMissingProgressBars": gt_layouts.iter()
-                .filter(|layout| primitive_count(layout, "progressBars") == 0)
+            "gregtechHandlerLayoutsRelyingOnTemplatePrimitives": gt_layouts.iter()
                 .take(25)
                 .map(|layout| json!({
                     "handlerKey": value_string(layout, "handlerKey"),
                     "handlerClass": value_string(layout, "handlerClass"),
                     "layoutKind": value_string(layout, "layoutKind"),
-                }))
-                .collect::<Vec<_>>(),
-            "gregtechRecipePayloadsMissingProgressBars": gt_recipe_entries.iter()
-                .filter(|entry| value_string(entry, "familyKey")
-                    .and_then(|family_key| layout_by_family.get(&family_key).copied())
-                    .map(|layout| primitive_count(layout, "progressBars") == 0)
-                    .unwrap_or(true))
-                .take(25)
-                .map(|entry| json!({
-                    "recipeId": value_string(entry, "recipeId"),
-                    "familyKey": value_string(entry, "familyKey"),
-                    "handlerKey": value_string(entry, "handlerKey"),
                 }))
                 .collect::<Vec<_>>(),
         },

@@ -52,7 +52,7 @@
       "path": "rust/strings.zh_cn.bin"
     },
     {
-      "bytes": 243,
+      "bytes": 311,
       "path": "rust/ui-pack/ui_templates.bin"
     },
     {
@@ -60,7 +60,7 @@
       "path": "rust/ui-pack/ui_bindings.bin"
     },
     {
-      "bytes": 1114,
+      "bytes": 1199,
       "path": "rust/ui-pack/ui_strings.bin"
     },
     {
@@ -68,7 +68,7 @@
       "path": "rust/ui-pack/ui_assets.manifest.json"
     },
     {
-      "bytes": 2797,
+      "bytes": 2989,
       "path": "rust/ui-pack/ui_template_catalog.json"
     },
     {
@@ -80,7 +80,7 @@
       "path": "rust/ui-pack/ui_family_census.json"
     },
     {
-      "bytes": 2189,
+      "bytes": 2586,
       "path": "rust/ui-pack/ui_pack_report.json"
     },
     {
@@ -92,7 +92,7 @@
       "path": "rust/native-ui-export-abi-validation-report.json"
     },
     {
-      "bytes": 4800,
+      "bytes": 4933,
       "path": "rust/ui-pack-abi-validation-report.json"
     },
     {
@@ -108,7 +108,7 @@
       "path": "rust/recipe-fragmentation-report.json"
     },
     {
-      "bytes": 1248,
+      "bytes": 1138,
       "path": "rust/native-ui-layout-report.json"
     },
     {
@@ -122,7 +122,7 @@
     "portableRelativePathsOnly": true,
     "windowsPathsAllowed": false
   },
-  "runtimeId": "rust-0d97108a1538006a",
+  "runtimeId": "rust-930740cc957a6f6a",
   "schema": "neonei/runtime/current",
   "schemaRevision": 1,
   "schemaVersion": "neonei/rust-runtime-manifest/current"

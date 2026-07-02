@@ -188,10 +188,6 @@ pub fn public_recipe_layout(layout: &Value) -> Value {
         "nativeBackground": layout.get("nativeBackground").cloned().unwrap_or(Value::Null),
         "slots": layout.get("slots").and_then(Value::as_array).cloned().unwrap_or_default(),
         "textOverlays": layout.get("textOverlays").and_then(Value::as_array).cloned().unwrap_or_default(),
-        "dynamicPrimitives": layout.get("dynamicPrimitives").and_then(Value::as_array).cloned().unwrap_or_default(),
-        "progressBars": layout.get("progressBars").and_then(Value::as_array).cloned().unwrap_or_default(),
-        "fluidBars": layout.get("fluidBars").and_then(Value::as_array).cloned().unwrap_or_default(),
-        "energyBars": layout.get("energyBars").and_then(Value::as_array).cloned().unwrap_or_default(),
         "hotspots": layout.get("hotspots").and_then(Value::as_array).cloned().unwrap_or_default(),
         "viewports": layout.get("viewports").and_then(Value::as_array).cloned().unwrap_or_default(),
     })

@@ -19,12 +19,13 @@ const UI_STRING_SCHEMA: &str = "neonei/ui-string-pack/current";
 const UI_TEMPLATE_MAGIC: &[u8; 8] = b"NEIUIT1\0";
 const UI_BINDING_MAGIC: &[u8; 8] = b"NEIUIB1\0";
 const UI_STRING_MAGIC: &[u8; 8] = b"NEIUIS1\0";
-const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 8;
+const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 9;
 const UI_BINDING_PAYLOAD_VERSION: u32 = 1;
 const UI_STRING_PAYLOAD_VERSION: u32 = 1;
-const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 23;
+const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 25;
 const UI_SLOT_ROW_STRIDE_U32: u32 = 12;
 const UI_TEXT_ROW_STRIDE_U32: u32 = 7;
+const UI_PRIMITIVE_ROW_STRIDE_U32: u32 = 13;
 const UI_RECT_ROW_STRIDE_U32: u32 = 15;
 const UI_BINDING_ROW_STRIDE_U32: u32 = 11;
 
@@ -452,37 +453,43 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
     let template_count = read_u32(payload, 12)?;
     let slot_count = read_u32(payload, 16)?;
     let text_count = read_u32(payload, 20)?;
-    let hotspot_count = read_u32(payload, 24)?;
-    let viewport_count = read_u32(payload, 28)?;
-    let template_stride = read_u32(payload, 32)?;
-    let slot_stride = read_u32(payload, 36)?;
-    let text_stride = read_u32(payload, 40)?;
-    let rect_stride = read_u32(payload, 44)?;
+    let primitive_count = read_u32(payload, 24)?;
+    let hotspot_count = read_u32(payload, 28)?;
+    let viewport_count = read_u32(payload, 32)?;
+    let template_stride = read_u32(payload, 36)?;
+    let slot_stride = read_u32(payload, 40)?;
+    let text_stride = read_u32(payload, 44)?;
+    let primitive_stride = read_u32(payload, 48)?;
+    let rect_stride = read_u32(payload, 52)?;
     if version != UI_TEMPLATE_PAYLOAD_VERSION
         || template_stride != UI_TEMPLATE_ROW_STRIDE_U32
         || slot_stride != UI_SLOT_ROW_STRIDE_U32
         || text_stride != UI_TEXT_ROW_STRIDE_U32
+        || primitive_stride != UI_PRIMITIVE_ROW_STRIDE_U32
         || rect_stride != UI_RECT_ROW_STRIDE_U32
     {
         return Err(anyhow!(
-            "template section contract mismatch: version={}, templateStride={}, slotStride={}, textStride={}, rectStride={}",
+            "template section contract mismatch: version={}, templateStride={}, slotStride={}, textStride={}, primitiveStride={}, rectStride={}",
             version,
             template_stride,
             slot_stride,
             text_stride,
+            primitive_stride,
             rect_stride
         ));
     }
-    let header_bytes = 8usize + 10 * 4;
+    let header_bytes = 8usize + 12 * 4;
     let template_bytes = table_bytes(template_count, template_stride)?;
     let slot_bytes = table_bytes(slot_count, slot_stride)?;
     let text_bytes = table_bytes(text_count, text_stride)?;
+    let primitive_bytes = table_bytes(primitive_count, primitive_stride)?;
     let hotspot_bytes = table_bytes(hotspot_count, rect_stride)?;
     let viewport_bytes = table_bytes(viewport_count, rect_stride)?;
     let expected_len = header_bytes
         .checked_add(template_bytes)
         .and_then(|value| value.checked_add(slot_bytes))
         .and_then(|value| value.checked_add(text_bytes))
+        .and_then(|value| value.checked_add(primitive_bytes))
         .and_then(|value| value.checked_add(hotspot_bytes))
         .and_then(|value| value.checked_add(viewport_bytes))
         .ok_or_else(|| anyhow!("template payload length overflow"))?;
@@ -521,6 +528,14 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
         validate_string_refs(
             payload,
             header_bytes + template_bytes + slot_bytes + text_bytes,
+            primitive_count,
+            primitive_stride,
+            &[0, 1, 6, 7, 8, 9, 10, 11, 12],
+            string_count,
+        )?;
+        validate_string_refs(
+            payload,
+            header_bytes + template_bytes + slot_bytes + text_bytes + primitive_bytes,
             hotspot_count,
             rect_stride,
             &[0, 1, 2, 3, 4, 9, 10, 11, 12, 13, 14],
@@ -528,7 +543,12 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
         )?;
         validate_string_refs(
             payload,
-            header_bytes + template_bytes + slot_bytes + text_bytes + hotspot_bytes,
+            header_bytes
+                + template_bytes
+                + slot_bytes
+                + text_bytes
+                + primitive_bytes
+                + hotspot_bytes,
             viewport_count,
             rect_stride,
             &[0, 1, 2, 3, 4, 9, 10, 11, 12, 13, 14],
@@ -543,6 +563,7 @@ fn validate_template_payload(payload: &[u8], string_count: u32) -> Result<UiPayl
             section_record("templates", template_count, template_stride),
             section_record("slots", slot_count, slot_stride),
             section_record("textOverlays", text_count, text_stride),
+            section_record("dynamicPrimitives", primitive_count, primitive_stride),
             section_record("hotspots", hotspot_count, rect_stride),
             section_record("viewports", viewport_count, rect_stride),
         ],

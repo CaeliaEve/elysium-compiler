@@ -60,20 +60,24 @@
           "pitchY": 18
         }
       ],
-      "progressBars": [
+      "coordinateSpace": "nei_pixels",
+      "scaleMode": "uniform-scale",
+      "anchor": "top-left",
+      "yShift": 0,
+      "dynamicPrimitives": [
         {
           "x": 78,
           "y": 24,
           "width": 20,
           "height": 18,
           "coordinateSpace": "nei_pixels",
-          "anchor": "top-left"
+          "anchor": "top-left",
+          "kind": "progress-bar",
+          "role": "gt-progress",
+          "orientation": "horizontal",
+          "source": "gtnh-basic-ui-properties-default"
         }
-      ],
-      "coordinateSpace": "nei_pixels",
-      "scaleMode": "uniform-scale",
-      "anchor": "top-left",
-      "yShift": 0
+      ]
     }
   ]
 }

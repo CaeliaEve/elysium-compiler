@@ -58,14 +58,14 @@
       "status": "present"
     },
     {
-      "bytes": 1626,
+      "bytes": 1481,
       "kind": "file",
       "logicalName": "neiHandlerLayouts",
       "manifestPath": "recipes/handler-layouts.json",
       "path": "recipes/handler-layouts.json",
       "required": false,
       "rowCount": null,
-      "sha256": "601d7197b3f27e953e8bbdca34b491f6f37fa71a2709ecd4090281be1bab22e2",
+      "sha256": "a55039503d760bbc220bd1ec623eb1aa041ad2ad28a1e2d39c268f9f5ef488ba",
       "status": "present"
     },
     {
@@ -113,14 +113,14 @@
       "status": "present"
     },
     {
-      "bytes": 2202,
+      "bytes": 2373,
       "kind": "file",
       "logicalName": "uiTemplateCatalog",
       "manifestPath": "recipes/ui-template-catalog.json",
       "path": "recipes/ui-template-catalog.json",
       "required": false,
       "rowCount": null,
-      "sha256": "7ec0ca85dbb2423d67c6ff42cbd0a1d94472958dfb50ea01f8d01815108ddef2",
+      "sha256": "de6e1329240c571ecd70b9914dc3e803750bfbedcb7d9bb6f20677826ec933aa",
       "status": "present"
     }
   ],

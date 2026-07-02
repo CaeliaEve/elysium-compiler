@@ -29,6 +29,21 @@
       "recipeBackgroundOffset",
       "recipeBackgroundSize"
     ],
+    "dynamicPrimitiveGeometryFields": [
+      "kind",
+      "role",
+      "x",
+      "y",
+      "width",
+      "height",
+      "coordinateSpace",
+      "anchor",
+      "orientation",
+      "source",
+      "trackColor",
+      "fillColor",
+      "borderColor"
+    ],
     "interactionContractFields": [
       "interactionKind",
       "interactionTargetKind",
@@ -37,6 +52,7 @@
     ],
     "legacyRectActionFieldNames": [],
     "legacyRectActionFields": false,
+    "primitiveStride": 13,
     "rectGeometryFields": [
       "coordinateSpace",
       "anchor"
@@ -57,9 +73,12 @@
       "anchor"
     ],
     "templateBackgroundField": "nativeBackground",
+    "templateDynamicPrimitiveFields": [
+      "dynamicPrimitives"
+    ],
     "templatePackMagic": "NEIUIT1_NUL",
-    "templatePackVersion": 8,
-    "templateStride": 23,
+    "templatePackVersion": 9,
+    "templateStride": 25,
     "textStride": 7
   },
   "generatedAt": "deterministic-rust-compiler",
@@ -73,10 +92,11 @@
     "assetCount": 1,
     "bindingCount": 1,
     "boundRecipeCount": 1,
+    "dynamicPrimitiveCount": 1,
     "hotspotCount": 0,
     "hotspotInteractionCount": 0,
     "slotCount": 1,
-    "stringCount": 15,
+    "stringCount": 19,
     "templateCount": 1,
     "textOverlayCount": 0,
     "unboundRecipeCount": 0,

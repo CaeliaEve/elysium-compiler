@@ -15,6 +15,7 @@
     "handlerCount": 0,
     "layoutKindCount": 1,
     "overlayCount": 0,
+    "primitiveCount": 1,
     "slotCount": 1,
     "templateCount": 1
   },
@@ -23,6 +24,20 @@
       "anchor": "top-left",
       "canonicalMachineFamily": "gregtech-machine",
       "coordinateSpace": "nei_pixels",
+      "dynamicPrimitives": [
+        {
+          "anchor": "top-left",
+          "coordinateSpace": "nei_pixels",
+          "height": 18,
+          "kind": "progress-bar",
+          "orientation": "horizontal",
+          "role": "gt-progress",
+          "source": "gtnh-basic-ui-properties-default",
+          "width": 20,
+          "x": 78,
+          "y": 24
+        }
+      ],
       "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
       "height": 90,
       "layoutKind": "machine",
@@ -60,16 +75,6 @@
         "width": 176,
         "yShift": 0
       },
-      "progressBars": [
-        {
-          "anchor": "top-left",
-          "coordinateSpace": "nei_pixels",
-          "height": 18,
-          "width": 20,
-          "x": 78,
-          "y": 24
-        }
-      ],
       "scaleMode": "uniform-scale",
       "slots": [
         {

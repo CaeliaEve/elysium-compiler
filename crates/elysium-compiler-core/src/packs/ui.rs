@@ -9,8 +9,8 @@ use crate::ui_templates::{
     build_ui_assets_manifest, build_ui_family_census_report,
     build_ui_template_binding_index_report, build_ui_template_bindings,
     build_ui_template_catalog_report, materialize_ui_background_assets,
-    ui_template_catalog_templates, ui_template_rect_count, ui_template_rect_interaction_count,
-    ui_template_slot_count, ui_template_text_count,
+    ui_template_catalog_templates, ui_template_dynamic_primitive_count, ui_template_rect_count,
+    ui_template_rect_interaction_count, ui_template_slot_count, ui_template_text_count,
 };
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
@@ -18,12 +18,13 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 8;
+const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 9;
 const UI_BINDING_PAYLOAD_VERSION: u32 = 1;
 const UI_STRING_PAYLOAD_VERSION: u32 = 1;
-const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 23;
+const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 25;
 const UI_SLOT_ROW_STRIDE_U32: u32 = 12;
 const UI_TEXT_ROW_STRIDE_U32: u32 = 7;
+const UI_PRIMITIVE_ROW_STRIDE_U32: u32 = 13;
 const UI_RECT_ROW_STRIDE_U32: u32 = 15;
 const UI_BINDING_ROW_STRIDE_U32: u32 = 11;
 const NATIVE_UI_COORDINATE_SPACE: &str = "nei_pixels";
@@ -182,6 +183,7 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
                 "unboundRecipeCount": bindings.len().saturating_sub(bound_recipe_count),
                 "slotCount": templates.iter().map(ui_template_slot_count).sum::<usize>(),
                 "textOverlayCount": templates.iter().map(ui_template_text_count).sum::<usize>(),
+                "dynamicPrimitiveCount": templates.iter().map(ui_template_dynamic_primitive_count).sum::<usize>(),
                 "hotspotCount": templates.iter().map(|template| ui_template_rect_count(template, "hotspots")).sum::<usize>(),
                 "viewportCount": templates.iter().map(|template| ui_template_rect_count(template, "viewports")).sum::<usize>(),
                 "hotspotInteractionCount": templates.iter().map(|template| ui_template_rect_interaction_count(template, "hotspots")).sum::<usize>(),
@@ -195,11 +197,14 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
                 "templateStride": UI_TEMPLATE_ROW_STRIDE_U32,
                 "slotStride": UI_SLOT_ROW_STRIDE_U32,
                 "textStride": UI_TEXT_ROW_STRIDE_U32,
+                "primitiveStride": UI_PRIMITIVE_ROW_STRIDE_U32,
                 "rectStride": UI_RECT_ROW_STRIDE_U32,
                 "surfaceContractFields": ["coordinateSpace", "scaleMode", "anchor"],
                 "legacyRectActionFields": false,
                 "legacyRectActionFieldNames": [],
                 "slotGeometryFields": ["coordinateSpace", "anchor", "slotWidth", "slotHeight", "pitchX", "pitchY"],
+                "templateDynamicPrimitiveFields": ["dynamicPrimitives"],
+                "dynamicPrimitiveGeometryFields": ["kind", "role", "x", "y", "width", "height", "coordinateSpace", "anchor", "orientation", "source", "trackColor", "fillColor", "borderColor"],
                 "rectGeometryFields": ["coordinateSpace", "anchor"],
                 "interactionContractFields": ["interactionKind", "interactionTargetKind", "interactionTargetId", "interactionPayloadSchema"],
                 "backgroundContractFields": ["coordinateSpace", "scaleMode", "anchor", "status", "kind", "scaling", "texture", "recipeBackgroundOffset", "recipeBackgroundSize"],
@@ -228,10 +233,12 @@ pub fn build_compact_ui_template_payload(
     let mut template_bytes = Vec::new();
     let mut slot_bytes = Vec::new();
     let mut text_bytes = Vec::new();
+    let mut primitive_bytes = Vec::new();
     let mut hotspot_bytes = Vec::new();
     let mut viewport_bytes = Vec::new();
     let mut slot_count = 0u32;
     let mut text_count = 0u32;
+    let mut primitive_count = 0u32;
     let mut hotspot_count = 0u32;
     let mut viewport_count = 0u32;
 
@@ -359,6 +366,23 @@ pub fn build_compact_ui_template_payload(
             }
         }
         let text_total = text_count.saturating_sub(text_start);
+        let primitive_start = primitive_count;
+        let template_key = value_string(template, "templateKey").unwrap_or("<unknown>".to_string());
+        ensure_no_legacy_dynamic_primitive_fields(template, &template_key)?;
+        let primitives = required_dynamic_primitives(template, &template_key)?;
+        for primitive in primitives {
+            push_compact_ui_dynamic_primitive(
+                &mut primitive_bytes,
+                strings,
+                string_refs,
+                primitive,
+                &template_coordinate_space,
+                &template_anchor,
+                &template_key,
+            )?;
+            primitive_count += 1;
+        }
+        let primitive_total = primitive_count.saturating_sub(primitive_start);
         let hotspot_start = hotspot_count;
         if let Some(hotspots) = template.get("hotspots").and_then(Value::as_array) {
             for hotspot in hotspots {
@@ -482,13 +506,16 @@ pub fn build_compact_ui_template_payload(
             &mut template_bytes,
             intern_compact_string(strings, string_refs, Some(native_background_json)),
         );
+        push_u32(&mut template_bytes, primitive_start);
+        push_u32(&mut template_bytes, primitive_total);
     }
 
     let mut payload = Vec::with_capacity(
-        8 + 10 * 4
+        8 + 12 * 4
             + template_bytes.len()
             + slot_bytes.len()
             + text_bytes.len()
+            + primitive_bytes.len()
             + hotspot_bytes.len()
             + viewport_bytes.len(),
     );
@@ -497,15 +524,18 @@ pub fn build_compact_ui_template_payload(
     push_u32(&mut payload, templates.len() as u32);
     push_u32(&mut payload, slot_count);
     push_u32(&mut payload, text_count);
+    push_u32(&mut payload, primitive_count);
     push_u32(&mut payload, hotspot_count);
     push_u32(&mut payload, viewport_count);
     push_u32(&mut payload, UI_TEMPLATE_ROW_STRIDE_U32);
     push_u32(&mut payload, UI_SLOT_ROW_STRIDE_U32);
     push_u32(&mut payload, UI_TEXT_ROW_STRIDE_U32);
+    push_u32(&mut payload, UI_PRIMITIVE_ROW_STRIDE_U32);
     push_u32(&mut payload, UI_RECT_ROW_STRIDE_U32);
     payload.extend_from_slice(&template_bytes);
     payload.extend_from_slice(&slot_bytes);
     payload.extend_from_slice(&text_bytes);
+    payload.extend_from_slice(&primitive_bytes);
     payload.extend_from_slice(&hotspot_bytes);
     payload.extend_from_slice(&viewport_bytes);
     Ok(payload)
@@ -514,6 +544,29 @@ pub fn build_compact_ui_template_payload(
 enum SlotFieldPolicy {
     NonNegative,
     Positive,
+}
+
+fn ensure_no_legacy_dynamic_primitive_fields(template: &Value, template_key: &str) -> Result<()> {
+    for legacy_key in ["progressBars", "fluidBars", "energyBars"] {
+        if template.get(legacy_key).is_some() {
+            return Err(anyhow!(
+                "ui template {template_key} uses legacy dynamic primitive field forbidden by v9 ABI: {legacy_key}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn required_dynamic_primitives<'a>(
+    template: &'a Value,
+    template_key: &str,
+) -> Result<&'a Vec<Value>> {
+    template
+        .get("dynamicPrimitives")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            anyhow!("ui template {template_key} missing required v9 dynamicPrimitives array")
+        })
 }
 
 fn validate_ui_template_background_contracts(templates: &[Value]) -> Result<()> {
@@ -775,6 +828,110 @@ fn required_slot_i32(slot: &Value, key: &str) -> Result<i32> {
         return Err(anyhow!("ui template slot field exceeds i32: {key}={value}"));
     }
     Ok(value as i32)
+}
+
+fn required_primitive_string(primitive: &Value, key: &str, label: &str) -> Result<String> {
+    value_string(primitive, key)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow!("{label} missing required string field: {key}"))
+}
+
+fn optional_primitive_string(primitive: &Value, key: &str) -> Option<String> {
+    value_string(primitive, key)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn required_primitive_contract_string(
+    primitive: &Value,
+    key: &str,
+    expected: &str,
+    label: &str,
+) -> Result<String> {
+    let value = required_primitive_string(primitive, key, label)?;
+    if value != expected {
+        return Err(anyhow!(
+            "{label} field {key} must be {expected}, got {value}"
+        ));
+    }
+    Ok(value)
+}
+
+fn required_primitive_orientation(primitive: &Value, label: &str) -> Result<String> {
+    let orientation = required_primitive_string(primitive, "orientation", label)?;
+    if orientation != "horizontal" && orientation != "vertical" {
+        return Err(anyhow!(
+            "{label} orientation must be horizontal or vertical, got {orientation}"
+        ));
+    }
+    Ok(orientation)
+}
+
+fn required_primitive_u32(primitive: &Value, key: &str, label: &str) -> Result<u32> {
+    let value =
+        value_u64(primitive, key).ok_or_else(|| anyhow!("{label} missing integer field: {key}"))?;
+    if value == 0 {
+        return Err(anyhow!("{label} field must be positive: {key}"));
+    }
+    if value > u32::MAX as u64 {
+        return Err(anyhow!("{label} field exceeds u32: {key}={value}"));
+    }
+    Ok(value as u32)
+}
+
+fn required_primitive_i32(primitive: &Value, key: &str, label: &str) -> Result<i32> {
+    let value = value_i64(primitive, key)
+        .ok_or_else(|| anyhow!("{label} missing signed integer field: {key}"))?;
+    if value < i32::MIN as i64 || value > i32::MAX as i64 {
+        return Err(anyhow!("{label} field exceeds i32: {key}={value}"));
+    }
+    Ok(value as i32)
+}
+
+fn push_compact_ui_dynamic_primitive(
+    bytes: &mut Vec<u8>,
+    strings: &mut Vec<String>,
+    string_refs: &mut HashMap<String, u32>,
+    primitive: &Value,
+    coordinate_space: &str,
+    anchor: &str,
+    template_key: &str,
+) -> Result<()> {
+    let label = format!("ui template {template_key} dynamic primitive");
+    let kind = required_primitive_string(primitive, "kind", &label)?;
+    let orientation = required_primitive_orientation(primitive, &label)?;
+    let coordinate_space =
+        required_primitive_contract_string(primitive, "coordinateSpace", coordinate_space, &label)?;
+    let anchor = required_primitive_contract_string(primitive, "anchor", anchor, &label)?;
+    push_u32(
+        bytes,
+        intern_compact_string(strings, string_refs, Some(kind)),
+    );
+    push_u32(
+        bytes,
+        intern_compact_string(
+            strings,
+            string_refs,
+            optional_primitive_string(primitive, "role"),
+        ),
+    );
+    push_i32(bytes, required_primitive_i32(primitive, "x", &label)?);
+    push_i32(bytes, required_primitive_i32(primitive, "y", &label)?);
+    push_u32(bytes, required_primitive_u32(primitive, "width", &label)?);
+    push_u32(bytes, required_primitive_u32(primitive, "height", &label)?);
+    for value in [
+        Some(coordinate_space),
+        Some(anchor),
+        Some(orientation),
+        optional_primitive_string(primitive, "source"),
+        optional_primitive_string(primitive, "trackColor"),
+        optional_primitive_string(primitive, "fillColor"),
+        optional_primitive_string(primitive, "borderColor"),
+    ] {
+        push_u32(bytes, intern_compact_string(strings, string_refs, value));
+    }
+    Ok(())
 }
 
 struct UiRectInteractionContract {

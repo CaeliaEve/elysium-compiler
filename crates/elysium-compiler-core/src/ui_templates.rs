@@ -102,6 +102,10 @@ pub fn build_ui_template_catalog_report(source_resource: &str, templates: &[Valu
     let handler_count = templates.iter().map(template_handler_count).sum::<usize>();
     let slot_count = templates.iter().map(ui_template_slot_count).sum::<usize>();
     let overlay_count = templates.iter().map(ui_template_text_count).sum::<usize>();
+    let primitive_count = templates
+        .iter()
+        .map(ui_template_dynamic_primitive_count)
+        .sum::<usize>();
 
     json!({
         "schemaVersion": "neonei/ui-template-catalog/current",
@@ -121,6 +125,7 @@ pub fn build_ui_template_catalog_report(source_resource: &str, templates: &[Valu
             "familyCount": family_keys.len(),
             "layoutKindCount": layout_kinds.len(),
             "slotCount": slot_count,
+            "primitiveCount": primitive_count,
             "overlayCount": overlay_count,
         },
         "templates": templates,
@@ -437,6 +442,14 @@ pub fn ui_template_slot_count(template: &Value) -> usize {
 pub fn ui_template_text_count(template: &Value) -> usize {
     template
         .get("textOverlays")
+        .and_then(Value::as_array)
+        .map(|values| values.len())
+        .unwrap_or(0)
+}
+
+pub fn ui_template_dynamic_primitive_count(template: &Value) -> usize {
+    template
+        .get("dynamicPrimitives")
         .and_then(Value::as_array)
         .map(|values| values.len())
         .unwrap_or(0)
