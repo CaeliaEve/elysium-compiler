@@ -1,6 +1,9 @@
 use crate::abi::abi_catalog;
 use crate::io::write_json_value;
-use crate::native_ui_export_abi::NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
+use crate::native_ui_export_abi_catalog::{
+    NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH, NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
+    NATIVE_UI_VALIDATION_DEFAULT_PATH, NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
+};
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::version::{
@@ -54,10 +57,10 @@ pub fn schema_catalog() -> Value {
                 "policy": "missing required files, missing declared files, path violations, and legacy fallback are compile blockers"
             },
             "nativeUiValidationReport": {
-                "rawExportPath": "validation/native-ui-abi.json",
-                "compilerReportPath": "rust/native-ui-export-abi-validation-report.json",
+                "rawExportPath": NATIVE_UI_VALIDATION_DEFAULT_PATH,
+                "compilerReportPath": NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH,
                 "schemaVersion": NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
-                "requiredRawSchemaVersion": "nesqlpp/raw-export/alpha1/native-ui-validation",
+                "requiredRawSchemaVersion": NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
                 "policy": "missing native UI validation, blocked geometry reports, and schema mismatches are compile blockers"
             },
             "nativeBackground": {

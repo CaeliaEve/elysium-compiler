@@ -1,3 +1,5 @@
+use crate::native_ui_export_abi_catalog::NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH;
+use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_REPORT_PATH;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use serde_json::Value;
@@ -112,11 +114,11 @@ pub fn summarize_runtime_output(output: Option<&Path>) -> Result<RuntimeSummary>
         ("uiPackReport", "rust/ui-pack/ui_pack_report.json"),
         (
             "uiPackAbiValidationReport",
-            "rust/ui-pack-abi-validation-report.json",
+            UI_PACK_ABI_VALIDATION_REPORT_PATH,
         ),
         (
             "nativeUiExportAbiValidationReport",
-            "rust/native-ui-export-abi-validation-report.json",
+            NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH,
         ),
         ("nativeUiLayoutReport", "rust/native-ui-layout-report.json"),
         ("runtimeValidationReport", "validation/report.json"),

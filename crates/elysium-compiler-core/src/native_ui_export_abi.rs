@@ -1,21 +1,13 @@
 use crate::io::{sha256_file, write_json_value};
 use crate::json_ext::{read_json_file, value_string, value_u64};
 use crate::manifest::{portable_relative_path, read_manifest};
+use crate::native_ui_export_abi_catalog::*;
 use crate::version::EXPORT_ABI_VERSION;
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-pub const NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION: &str =
-    "elysium-compiler/native-ui-export-abi-validation/v1";
-pub const NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION: &str =
-    "nesqlpp/raw-export/alpha1/native-ui-validation";
-pub const NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH: &str =
-    "rust/native-ui-export-abi-validation-report.json";
-pub const NATIVE_UI_VALIDATION_MANIFEST_KEY: &str = "nativeUiValidation";
-pub const NATIVE_UI_VALIDATION_DEFAULT_PATH: &str = "validation/native-ui-abi.json";
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -170,23 +162,43 @@ pub fn validate_native_ui_export_abi(input: &Path) -> Result<NativeUiExportAbiVa
     let raw_report = read_json_file(&path)?;
     state.raw_report_schema_version = value_string(&raw_report, "schemaVersion");
     state.raw_report_status = value_string(&raw_report, "status");
-    state.layout_count = value_u64(&raw_report, "layoutCount").unwrap_or(0);
-    state.slot_count = value_u64(&raw_report, "slotCount").unwrap_or(0);
-    state.rect_count = value_u64(&raw_report, "rectCount").unwrap_or(0);
-    state.primitive_count = value_u64(&raw_report, "primitiveCount").unwrap_or(0);
-    state.missing_surface_count = value_u64(&raw_report, "missingSurfaceCount").unwrap_or(0);
-    state.slot_bounds_violation_count =
-        value_u64(&raw_report, "slotBoundsViolationCount").unwrap_or(0);
-    state.rect_bounds_violation_count =
-        value_u64(&raw_report, "rectBoundsViolationCount").unwrap_or(0);
-    state.primitive_bounds_violation_count =
-        value_u64(&raw_report, "primitiveBoundsViolationCount").unwrap_or(0);
-    state.background_bounds_violation_count =
-        value_u64(&raw_report, "backgroundBoundsViolationCount").unwrap_or(0);
-    state.coordinate_contract_violation_count =
-        value_u64(&raw_report, "coordinateContractViolationCount").unwrap_or(0);
-    state.interaction_contract_violation_count =
-        value_u64(&raw_report, "interactionContractViolationCount").unwrap_or(0);
+    state.layout_count = value_u64(&raw_report, NATIVE_UI_EXPORT_LAYOUT_COUNT_FIELD).unwrap_or(0);
+    state.slot_count = value_u64(&raw_report, NATIVE_UI_EXPORT_SLOT_COUNT_FIELD).unwrap_or(0);
+    state.rect_count = value_u64(&raw_report, NATIVE_UI_EXPORT_RECT_COUNT_FIELD).unwrap_or(0);
+    state.primitive_count =
+        value_u64(&raw_report, NATIVE_UI_EXPORT_PRIMITIVE_COUNT_FIELD).unwrap_or(0);
+    state.missing_surface_count =
+        value_u64(&raw_report, NATIVE_UI_EXPORT_MISSING_SURFACE_COUNT_FIELD).unwrap_or(0);
+    state.slot_bounds_violation_count = value_u64(
+        &raw_report,
+        NATIVE_UI_EXPORT_SLOT_BOUNDS_VIOLATION_COUNT_FIELD,
+    )
+    .unwrap_or(0);
+    state.rect_bounds_violation_count = value_u64(
+        &raw_report,
+        NATIVE_UI_EXPORT_RECT_BOUNDS_VIOLATION_COUNT_FIELD,
+    )
+    .unwrap_or(0);
+    state.primitive_bounds_violation_count = value_u64(
+        &raw_report,
+        NATIVE_UI_EXPORT_PRIMITIVE_BOUNDS_VIOLATION_COUNT_FIELD,
+    )
+    .unwrap_or(0);
+    state.background_bounds_violation_count = value_u64(
+        &raw_report,
+        NATIVE_UI_EXPORT_BACKGROUND_BOUNDS_VIOLATION_COUNT_FIELD,
+    )
+    .unwrap_or(0);
+    state.coordinate_contract_violation_count = value_u64(
+        &raw_report,
+        NATIVE_UI_EXPORT_COORDINATE_CONTRACT_VIOLATION_COUNT_FIELD,
+    )
+    .unwrap_or(0);
+    state.interaction_contract_violation_count = value_u64(
+        &raw_report,
+        NATIVE_UI_EXPORT_INTERACTION_CONTRACT_VIOLATION_COUNT_FIELD,
+    )
+    .unwrap_or(0);
     state.samples = read_samples(&raw_report);
 
     if state.raw_report_schema_version.as_deref() != Some(NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION)
@@ -200,57 +212,20 @@ pub fn validate_native_ui_export_abi(input: &Path) -> Result<NativeUiExportAbiVa
                 .unwrap_or("<missing>")
         ));
     }
-    if state.raw_report_status.as_deref() != Some("ok") {
+    if state.raw_report_status.as_deref() != Some(NATIVE_UI_EXPORT_STATUS_OK) {
         state.contract_violations.push(format!(
             "NESQL++ native UI validation status must be ok but was {}",
             state.raw_report_status.as_deref().unwrap_or("<missing>")
         ));
     }
-    if state.layout_count == 0 {
-        state
-            .contract_violations
-            .push("layoutCount must be greater than zero".to_string());
+    for key in NATIVE_UI_EXPORT_REQUIRED_POSITIVE_COUNTERS {
+        let value = state.counter_value(key);
+        push_positive_counter_requirement(&mut state.contract_violations, key, value);
     }
-    if state.slot_count == 0 {
-        state
-            .contract_violations
-            .push("slotCount must be greater than zero".to_string());
+    for key in NATIVE_UI_EXPORT_ZERO_VIOLATION_COUNTERS {
+        let value = state.counter_value(key);
+        push_counter_violation(&mut state.contract_violations, key, value);
     }
-    push_counter_violation(
-        &mut state.contract_violations,
-        "missingSurfaceCount",
-        state.missing_surface_count,
-    );
-    push_counter_violation(
-        &mut state.contract_violations,
-        "slotBoundsViolationCount",
-        state.slot_bounds_violation_count,
-    );
-    push_counter_violation(
-        &mut state.contract_violations,
-        "rectBoundsViolationCount",
-        state.rect_bounds_violation_count,
-    );
-    push_counter_violation(
-        &mut state.contract_violations,
-        "primitiveBoundsViolationCount",
-        state.primitive_bounds_violation_count,
-    );
-    push_counter_violation(
-        &mut state.contract_violations,
-        "backgroundBoundsViolationCount",
-        state.background_bounds_violation_count,
-    );
-    push_counter_violation(
-        &mut state.contract_violations,
-        "coordinateContractViolationCount",
-        state.coordinate_contract_violation_count,
-    );
-    push_counter_violation(
-        &mut state.contract_violations,
-        "interactionContractViolationCount",
-        state.interaction_contract_violation_count,
-    );
 
     Ok(state.into_report())
 }
@@ -282,15 +257,40 @@ struct NativeUiExportAbiState {
 }
 
 impl NativeUiExportAbiState {
+    fn counter_value(&self, key: &str) -> u64 {
+        match key {
+            NATIVE_UI_EXPORT_LAYOUT_COUNT_FIELD => self.layout_count,
+            NATIVE_UI_EXPORT_SLOT_COUNT_FIELD => self.slot_count,
+            NATIVE_UI_EXPORT_RECT_COUNT_FIELD => self.rect_count,
+            NATIVE_UI_EXPORT_PRIMITIVE_COUNT_FIELD => self.primitive_count,
+            NATIVE_UI_EXPORT_MISSING_SURFACE_COUNT_FIELD => self.missing_surface_count,
+            NATIVE_UI_EXPORT_SLOT_BOUNDS_VIOLATION_COUNT_FIELD => self.slot_bounds_violation_count,
+            NATIVE_UI_EXPORT_RECT_BOUNDS_VIOLATION_COUNT_FIELD => self.rect_bounds_violation_count,
+            NATIVE_UI_EXPORT_PRIMITIVE_BOUNDS_VIOLATION_COUNT_FIELD => {
+                self.primitive_bounds_violation_count
+            }
+            NATIVE_UI_EXPORT_BACKGROUND_BOUNDS_VIOLATION_COUNT_FIELD => {
+                self.background_bounds_violation_count
+            }
+            NATIVE_UI_EXPORT_COORDINATE_CONTRACT_VIOLATION_COUNT_FIELD => {
+                self.coordinate_contract_violation_count
+            }
+            NATIVE_UI_EXPORT_INTERACTION_CONTRACT_VIOLATION_COUNT_FIELD => {
+                self.interaction_contract_violation_count
+            }
+            _ => 0,
+        }
+    }
+
     fn into_report(self) -> NativeUiExportAbiValidationReport {
         let status = if self.missing_report
             || !self.schema_violations.is_empty()
             || !self.path_violations.is_empty()
             || !self.contract_violations.is_empty()
         {
-            "blocked"
+            NATIVE_UI_EXPORT_STATUS_BLOCKED
         } else {
-            "ok"
+            NATIVE_UI_EXPORT_STATUS_OK
         };
         NativeUiExportAbiValidationReport {
             schema_version: NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
@@ -321,14 +321,12 @@ impl NativeUiExportAbiState {
             contract_violations: self.contract_violations,
             samples: self.samples,
             policy: NativeUiExportAbiPolicy {
-                missing_report: "fail-closed",
-                schema_mismatch: "fail-closed",
-                blocked_raw_report: "fail-closed",
-                geometry_contract:
-                    "layouts, slots, and rect primitives must be bounded, surface-complete, and use NEI pixel coordinates with uniform scaling",
-                path_portability:
-                    "portable-relative raw-export path only; expected validation/native-ui-abi.json",
-                legacy_fallback: "forbidden",
+                missing_report: NATIVE_UI_EXPORT_POLICY_FAIL_CLOSED,
+                schema_mismatch: NATIVE_UI_EXPORT_POLICY_FAIL_CLOSED,
+                blocked_raw_report: NATIVE_UI_EXPORT_POLICY_FAIL_CLOSED,
+                geometry_contract: NATIVE_UI_EXPORT_POLICY_GEOMETRY_CONTRACT,
+                path_portability: NATIVE_UI_EXPORT_POLICY_PATH_PORTABILITY,
+                legacy_fallback: NATIVE_UI_EXPORT_POLICY_LEGACY_FORBIDDEN,
             },
         }
     }
@@ -336,13 +334,13 @@ impl NativeUiExportAbiState {
 
 fn read_samples(raw_report: &Value) -> NativeUiExportAbiSamples {
     NativeUiExportAbiSamples {
-        missing_surface: read_string_array(raw_report, "missingSurfaceSamples"),
-        slot_bounds: read_string_array(raw_report, "slotBoundsSamples"),
-        rect_bounds: read_string_array(raw_report, "rectBoundsSamples"),
-        primitive_bounds: read_string_array(raw_report, "primitiveBoundsSamples"),
-        background_bounds: read_string_array(raw_report, "backgroundBoundsSamples"),
-        coordinate_contract: read_string_array(raw_report, "coordinateContractSamples"),
-        interaction_contract: read_string_array(raw_report, "interactionContractSamples"),
+        missing_surface: read_string_array(raw_report, NATIVE_UI_EXPORT_SAMPLE_FIELDS[0]),
+        slot_bounds: read_string_array(raw_report, NATIVE_UI_EXPORT_SAMPLE_FIELDS[1]),
+        rect_bounds: read_string_array(raw_report, NATIVE_UI_EXPORT_SAMPLE_FIELDS[2]),
+        primitive_bounds: read_string_array(raw_report, NATIVE_UI_EXPORT_SAMPLE_FIELDS[3]),
+        background_bounds: read_string_array(raw_report, NATIVE_UI_EXPORT_SAMPLE_FIELDS[4]),
+        coordinate_contract: read_string_array(raw_report, NATIVE_UI_EXPORT_SAMPLE_FIELDS[5]),
+        interaction_contract: read_string_array(raw_report, NATIVE_UI_EXPORT_SAMPLE_FIELDS[6]),
     }
 }
 
@@ -363,5 +361,11 @@ fn read_string_array(value: &Value, key: &str) -> Vec<String> {
 fn push_counter_violation(violations: &mut Vec<String>, key: &str, value: u64) {
     if value > 0 {
         violations.push(format!("{key} must be zero but was {value}"));
+    }
+}
+
+fn push_positive_counter_requirement(violations: &mut Vec<String>, key: &str, value: u64) {
+    if value == 0 {
+        violations.push(format!("{key} must be greater than zero"));
     }
 }

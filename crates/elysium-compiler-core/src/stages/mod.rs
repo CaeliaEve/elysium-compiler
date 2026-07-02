@@ -4,6 +4,9 @@ use crate::kernel::{
     CompileStageContract, CompileStageRegistry,
 };
 use crate::native_ui_export_abi::write_native_ui_export_abi_validation_report;
+use crate::native_ui_export_abi_catalog::{
+    NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH, NATIVE_UI_VALIDATION_DEFAULT_PATH,
+};
 use crate::native_ui_report::compile_native_ui_layout_report;
 use crate::pack_abi::{purge_out_of_scope_runtime_artifacts, write_pack_abi_validation_report};
 use crate::packs::browser::compile_browser_pack;
@@ -97,8 +100,8 @@ fn register_native_ui_export_abi_stages(registry: &mut CompileStageRegistry) {
         "compiler.native_ui_export_abi",
         "validate-native-ui-export-abi",
         CompileStageContract::new(
-            &["validation/native-ui-abi.json", "raw-export-manifest"],
-            &["rust/native-ui-export-abi-validation-report.json"],
+            &[NATIVE_UI_VALIDATION_DEFAULT_PATH, "raw-export-manifest"],
+            &[NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH],
             &["compiler.native_ui_export_abi_validator"],
         ),
         native_ui_export_abi_validation_stage,

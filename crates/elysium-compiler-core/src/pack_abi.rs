@@ -1,6 +1,6 @@
 use crate::cli::CompileScope;
 use crate::io::{normalize_path, sha256_file, write_json_value};
-use crate::native_ui_export_abi::NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH;
+use crate::native_ui_export_abi_catalog::NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH;
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_REPORT_PATH;
 use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_REPORT_PATH;
 use crate::version::PACK_ABI_VERSION;

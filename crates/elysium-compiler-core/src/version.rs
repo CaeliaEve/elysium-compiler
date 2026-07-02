@@ -1,4 +1,6 @@
-﻿pub const COMPILER_NAME: &str = "elysium-compiler";
+use crate::native_ui_export_abi_catalog::NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_HASH_INPUT;
+
+pub const COMPILER_NAME: &str = "elysium-compiler";
 pub const COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const RAW_EXPORT_SCHEMA_VERSION: &str = "1.0";
 pub const COMPILED_DIST_SCHEMA_VERSION: &str = "1.0";
@@ -22,7 +24,7 @@ pub fn schema_hash() -> String {
         "commands=compile,inspect,validate,schemas",
         "scopes=all,native-ui,search,browser,recipes,ui,textures",
         "raw-export-abi-validation=elysium-compiler/raw-export-abi-validation/v1",
-        "native-ui-export-abi-validation=elysium-compiler/native-ui-export-abi-validation/v1",
+        NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_HASH_INPUT,
         "ui-pack-abi-validation=elysium-compiler/ui-pack-abi-validation/v1",
         "pack-abi-validation=elysium-compiler/pack-abi-validation/v1",
     ] {

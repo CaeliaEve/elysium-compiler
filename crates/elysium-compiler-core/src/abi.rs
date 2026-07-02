@@ -1,4 +1,8 @@
-use crate::native_ui_export_abi::NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
+use crate::native_ui_export_abi_catalog::{
+    native_ui_export_abi_catalog, NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH,
+    NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION, NATIVE_UI_VALIDATION_DEFAULT_PATH,
+    NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
+};
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::version::{
@@ -16,6 +20,7 @@ pub fn abi_catalog() -> Value {
             "removed": "Historical record only; implementations must not depend on it."
         },
         "exportAbi": export_abi_catalog(),
+        "nativeUiExportAbi": native_ui_export_abi_catalog(),
         "packAbi": pack_abi_catalog(),
         "runtimeAbi": runtime_abi_catalog(),
         "controlAbi": control_abi_catalog(),
@@ -60,7 +65,7 @@ fn export_abi_catalog() -> Value {
                 "native-ui/families.jsonl.zst",
                 "native-ui/surfaces.jsonl.zst",
                 "native-ui/slots.bin",
-                "validation/native-ui-abi.json"
+                NATIVE_UI_VALIDATION_DEFAULT_PATH
             ],
             "coordinateSpace": "nei_pixels",
             "runtimeTransform": "uniform-scale-to-fit-only",
@@ -76,10 +81,10 @@ fn export_abi_catalog() -> Value {
             "policy": "missing required raw files, missing declared raw files, and path violations are compile blockers"
         },
         "nativeUiValidationReport": {
-            "rawExportPath": "validation/native-ui-abi.json",
-            "compilerReportPath": "rust/native-ui-export-abi-validation-report.json",
+            "rawExportPath": NATIVE_UI_VALIDATION_DEFAULT_PATH,
+            "compilerReportPath": NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH,
             "schemaVersion": NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
-            "rawSchemaVersion": "nesqlpp/raw-export/alpha1/native-ui-validation",
+            "rawSchemaVersion": NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
             "policy": "compiler must consume the NESQL++ native UI ABI report before emitting runtime packs"
         }
     })
