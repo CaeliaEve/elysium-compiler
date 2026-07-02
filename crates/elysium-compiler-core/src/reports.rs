@@ -1,5 +1,4 @@
-use crate::native_ui_export_abi_catalog::NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH;
-use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_REPORT_PATH;
+use crate::pack_abi::runtime_summary_artifact_specs;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use serde_json::Value;
@@ -98,31 +97,7 @@ pub fn summarize_runtime_output(output: Option<&Path>) -> Result<RuntimeSummary>
         }
     }
 
-    for (logical_name, relative_path) in [
-        ("manifest", "manifest.json"),
-        ("browserItemCatalog", "browser/item-catalog.json"),
-        ("browserGroupIndex", "browser/group-index.json"),
-        ("searchPack", "search/all.json"),
-        ("recipeItemIndex", "recipes/item-index.json"),
-        ("recipeHandlerIndex", "recipes/handler-index.json"),
-        ("browserAtlasIndex", "textures/browser-atlas-index.json"),
-        ("animationTable", "textures/animation-table.json"),
-        ("uiTemplatesBin", "rust/ui-pack/ui_templates.bin"),
-        ("uiBindingsBin", "rust/ui-pack/ui_bindings.bin"),
-        ("uiStringsBin", "rust/ui-pack/ui_strings.bin"),
-        ("uiAssetsManifest", "rust/ui-pack/ui_assets.manifest.json"),
-        ("uiPackReport", "rust/ui-pack/ui_pack_report.json"),
-        (
-            "uiPackAbiValidationReport",
-            UI_PACK_ABI_VALIDATION_REPORT_PATH,
-        ),
-        (
-            "nativeUiExportAbiValidationReport",
-            NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH,
-        ),
-        ("nativeUiLayoutReport", "rust/native-ui-layout-report.json"),
-        ("runtimeValidationReport", "validation/report.json"),
-    ] {
+    for (logical_name, relative_path) in runtime_summary_artifact_specs() {
         let path = output.join(relative_path);
         if path.exists() {
             sizes.insert(logical_name.to_string(), path.metadata()?.len());

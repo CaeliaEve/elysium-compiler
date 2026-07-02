@@ -292,6 +292,491 @@
         "abi.json"
       ],
       "root": "elysium.pack.v1/",
+      "runtimeArtifacts": {
+        "artifacts": [
+          {
+            "debugOnly": false,
+            "kind": "manifest",
+            "logicalName": "rustRuntimeManifest",
+            "path": "rust/runtime-manifest.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser",
+              "recipes",
+              "ui",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustIntegrity",
+            "path": "rust/integrity.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser",
+              "recipes",
+              "ui",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustSizeReport",
+            "path": "rust/size-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser",
+              "recipes",
+              "ui",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustMissingDataReport",
+            "path": "rust/missing-data-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser",
+              "recipes",
+              "ui",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustPackValidationReport",
+            "path": "rust/pack-validation-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser",
+              "recipes",
+              "ui",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustMigrationReadiness",
+            "path": "rust/migration-readiness.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser",
+              "recipes",
+              "ui",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustDeploymentReport",
+            "path": "rust/deployment-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser",
+              "recipes",
+              "ui",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "binary-pack",
+            "logicalName": "rustBrowserBin",
+            "path": "rust/browser.bin",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "browser"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "binary-pack",
+            "logicalName": "rustGroupsBin",
+            "path": "rust/groups.bin",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "browser"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "binary-pack",
+            "logicalName": "rustSearchBin",
+            "path": "rust/search.bin",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "binary-pack",
+            "logicalName": "rustRecipeBin",
+            "path": "rust/recipes.bin",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "recipes"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "binary-pack",
+            "logicalName": "rustTextureBin",
+            "path": "rust/textures.bin",
+            "required": true,
+            "scopes": [
+              "all",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "binary-pack",
+            "logicalName": "rustAtlasMetaBin",
+            "path": "rust/atlas.meta.bin",
+            "required": true,
+            "scopes": [
+              "all",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "binary-pack",
+            "logicalName": "rustAnimationBin",
+            "path": "rust/animations.bin",
+            "required": true,
+            "scopes": [
+              "all",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "binary-pack",
+            "logicalName": "rustStringsZhCnBin",
+            "path": "rust/strings.zh_cn.bin",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "binary-pack",
+            "logicalName": "rustUiTemplatesBin",
+            "path": "rust/ui-pack/ui_templates.bin",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "ui"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "binary-pack",
+            "logicalName": "rustUiBindingsBin",
+            "path": "rust/ui-pack/ui_bindings.bin",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "ui"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "binary-pack",
+            "logicalName": "rustUiStringsBin",
+            "path": "rust/ui-pack/ui_strings.bin",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "ui"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "manifest",
+            "logicalName": "rustUiAssetsManifest",
+            "path": "rust/ui-pack/ui_assets.manifest.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "ui"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "manifest",
+            "logicalName": "rustUiTemplateCatalog",
+            "path": "rust/ui-pack/ui_template_catalog.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "ui"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "manifest",
+            "logicalName": "rustUiTemplateBindingIndex",
+            "path": "rust/ui-pack/ui_template_binding_index.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "ui"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustUiFamilyCensus",
+            "path": "rust/ui-pack/ui_family_census.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "ui"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustUiPackReport",
+            "path": "rust/ui-pack/ui_pack_report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "ui"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustRawExportAbiValidationReport",
+            "path": "rust/raw-export-abi-validation-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser",
+              "recipes",
+              "ui",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustNativeUiExportAbiValidationReport",
+            "path": "rust/native-ui-export-abi-validation-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser",
+              "recipes",
+              "ui",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustUiPackAbiValidationReport",
+            "path": "rust/ui-pack-abi-validation-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser",
+              "recipes",
+              "ui",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustSemanticValidationReport",
+            "path": "rust/semantic-validation-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser",
+              "recipes",
+              "ui",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustMissingTextureReport",
+            "path": "rust/missing-texture-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustSuspiciousTextureReport",
+            "path": "rust/suspicious-texture-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustRecipeHandlerMetadataReport",
+            "path": "rust/recipe-handler-metadata-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "recipes"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustRecipeFragmentationReport",
+            "path": "rust/recipe-fragmentation-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "recipes"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "report",
+            "logicalName": "rustNativeUiLayoutReport",
+            "path": "rust/native-ui-layout-report.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "recipes"
+            ]
+          },
+          {
+            "debugOnly": true,
+            "kind": "debug-json-pack",
+            "logicalName": "rustBrowserPack",
+            "path": "rust/browser-pack.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "browser"
+            ]
+          },
+          {
+            "debugOnly": true,
+            "kind": "debug-json-pack",
+            "logicalName": "rustSearchPack",
+            "path": "rust/search-pack.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "search",
+              "browser"
+            ]
+          },
+          {
+            "debugOnly": true,
+            "kind": "debug-json-pack",
+            "logicalName": "rustRecipePack",
+            "path": "rust/recipe-pack.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "native-ui",
+              "recipes"
+            ]
+          },
+          {
+            "debugOnly": true,
+            "kind": "debug-json-pack",
+            "logicalName": "rustTexturePack",
+            "path": "rust/texture-pack.json",
+            "required": true,
+            "scopes": [
+              "all",
+              "textures"
+            ]
+          }
+        ],
+        "packAbiVersion": "elysium.pack.v1",
+        "policy": {
+          "legacyFallback": "forbidden",
+          "missingRequiredArtifact": "fail-closed",
+          "pathPortability": "portable-relative-runtime-paths-only; no drive letters, UNC paths, or file URLs",
+          "registration": "static-runtime-artifact-descriptor-table"
+        },
+        "schemaVersion": "elysium-compiler/runtime-artifact-catalog/v1"
+      },
       "runtimePacks": [
         "packs/items.pack",
         "packs/recipes.pack",
@@ -775,6 +1260,491 @@
     "packValidationReport": "elysium-compiler/pack-abi-validation/v1",
     "rawExportAbiValidationReport": "elysium-compiler/raw-export-abi-validation/v1",
     "recipeUiPayloadIndex": "neonei/recipe-ui-payload-index/v1",
+    "runtimeArtifacts": {
+      "artifacts": [
+        {
+          "debugOnly": false,
+          "kind": "manifest",
+          "logicalName": "rustRuntimeManifest",
+          "path": "rust/runtime-manifest.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser",
+            "recipes",
+            "ui",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustIntegrity",
+          "path": "rust/integrity.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser",
+            "recipes",
+            "ui",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustSizeReport",
+          "path": "rust/size-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser",
+            "recipes",
+            "ui",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustMissingDataReport",
+          "path": "rust/missing-data-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser",
+            "recipes",
+            "ui",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustPackValidationReport",
+          "path": "rust/pack-validation-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser",
+            "recipes",
+            "ui",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustMigrationReadiness",
+          "path": "rust/migration-readiness.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser",
+            "recipes",
+            "ui",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustDeploymentReport",
+          "path": "rust/deployment-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser",
+            "recipes",
+            "ui",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "binary-pack",
+          "logicalName": "rustBrowserBin",
+          "path": "rust/browser.bin",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "browser"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "binary-pack",
+          "logicalName": "rustGroupsBin",
+          "path": "rust/groups.bin",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "browser"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "binary-pack",
+          "logicalName": "rustSearchBin",
+          "path": "rust/search.bin",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "binary-pack",
+          "logicalName": "rustRecipeBin",
+          "path": "rust/recipes.bin",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "recipes"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "binary-pack",
+          "logicalName": "rustTextureBin",
+          "path": "rust/textures.bin",
+          "required": true,
+          "scopes": [
+            "all",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "binary-pack",
+          "logicalName": "rustAtlasMetaBin",
+          "path": "rust/atlas.meta.bin",
+          "required": true,
+          "scopes": [
+            "all",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "binary-pack",
+          "logicalName": "rustAnimationBin",
+          "path": "rust/animations.bin",
+          "required": true,
+          "scopes": [
+            "all",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "binary-pack",
+          "logicalName": "rustStringsZhCnBin",
+          "path": "rust/strings.zh_cn.bin",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "binary-pack",
+          "logicalName": "rustUiTemplatesBin",
+          "path": "rust/ui-pack/ui_templates.bin",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "ui"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "binary-pack",
+          "logicalName": "rustUiBindingsBin",
+          "path": "rust/ui-pack/ui_bindings.bin",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "ui"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "binary-pack",
+          "logicalName": "rustUiStringsBin",
+          "path": "rust/ui-pack/ui_strings.bin",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "ui"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "manifest",
+          "logicalName": "rustUiAssetsManifest",
+          "path": "rust/ui-pack/ui_assets.manifest.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "ui"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "manifest",
+          "logicalName": "rustUiTemplateCatalog",
+          "path": "rust/ui-pack/ui_template_catalog.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "ui"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "manifest",
+          "logicalName": "rustUiTemplateBindingIndex",
+          "path": "rust/ui-pack/ui_template_binding_index.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "ui"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustUiFamilyCensus",
+          "path": "rust/ui-pack/ui_family_census.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "ui"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustUiPackReport",
+          "path": "rust/ui-pack/ui_pack_report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "ui"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustRawExportAbiValidationReport",
+          "path": "rust/raw-export-abi-validation-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser",
+            "recipes",
+            "ui",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustNativeUiExportAbiValidationReport",
+          "path": "rust/native-ui-export-abi-validation-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser",
+            "recipes",
+            "ui",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustUiPackAbiValidationReport",
+          "path": "rust/ui-pack-abi-validation-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser",
+            "recipes",
+            "ui",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustSemanticValidationReport",
+          "path": "rust/semantic-validation-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser",
+            "recipes",
+            "ui",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustMissingTextureReport",
+          "path": "rust/missing-texture-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustSuspiciousTextureReport",
+          "path": "rust/suspicious-texture-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustRecipeHandlerMetadataReport",
+          "path": "rust/recipe-handler-metadata-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "recipes"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustRecipeFragmentationReport",
+          "path": "rust/recipe-fragmentation-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "recipes"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "report",
+          "logicalName": "rustNativeUiLayoutReport",
+          "path": "rust/native-ui-layout-report.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "recipes"
+          ]
+        },
+        {
+          "debugOnly": true,
+          "kind": "debug-json-pack",
+          "logicalName": "rustBrowserPack",
+          "path": "rust/browser-pack.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "browser"
+          ]
+        },
+        {
+          "debugOnly": true,
+          "kind": "debug-json-pack",
+          "logicalName": "rustSearchPack",
+          "path": "rust/search-pack.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "search",
+            "browser"
+          ]
+        },
+        {
+          "debugOnly": true,
+          "kind": "debug-json-pack",
+          "logicalName": "rustRecipePack",
+          "path": "rust/recipe-pack.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "native-ui",
+            "recipes"
+          ]
+        },
+        {
+          "debugOnly": true,
+          "kind": "debug-json-pack",
+          "logicalName": "rustTexturePack",
+          "path": "rust/texture-pack.json",
+          "required": true,
+          "scopes": [
+            "all",
+            "textures"
+          ]
+        }
+      ],
+      "packAbiVersion": "elysium.pack.v1",
+      "policy": {
+        "legacyFallback": "forbidden",
+        "missingRequiredArtifact": "fail-closed",
+        "pathPortability": "portable-relative-runtime-paths-only; no drive letters, UNC paths, or file URLs",
+        "registration": "static-runtime-artifact-descriptor-table"
+      },
+      "schemaVersion": "elysium-compiler/runtime-artifact-catalog/v1"
+    },
     "runtimeEntrypoints": [
       "rust/browser.bin",
       "rust/groups.bin",

@@ -2,6 +2,7 @@ use crate::cli::CompileScope;
 use crate::io::{sha256_file, write_json_value};
 use crate::pack_abi::{
     collect_text_path_violations, runtime_manifest_file_entries, runtime_pack_artifact_specs,
+    PACK_ABI_VALIDATION_REPORT_PATH,
 };
 use crate::runtime_manifest_abi::{
     runtime_capabilities, NATIVE_RUNTIME_DIST_SCHEMA_VERSION, RUST_DEPLOYMENT_REPORT_PATH,
@@ -96,7 +97,7 @@ pub fn compile_runtime_reports(
         .into_iter()
         .map(|spec| spec.relative_path.to_string())
         .collect::<Vec<_>>();
-    artifact_paths.push("rust/pack-validation-report.json".to_string());
+    artifact_paths.push(PACK_ABI_VALIDATION_REPORT_PATH.to_string());
 
     for relative in artifact_paths {
         let path = output.join(&relative);

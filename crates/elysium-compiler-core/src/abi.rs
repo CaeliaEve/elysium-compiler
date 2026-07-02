@@ -9,13 +9,10 @@ use crate::native_ui_export_abi_catalog::{
     NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION, NATIVE_UI_VALIDATION_DEFAULT_PATH,
     NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
 };
+use crate::pack_abi::pack_abi_catalog;
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::runtime_manifest_abi::runtime_manifest_abi_catalog;
-use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_SCHEMA_VERSION;
-use crate::version::{
-    COMPILED_DIST_SCHEMA_VERSION, EXPORT_ABI_VERSION, PACK_ABI_VERSION, RAW_EXPORT_SCHEMA_VERSION,
-    RUNTIME_ABI_VERSION,
-};
+use crate::version::{EXPORT_ABI_VERSION, RAW_EXPORT_SCHEMA_VERSION, RUNTIME_ABI_VERSION};
 use serde_json::{json, Value};
 
 pub fn abi_catalog() -> Value {
@@ -87,59 +84,6 @@ fn export_abi_catalog() -> Value {
             "rawSchemaVersion": NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
             "policy": "compiler must consume the NESQL++ native UI ABI report before emitting runtime packs"
         }
-    })
-}
-
-fn pack_abi_catalog() -> Value {
-    json!({
-        "name": "elysium.pack",
-        "version": PACK_ABI_VERSION,
-        "status": "testing",
-        "legacyCompiledDistSchemaVersion": COMPILED_DIST_SCHEMA_VERSION,
-        "root": "elysium.pack.v1/",
-        "requiredFiles": [
-            "manifest.json",
-            "abi.json"
-        ],
-        "requiredDirectories": [
-            "packs/",
-            "reports/"
-        ],
-        "validationReport": {
-            "path": "rust/pack-validation-report.json",
-            "schemaVersion": "elysium-compiler/pack-abi-validation/v1",
-            "policy": "missing required runtime artifacts, path leaks, and legacy fallback are compile blockers"
-        },
-        "runtimePacks": [
-            "packs/items.pack",
-            "packs/recipes.pack",
-            "packs/search.pack",
-            "packs/native-ui.pack",
-            "packs/textures.pack",
-            "packs/browser.pack",
-            "packs/bootstrap.pack"
-        ],
-        "nativeUiPack": {
-            "path": "packs/native-ui.pack",
-            "encoding": "binary",
-            "validationReport": {
-                "path": "rust/ui-pack-abi-validation-report.json",
-                "schemaVersion": UI_PACK_ABI_VALIDATION_SCHEMA_VERSION,
-                "policy": "native UI binary envelope, section layout, string references, and sidecar schemaVersion are compile blockers"
-            },
-            "sections": [
-                "header",
-                "stringTable",
-                "surfaceTable",
-                "slotRectTable",
-                "interactionTable",
-                "textureRegionTable",
-                "animationTable",
-                "checksumTable"
-            ],
-            "layoutPolicy": "renderer consumes exported design-space coordinates; no frontend reflow"
-        },
-        "hotPathPolicy": "JSON is for manifests, schemas, reports, and diagnostics; runtime hot paths prefer binary packs."
     })
 }
 

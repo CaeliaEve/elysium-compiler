@@ -16,7 +16,11 @@ use crate::native_ui_pack_abi::{
     UI_TEMPLATE_PAYLOAD_VERSION, UI_TEMPLATE_ROW_STRIDE_U32, UI_TEXT_ROW_STRIDE_U32,
 };
 use crate::native_ui_report;
-use crate::pack_abi::{runtime_pack_artifact_specs, validate_runtime_pack_abi};
+use crate::pack_abi::{
+    runtime_artifact_catalog, runtime_artifact_catalog_specs, runtime_pack_artifact_specs,
+    runtime_summary_artifact_specs, validate_runtime_pack_abi, PACK_ABI_VALIDATION_REPORT_PATH,
+    PACK_ABI_VALIDATION_SCHEMA_VERSION, RUNTIME_ARTIFACT_CATALOG_SCHEMA_VERSION,
+};
 use crate::packs::browser::build_compact_group_payload_from_groups;
 use crate::packs::recipe::build_compact_recipe_payload_from_pack;
 use crate::packs::search::{
@@ -41,6 +45,7 @@ use crate::runtime_manifest_abi::{
     RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION, RUST_RUNTIME_SCHEMA,
     RUST_RUNTIME_SCHEMA_REVISION, SCHEMA_HASH_RUNTIME_MANIFEST_INPUT,
 };
+use crate::schemas;
 use crate::stages::{compile_kernel_catalog, compile_kernel_modules};
 use crate::texture_animation::{
     expected_animated_item, expected_animation_reason, promote_animation_facts_to_animated_atlas,
@@ -1126,6 +1131,62 @@ fn pack_abi_registry_is_scope_specific_and_fail_closed() {
     assert!(report
         .missing_required_artifacts
         .contains(&"rust/search.bin".to_string()));
+}
+
+#[test]
+fn runtime_artifact_catalog_drives_schema_catalog_and_summary_surfaces() {
+    let catalog = runtime_artifact_catalog();
+    let artifacts = catalog["artifacts"].as_array().unwrap();
+    assert_eq!(
+        catalog["schemaVersion"],
+        json!(RUNTIME_ARTIFACT_CATALOG_SCHEMA_VERSION)
+    );
+    assert_eq!(artifacts.len(), runtime_artifact_catalog_specs().len());
+    assert!(artifacts.iter().any(|artifact| {
+        artifact["logicalName"] == json!("rustPackValidationReport")
+            && artifact["path"] == json!(PACK_ABI_VALIDATION_REPORT_PATH)
+            && artifact["kind"] == json!("report")
+    }));
+    assert!(artifacts.iter().any(|artifact| {
+        artifact["logicalName"] == json!("rustUiTemplatesBin")
+            && artifact["path"] == json!("rust/ui-pack/ui_templates.bin")
+            && artifact["scopes"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("native-ui"))
+    }));
+
+    let schemas = schemas::schema_catalog();
+    assert_eq!(
+        schemas["distData"]["runtimeArtifacts"]["schemaVersion"],
+        json!(RUNTIME_ARTIFACT_CATALOG_SCHEMA_VERSION)
+    );
+    assert_eq!(
+        schemas["distData"]["packValidationReport"],
+        json!(PACK_ABI_VALIDATION_SCHEMA_VERSION)
+    );
+    assert!(schemas["distData"]["runtimeEntrypoints"]
+        .as_array()
+        .unwrap()
+        .contains(&json!("rust/ui-pack/ui_templates.bin")));
+
+    let output = tempfile::tempdir().unwrap();
+    for relative_path in [
+        "manifest.json",
+        PACK_ABI_VALIDATION_REPORT_PATH,
+        "rust/ui-pack/ui_templates.bin",
+    ] {
+        let path = output.path().join(relative_path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, b"catalog-owned-artifact").unwrap();
+    }
+    let summary = reports::summarize_runtime_output(Some(output.path())).unwrap();
+    assert!(summary.sizes.contains_key("manifest"));
+    assert!(summary.sizes.contains_key("rustPackValidationReport"));
+    assert!(summary.sizes.contains_key("rustUiTemplatesBin"));
+    assert!(runtime_summary_artifact_specs()
+        .iter()
+        .any(|(_, path)| *path == PACK_ABI_VALIDATION_REPORT_PATH));
 }
 
 #[test]

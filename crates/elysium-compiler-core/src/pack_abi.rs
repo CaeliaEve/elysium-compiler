@@ -7,10 +7,13 @@ use crate::runtime_manifest_abi::{
     RUST_MIGRATION_READINESS_REPORT_PATH, RUST_MISSING_DATA_REPORT_PATH,
     RUST_RUNTIME_MANIFEST_PATH, RUST_SIZE_REPORT_PATH,
 };
-use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_REPORT_PATH;
-use crate::version::PACK_ABI_VERSION;
+use crate::ui_pack_abi::{
+    UI_PACK_ABI_VALIDATION_REPORT_PATH, UI_PACK_ABI_VALIDATION_SCHEMA_VERSION,
+};
+use crate::version::{COMPILED_DIST_SCHEMA_VERSION, PACK_ABI_VERSION};
 use anyhow::{anyhow, Result};
 use serde::Serialize;
+use serde_json::{json, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -42,6 +45,18 @@ const SCOPE_ALL_NATIVE_RECIPES: &[CompileScope] = &[
 const SCOPE_ALL_NATIVE_UI: &[CompileScope] =
     &[CompileScope::All, CompileScope::NativeUi, CompileScope::Ui];
 const SCOPE_ALL_TEXTURES: &[CompileScope] = &[CompileScope::All, CompileScope::Textures];
+
+pub const PACK_ABI_VALIDATION_SCHEMA_VERSION: &str = "elysium-compiler/pack-abi-validation/v1";
+pub const PACK_ABI_VALIDATION_REPORT_PATH: &str = "rust/pack-validation-report.json";
+pub const RUNTIME_ARTIFACT_CATALOG_SCHEMA_VERSION: &str =
+    "elysium-compiler/runtime-artifact-catalog/v1";
+pub const RUNTIME_ARTIFACT_STATUS_PRESENT: &str = "present";
+pub const RUNTIME_ARTIFACT_STATUS_MISSING: &str = "missing";
+pub const PACK_ABI_STATUS_OK: &str = "ok";
+pub const PACK_ABI_STATUS_BLOCKED: &str = "blocked";
+pub const PACK_ABI_GENERATED_AT: &str = "deterministic-rust-compiler";
+pub const PACK_ABI_POLICY_MISSING_REQUIRED_ARTIFACT: &str = "fail-closed";
+pub const PACK_ABI_POLICY_LEGACY_FALLBACK: &str = "forbidden";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RuntimeArtifactKind {
@@ -91,6 +106,10 @@ impl RuntimeArtifactSpec {
     pub fn applies_to(self, scope: CompileScope, debug_json: bool) -> bool {
         (!self.debug_only || debug_json) && self.scopes.contains(&scope)
     }
+
+    pub fn scopes(self) -> &'static [CompileScope] {
+        self.scopes
+    }
 }
 
 pub const RUNTIME_FINAL_REPORT_SPECS: &[RuntimeArtifactSpec] = &[
@@ -124,7 +143,7 @@ pub const RUNTIME_FINAL_REPORT_SPECS: &[RuntimeArtifactSpec] = &[
     ),
     RuntimeArtifactSpec::new(
         "rustPackValidationReport",
-        "rust/pack-validation-report.json",
+        PACK_ABI_VALIDATION_REPORT_PATH,
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
@@ -395,6 +414,109 @@ impl PackAbiValidationReport {
     }
 }
 
+pub fn runtime_artifact_catalog_specs() -> Vec<&'static RuntimeArtifactSpec> {
+    RUNTIME_FINAL_REPORT_SPECS
+        .iter()
+        .chain(RUNTIME_PACK_ARTIFACT_SPECS.iter())
+        .collect()
+}
+
+pub fn runtime_summary_artifact_specs() -> Vec<(&'static str, &'static str)> {
+    let mut specs = vec![("manifest", "manifest.json")];
+    specs.extend(
+        runtime_artifact_catalog_specs()
+            .into_iter()
+            .map(|spec| (spec.logical_name, spec.relative_path)),
+    );
+    specs.push(("runtimeValidationReport", "validation/report.json"));
+    specs
+}
+
+pub fn runtime_artifact_catalog() -> Value {
+    json!({
+        "schemaVersion": RUNTIME_ARTIFACT_CATALOG_SCHEMA_VERSION,
+        "packAbiVersion": PACK_ABI_VERSION,
+        "policy": {
+            "missingRequiredArtifact": PACK_ABI_POLICY_MISSING_REQUIRED_ARTIFACT,
+            "pathPortability": PATH_POLICY_PORTABLE_RELATIVE_ONLY,
+            "legacyFallback": PACK_ABI_POLICY_LEGACY_FALLBACK,
+            "registration": "static-runtime-artifact-descriptor-table"
+        },
+        "artifacts": runtime_artifact_catalog_specs()
+            .into_iter()
+            .map(runtime_artifact_descriptor_catalog)
+            .collect::<Vec<_>>()
+    })
+}
+
+pub fn pack_abi_catalog() -> Value {
+    json!({
+        "name": "elysium.pack",
+        "version": PACK_ABI_VERSION,
+        "status": "testing",
+        "legacyCompiledDistSchemaVersion": COMPILED_DIST_SCHEMA_VERSION,
+        "root": "elysium.pack.v1/",
+        "requiredFiles": [
+            "manifest.json",
+            "abi.json"
+        ],
+        "requiredDirectories": [
+            "packs/",
+            "reports/"
+        ],
+        "validationReport": {
+            "path": PACK_ABI_VALIDATION_REPORT_PATH,
+            "schemaVersion": PACK_ABI_VALIDATION_SCHEMA_VERSION,
+            "policy": "missing required runtime artifacts, path leaks, and legacy fallback are compile blockers"
+        },
+        "runtimeArtifacts": runtime_artifact_catalog(),
+        "runtimePacks": [
+            "packs/items.pack",
+            "packs/recipes.pack",
+            "packs/search.pack",
+            "packs/native-ui.pack",
+            "packs/textures.pack",
+            "packs/browser.pack",
+            "packs/bootstrap.pack"
+        ],
+        "nativeUiPack": {
+            "path": "packs/native-ui.pack",
+            "encoding": "binary",
+            "validationReport": {
+                "path": UI_PACK_ABI_VALIDATION_REPORT_PATH,
+                "schemaVersion": UI_PACK_ABI_VALIDATION_SCHEMA_VERSION,
+                "policy": "native UI binary envelope, section layout, string references, and sidecar schemaVersion are compile blockers"
+            },
+            "sections": [
+                "header",
+                "stringTable",
+                "surfaceTable",
+                "slotRectTable",
+                "interactionTable",
+                "textureRegionTable",
+                "animationTable",
+                "checksumTable"
+            ],
+            "layoutPolicy": "renderer consumes exported design-space coordinates; no frontend reflow"
+        },
+        "hotPathPolicy": "JSON is for manifests, schemas, reports, and diagnostics; runtime hot paths prefer binary packs."
+    })
+}
+
+fn runtime_artifact_descriptor_catalog(spec: &'static RuntimeArtifactSpec) -> Value {
+    json!({
+        "logicalName": spec.logical_name,
+        "path": spec.relative_path,
+        "kind": spec.kind.as_str(),
+        "required": true,
+        "debugOnly": spec.debug_only,
+        "scopes": spec.scopes()
+            .iter()
+            .map(|scope| scope.as_str())
+            .collect::<Vec<_>>()
+    })
+}
+
 pub fn runtime_pack_artifact_specs(
     scope: CompileScope,
     debug_json: bool,
@@ -423,7 +545,7 @@ pub fn runtime_manifest_file_entries(
 }
 
 pub fn pack_validation_report_path(output: &Path) -> PathBuf {
-    output.join("rust").join("pack-validation-report.json")
+    output.join(PACK_ABI_VALIDATION_REPORT_PATH)
 }
 
 pub fn purge_out_of_scope_runtime_artifacts(
@@ -483,7 +605,7 @@ pub fn validate_runtime_pack_abi(
                 kind: spec.kind.as_str(),
                 required: true,
                 debug_only: spec.debug_only,
-                status: "present",
+                status: RUNTIME_ARTIFACT_STATUS_PRESENT,
                 bytes: Some(bytes),
                 sha256: Some(sha256_file(&path)?),
             });
@@ -495,7 +617,7 @@ pub fn validate_runtime_pack_abi(
                 kind: spec.kind.as_str(),
                 required: true,
                 debug_only: spec.debug_only,
-                status: "missing",
+                status: RUNTIME_ARTIFACT_STATUS_MISSING,
                 bytes: None,
                 sha256: None,
             });
@@ -503,18 +625,18 @@ pub fn validate_runtime_pack_abi(
     }
     let path_violations = collect_text_path_violations(&output.join("rust"))?;
     let status = if missing_required_artifacts.is_empty() && path_violations.is_empty() {
-        "ok"
+        PACK_ABI_STATUS_OK
     } else {
-        "blocked"
+        PACK_ABI_STATUS_BLOCKED
     };
     let present_artifact_count = artifacts
         .iter()
-        .filter(|artifact| artifact.status == "present")
+        .filter(|artifact| artifact.status == RUNTIME_ARTIFACT_STATUS_PRESENT)
         .count();
     Ok(PackAbiValidationReport {
-        schema_version: "elysium-compiler/pack-abi-validation/v1",
+        schema_version: PACK_ABI_VALIDATION_SCHEMA_VERSION,
         pack_abi_version: PACK_ABI_VERSION,
-        generated_at: "deterministic-rust-compiler",
+        generated_at: PACK_ABI_GENERATED_AT,
         status,
         compile_scope: scope.as_str().to_string(),
         debug_json,
@@ -524,9 +646,9 @@ pub fn validate_runtime_pack_abi(
         path_violations,
         artifacts,
         policy: PackAbiPolicy {
-            missing_required_artifact: "fail-closed",
+            missing_required_artifact: PACK_ABI_POLICY_MISSING_REQUIRED_ARTIFACT,
             path_portability: PATH_POLICY_PORTABLE_RELATIVE_ONLY,
-            legacy_fallback: "forbidden",
+            legacy_fallback: PACK_ABI_POLICY_LEGACY_FALLBACK,
         },
     })
 }

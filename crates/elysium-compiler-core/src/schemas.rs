@@ -5,10 +5,13 @@ use crate::native_ui_export_abi_catalog::{
     NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH, NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
     NATIVE_UI_VALIDATION_DEFAULT_PATH, NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
 };
+use crate::pack_abi::{runtime_artifact_catalog, PACK_ABI_VALIDATION_SCHEMA_VERSION};
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
-use crate::runtime_manifest_abi::RUST_RUNTIME_MANIFEST_SCHEMA_VERSION;
+use crate::runtime_manifest_abi::{RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION};
 use crate::stages::compile_kernel_catalog;
-use crate::ui_pack_abi::UI_PACK_ABI_VALIDATION_SCHEMA_VERSION;
+use crate::ui_pack_abi::{
+    UI_PACK_ABI_VALIDATION_REPORT_PATH, UI_PACK_ABI_VALIDATION_SCHEMA_VERSION,
+};
 use crate::version::{
     metadata as compiler_metadata, COMPILED_DIST_SCHEMA_VERSION, RAW_EXPORT_SCHEMA_VERSION,
 };
@@ -81,25 +84,16 @@ pub fn schema_catalog() -> Value {
             "runtimeManifest": RUST_RUNTIME_MANIFEST_SCHEMA_VERSION,
             "rawExportAbiValidationReport": RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
             "nativeUiExportAbiValidationReport": NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
-            "packValidationReport": "elysium-compiler/pack-abi-validation/v1",
-            "runtimeEntrypoints": [
-                "rust/browser.bin",
-                "rust/groups.bin",
-                "rust/search.bin",
-                "rust/recipes.bin",
-                "rust/textures.bin",
-                "rust/atlas.meta.bin",
-                "rust/animations.bin",
-                "rust/strings.zh_cn.bin",
-                "rust/ui-pack/ui_templates.bin",
-                "rust/ui-pack/ui_bindings.bin",
-                "rust/ui-pack/ui_strings.bin"
-            ],
+            "packValidationReport": PACK_ABI_VALIDATION_SCHEMA_VERSION,
+            "runtimeEntrypoints": RUST_RUNTIME_ENTRYPOINTS.iter()
+                .map(|spec| spec.path)
+                .collect::<Vec<_>>(),
+            "runtimeArtifacts": runtime_artifact_catalog(),
             "uiPack": {
                 "assetsManifest": "neonei/ui-assets-manifest/current",
                 "report": "neonei/ui-pack-report/current",
                 "abiValidationReport": UI_PACK_ABI_VALIDATION_SCHEMA_VERSION,
-                "abiValidationReportPath": "rust/ui-pack-abi-validation-report.json",
+                "abiValidationReportPath": UI_PACK_ABI_VALIDATION_REPORT_PATH,
                 "templatePackSchema": "neonei/ui-template-pack/current",
                 "bindingPackSchema": "neonei/ui-binding-pack/current",
                 "stringPackSchema": "neonei/ui-string-pack/current"
