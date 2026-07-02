@@ -98,7 +98,7 @@
       "path": "rust/ui-pack/ui_family_census.json"
     },
     {
-      "bytes": 2122,
+      "bytes": 2138,
       "path": "rust/ui-pack/ui_pack_report.json"
     },
     {
@@ -152,7 +152,7 @@
     "portableRelativePathsOnly": true,
     "windowsPathsAllowed": false
   },
-  "runtimeId": "rust-a137cfdbf5d1abc6",
+  "runtimeId": "rust-126368c5fd9a8d44",
   "schema": "neonei/runtime/current",
   "schemaRevision": 1,
   "schemaVersion": "neonei/rust-runtime-manifest/current"

@@ -55,18 +55,18 @@
           "bytes": 0,
           "name": "hotspots",
           "rows": 0,
-          "strideU32": 18
+          "strideU32": 15
         },
         {
           "bytes": 0,
           "name": "viewports",
           "rows": 0,
-          "strideU32": 18
+          "strideU32": 15
         }
       ],
-      "sha256": "c8d39a5a7fc5ba2f8c7348c447e93ed3c916a99ab56a711bdfff60402d1ff2c8",
+      "sha256": "993204d676b58e0b72672d929c5484b4c78ba226c8ec004e77118fa0dc561494",
       "status": "present",
-      "version": 6
+      "version": 7
     },
     {
       "bytes": 162,
@@ -136,14 +136,14 @@
       "version": null
     },
     {
-      "bytes": 2122,
+      "bytes": 2138,
       "envelopeSchema": null,
       "kind": "report",
       "logicalName": "rustUiPackReport",
       "path": "rust/ui-pack/ui_pack_report.json",
       "payloadMagic": null,
       "sections": [],
-      "sha256": "f4c6aadae3ccbba49142c593e0fc10afe05e2bd1d618c847d6d726bd76fa54db",
+      "sha256": "91b76552662dcc182d167631131db24e7b6f1218ee4505ccfaa02313449277bd",
       "status": "present",
       "version": null
     }

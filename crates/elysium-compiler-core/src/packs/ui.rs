@@ -9,7 +9,7 @@ use crate::ui_templates::{
     build_ui_assets_manifest, build_ui_family_census_report,
     build_ui_template_binding_index_report, build_ui_template_bindings,
     build_ui_template_catalog_report, materialize_ui_background_assets,
-    ui_template_catalog_templates, ui_template_rect_action_count, ui_template_rect_count,
+    ui_template_catalog_templates, ui_template_rect_count, ui_template_rect_interaction_count,
     ui_template_slot_count, ui_template_text_count,
 };
 use anyhow::{anyhow, Result};
@@ -18,13 +18,13 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 6;
+const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 7;
 const UI_BINDING_PAYLOAD_VERSION: u32 = 1;
 const UI_STRING_PAYLOAD_VERSION: u32 = 1;
 const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 22;
 const UI_SLOT_ROW_STRIDE_U32: u32 = 12;
 const UI_TEXT_ROW_STRIDE_U32: u32 = 7;
-const UI_RECT_ROW_STRIDE_U32: u32 = 18;
+const UI_RECT_ROW_STRIDE_U32: u32 = 15;
 const UI_BINDING_ROW_STRIDE_U32: u32 = 11;
 const NATIVE_UI_COORDINATE_SPACE: &str = "nei_pixels";
 const NATIVE_UI_ANCHOR: &str = "top-left";
@@ -184,8 +184,8 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
                 "textOverlayCount": templates.iter().map(ui_template_text_count).sum::<usize>(),
                 "hotspotCount": templates.iter().map(|template| ui_template_rect_count(template, "hotspots")).sum::<usize>(),
                 "viewportCount": templates.iter().map(|template| ui_template_rect_count(template, "viewports")).sum::<usize>(),
-                "hotspotActionCount": templates.iter().map(|template| ui_template_rect_action_count(template, "hotspots")).sum::<usize>(),
-                "viewportActionCount": templates.iter().map(|template| ui_template_rect_action_count(template, "viewports")).sum::<usize>(),
+                "hotspotInteractionCount": templates.iter().map(|template| ui_template_rect_interaction_count(template, "hotspots")).sum::<usize>(),
+                "viewportInteractionCount": templates.iter().map(|template| ui_template_rect_interaction_count(template, "viewports")).sum::<usize>(),
                 "stringCount": strings.len(),
                 "assetCount": assets_manifest.get("assets").and_then(Value::as_array).map(|items| items.len()).unwrap_or(0),
             },
@@ -197,8 +197,8 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
                 "textStride": UI_TEXT_ROW_STRIDE_U32,
                 "rectStride": UI_RECT_ROW_STRIDE_U32,
                 "surfaceContractFields": ["coordinateSpace", "scaleMode", "anchor"],
-                "hotspotActionFields": false,
-                "hotspotActionFieldNames": [],
+                "legacyRectActionFields": false,
+                "legacyRectActionFieldNames": [],
                 "slotGeometryFields": ["coordinateSpace", "anchor", "slotWidth", "slotHeight", "pitchX", "pitchY"],
                 "rectGeometryFields": ["coordinateSpace", "anchor"],
                 "interactionContractFields": ["interactionKind", "interactionTargetKind", "interactionTargetId", "interactionPayloadSchema"],
@@ -772,6 +772,13 @@ struct UiRectInteractionContract {
 }
 
 fn resolve_rect_interaction_contract(rect: &Value) -> Result<UiRectInteractionContract> {
+    for legacy_key in ["action", "itemId", "payloadKey"] {
+        if rect.get(legacy_key).is_some() {
+            return Err(anyhow!(
+                "ui template rect uses legacy interaction field forbidden by v7 ABI: {legacy_key}"
+            ));
+        }
+    }
     let kind = required_string(rect, "interactionKind", "ui template rect")?;
     let target_kind = required_string(rect, "interactionTargetKind", "ui template rect")?;
     let payload_schema = required_rect_contract_string(
@@ -825,16 +832,7 @@ fn push_compact_ui_rect(
     anchor: &str,
 ) -> Result<()> {
     let interaction = resolve_rect_interaction_contract(rect)?;
-    for key in [
-        "id",
-        "kind",
-        "role",
-        "label",
-        "tooltip",
-        "action",
-        "itemId",
-        "payloadKey",
-    ] {
+    for key in ["id", "kind", "role", "label", "tooltip"] {
         push_u32(
             bytes,
             intern_compact_string(strings, string_refs, value_string(rect, key)),

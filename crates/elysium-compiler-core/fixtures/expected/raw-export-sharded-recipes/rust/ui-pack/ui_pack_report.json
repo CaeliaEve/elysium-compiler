@@ -29,19 +29,19 @@
       "recipeBackgroundOffset",
       "recipeBackgroundSize"
     ],
-    "hotspotActionFieldNames": [],
-    "hotspotActionFields": false,
     "interactionContractFields": [
       "interactionKind",
       "interactionTargetKind",
       "interactionTargetId",
       "interactionPayloadSchema"
     ],
+    "legacyRectActionFieldNames": [],
+    "legacyRectActionFields": false,
     "rectGeometryFields": [
       "coordinateSpace",
       "anchor"
     ],
-    "rectStride": 18,
+    "rectStride": 15,
     "slotGeometryFields": [
       "coordinateSpace",
       "anchor",
@@ -57,7 +57,7 @@
       "anchor"
     ],
     "templatePackMagic": "NEIUIT1_NUL",
-    "templatePackVersion": 6,
+    "templatePackVersion": 7,
     "templateStride": 22,
     "textStride": 7
   },
@@ -72,15 +72,15 @@
     "assetCount": 1,
     "bindingCount": 2,
     "boundRecipeCount": 2,
-    "hotspotActionCount": 0,
     "hotspotCount": 0,
+    "hotspotInteractionCount": 0,
     "slotCount": 1,
     "stringCount": 16,
     "templateCount": 1,
     "textOverlayCount": 0,
     "unboundRecipeCount": 0,
-    "viewportActionCount": 0,
-    "viewportCount": 0
+    "viewportCount": 0,
+    "viewportInteractionCount": 0
   },
   "unboundRecipes": []
 }

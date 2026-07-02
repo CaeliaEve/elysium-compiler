@@ -450,14 +450,17 @@ pub fn ui_template_rect_count(template: &Value, key: &str) -> usize {
         .unwrap_or(0)
 }
 
-pub fn ui_template_rect_action_count(template: &Value, key: &str) -> usize {
+pub fn ui_template_rect_interaction_count(template: &Value, key: &str) -> usize {
     template
         .get(key)
         .and_then(Value::as_array)
         .map(|values| {
             values
                 .iter()
-                .filter(|rect| value_string(rect, "action").is_some_and(|value| !value.is_empty()))
+                .filter(|rect| {
+                    value_string(rect, "interactionKind")
+                        .is_some_and(|value| value != "none" && !value.is_empty())
+                })
                 .count()
         })
         .unwrap_or(0)

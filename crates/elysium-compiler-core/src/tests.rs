@@ -842,7 +842,7 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     assert_eq!(&template_payload[0..8], b"NEIUIT1\0");
     assert_eq!(
         u32::from_le_bytes(template_payload[8..12].try_into().unwrap()),
-        6
+        7
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[12..16].try_into().unwrap()),
@@ -878,7 +878,7 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[44..48].try_into().unwrap()),
-        18
+        15
     );
     assert_eq!(&binding_payload[0..8], b"NEIUIB1\0");
     assert_eq!(
@@ -888,6 +888,55 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     assert_eq!(&string_payload[0..8], b"NEIUIS1\0");
     assert!(u32::from_le_bytes(string_payload[12..16].try_into().unwrap()) > 8);
     assert_eq!(bindings[0]["templateKey"], json!("furnace@default"));
+}
+
+#[test]
+fn compact_ui_pack_rejects_legacy_rect_action_fields() {
+    let templates = vec![json!({
+        "templateKey": "furnace@default",
+        "templateSignature": "abc123",
+        "familyKey": "furnace",
+        "canonicalMachineFamily": "furnace",
+        "layoutKind": "furnace",
+        "coordinateSpace": "nei_pixels",
+        "scaleMode": "uniform-scale",
+        "anchor": "top-left",
+        "width": 166,
+        "height": 65,
+        "yShift": -4,
+        "maxRecipesPerPage": 2,
+        "imageResource": "textures/gui/furnace.png",
+        "handlerCount": 1,
+        "slots": [],
+        "textOverlays": [],
+        "hotspots": [{
+            "id": "legacy-hotspot",
+            "kind": "hotspot",
+            "role": "item-output",
+            "label": "Output",
+            "tooltip": "",
+            "action": "show-usage",
+            "x": 115,
+            "y": 24,
+            "width": 18,
+            "height": 18,
+            "coordinateSpace": "nei_pixels",
+            "anchor": "top-left",
+            "interactionKind": "none",
+            "interactionTargetKind": "none",
+            "interactionTargetId": "",
+            "interactionPayloadSchema": "neonei/native-ui-interaction/v1"
+        }],
+        "viewports": []
+    })];
+    let mut strings = vec![String::new()];
+    let mut string_refs = HashMap::new();
+    string_refs.insert(String::new(), 0u32);
+
+    let err = build_compact_ui_template_payload(&templates, &mut strings, &mut string_refs)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("legacy interaction field forbidden by v7 ABI"));
 }
 
 #[test]
