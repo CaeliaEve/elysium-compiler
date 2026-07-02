@@ -806,6 +806,22 @@ fn compact_ui_pack_uses_shared_native_string_table() {
         "yShift": -4,
         "maxRecipesPerPage": 2,
         "imageResource": "textures/gui/furnace.png",
+        "nativeBackground": {
+            "status": "captured",
+            "kind": "gt-modular-ui",
+            "coordinateSpace": "nei_pixels",
+            "scaleMode": "uniform-scale",
+            "anchor": "top-left",
+            "width": 166,
+            "height": 65,
+            "assetRef": "assets/ui-backgrounds/gregtech/nei_single_recipe.png",
+            "resource": "gregtech:textures/gui/background/nei_single_recipe.png",
+            "drawable": "GT_UI_TEXTURE_NEI_SINGLE_RECIPE",
+            "scaling": "nine-slice",
+            "texture": { "width": 18, "height": 18, "borderU": 4, "borderV": 4 },
+            "recipeBackgroundOffset": { "x": 0, "y": 0 },
+            "recipeBackgroundSize": { "width": 166, "height": 65 }
+        },
         "handlerCount": 1,
         "slots": [
             { "role": "item-input", "startIndex": 0, "columns": 1, "rows": 1, "x": 45, "y": 24, "coordinateSpace": "nei_pixels", "anchor": "top-left", "slotWidth": 18, "slotHeight": 18, "pitchX": 18, "pitchY": 18 },
@@ -842,7 +858,7 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     assert_eq!(&template_payload[0..8], b"NEIUIT1\0");
     assert_eq!(
         u32::from_le_bytes(template_payload[8..12].try_into().unwrap()),
-        7
+        8
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[12..16].try_into().unwrap()),
@@ -866,7 +882,7 @@ fn compact_ui_pack_uses_shared_native_string_table() {
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[32..36].try_into().unwrap()),
-        22
+        23
     );
     assert_eq!(
         u32::from_le_bytes(template_payload[36..40].try_into().unwrap()),

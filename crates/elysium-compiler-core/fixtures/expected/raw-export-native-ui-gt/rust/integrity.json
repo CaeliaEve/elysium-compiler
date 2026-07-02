@@ -5,7 +5,7 @@
     "rust/groups.bin": "325a026644239c6c2535177dcb5531810bc79ab5293b368f80f78eea9e13e0cd",
     "rust/native-ui-export-abi-validation-report.json": "a26ae61ddad53d4d67ac21b57e30da16f9abc4fbf7b8d1ebf9920b5d468e609d",
     "rust/native-ui-layout-report.json": "e070a08dc11e8edf859292b617219ac6fd143cfc48954271925537154abef2ad",
-    "rust/pack-validation-report.json": "f3138867f97f35bcacda558b6624f26277547b95088621c7cc21919ef1099f5d",
+    "rust/pack-validation-report.json": "f2da4f696e9f738b51271c6f5d829fff36c2d5f70cf9e99446cddf1a2e0d21b7",
     "rust/raw-export-abi-validation-report.json": "ed96910bf3362d5f9cd2c758d62e92b7594a872bca5403c706b457578c3559a5",
     "rust/recipe-fragmentation-report.json": "5c217db3a12cd0548f22d84a1bc1be8205e36212350681af085d6399df7ce410",
     "rust/recipe-handler-metadata-report.json": "d875adb5abc5fc820aa61355b11a248e0d1a9108b1cacde8cca7f47c9c366b98",
@@ -13,15 +13,15 @@
     "rust/search.bin": "9c7029e93a93328a0bb054b1066d93fdd65a9917d6a95bf9dcfd975d5c8d2420",
     "rust/semantic-validation-report.json": "2c1cf6ce724eb9e6531eef55f26d5667df9c6ab9430cb9f42272d44cd191803e",
     "rust/strings.zh_cn.bin": "7933b9778a30ed8c4d8d00e25934e528f373c7551de0e4ed4605939f29fc924b",
-    "rust/ui-pack-abi-validation-report.json": "ff49144fae71da4a685d26f6881ed98741badfbcdfa8c15b4fc84d756bcbb631",
+    "rust/ui-pack-abi-validation-report.json": "8f84323a76c9f8fa4a5d5f16921440bc90c742a163ce0f6851a69057c448e78a",
     "rust/ui-pack/ui_assets.manifest.json": "542881fe87414370a87e20ec1622d14906a9f2e8dbbe8a7cb02e7cf46390b9e8",
-    "rust/ui-pack/ui_bindings.bin": "6eee340d88268c34f2c7c3c684961c385f782ef64e61144bfd7f9cd4a22283fa",
+    "rust/ui-pack/ui_bindings.bin": "6ff677f065b02543f8d954bdf3485bbe5b2eb8b4b77c6c2945cdb52dab24fc59",
     "rust/ui-pack/ui_family_census.json": "536ca5408c0c9dbeeada0321156e402ac6b5e69efaf6cada00042806781469e4",
-    "rust/ui-pack/ui_pack_report.json": "9c020097effc32adcb332bd006f7f056cd97f0029ec761a9057c0926eef98d2a",
-    "rust/ui-pack/ui_strings.bin": "89f4111e5153a8588b82a783849803f44c1852571428bf90f66f5e268e5864c1",
+    "rust/ui-pack/ui_pack_report.json": "2358b43b5674567762f1bbc40857a8d3f482c93ad362eef60c32f1ad2c2da146",
+    "rust/ui-pack/ui_strings.bin": "d2b04818244c0be810f06f12679d74d2ef924ade67b199fde8c973f208496549",
     "rust/ui-pack/ui_template_binding_index.json": "b68cda01740583936d42c1390d63938bb2d09aa944fab47e002155f3e5d41ed1",
     "rust/ui-pack/ui_template_catalog.json": "64cb60a178bade62cbffbeac62687cde06e5bb6a3f580e4071db56ea460c361a",
-    "rust/ui-pack/ui_templates.bin": "993204d676b58e0b72672d929c5484b4c78ba226c8ec004e77118fa0dc561494"
+    "rust/ui-pack/ui_templates.bin": "ee1734cb495d1d414581066df6a756d75b054cd3a76e83db4eb774424d65be47"
   },
   "schemaVersion": "neonei/rust-integrity/current"
 }

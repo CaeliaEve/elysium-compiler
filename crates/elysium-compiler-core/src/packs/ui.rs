@@ -18,10 +18,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 7;
+const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 8;
 const UI_BINDING_PAYLOAD_VERSION: u32 = 1;
 const UI_STRING_PAYLOAD_VERSION: u32 = 1;
-const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 22;
+const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 23;
 const UI_SLOT_ROW_STRIDE_U32: u32 = 12;
 const UI_TEXT_ROW_STRIDE_U32: u32 = 7;
 const UI_RECT_ROW_STRIDE_U32: u32 = 15;
@@ -203,6 +203,7 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
                 "rectGeometryFields": ["coordinateSpace", "anchor"],
                 "interactionContractFields": ["interactionKind", "interactionTargetKind", "interactionTargetId", "interactionPayloadSchema"],
                 "backgroundContractFields": ["coordinateSpace", "scaleMode", "anchor", "status", "kind", "scaling", "texture", "recipeBackgroundOffset", "recipeBackgroundSize"],
+                "templateBackgroundField": "nativeBackground",
             },
             "artifacts": {
                 "uiTemplates": "rust/ui-pack/ui_templates.bin",
@@ -468,6 +469,18 @@ pub fn build_compact_ui_template_payload(
         push_u32(
             &mut template_bytes,
             intern_compact_string(strings, string_refs, Some(template_anchor.clone())),
+        );
+        let native_background_json = serde_json::to_string(required_object(
+            template,
+            "nativeBackground",
+            &format!(
+                "ui template {}",
+                value_string(template, "templateKey").unwrap_or("<unknown>".to_string())
+            ),
+        )?)?;
+        push_u32(
+            &mut template_bytes,
+            intern_compact_string(strings, string_refs, Some(native_background_json)),
         );
     }
 

@@ -51,9 +51,10 @@
       "scaleMode",
       "anchor"
     ],
+    "templateBackgroundField": "nativeBackground",
     "templatePackMagic": "NEIUIT1_NUL",
-    "templatePackVersion": 7,
-    "templateStride": 22,
+    "templatePackVersion": 8,
+    "templateStride": 23,
     "textStride": 7
   },
   "generatedAt": "deterministic-rust-compiler",
@@ -70,7 +71,7 @@
     "hotspotCount": 0,
     "hotspotInteractionCount": 0,
     "slotCount": 1,
-    "stringCount": 14,
+    "stringCount": 15,
     "templateCount": 1,
     "textOverlayCount": 0,
     "unboundRecipeCount": 0,
