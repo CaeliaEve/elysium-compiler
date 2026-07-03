@@ -6,6 +6,10 @@ use crate::compiler_capability_abi::{
     NATIVE_UI_REQUIRED_CAPABILITIES, NATIVE_UI_REQUIRED_FILES, NATIVE_UI_RUNTIME_TRANSFORM,
     REQUIRED_COMPILER_COMMANDS, SCHEMA_HASH_COMPILER_CAPABILITY_INPUT,
 };
+use crate::compiler_command_catalog::{
+    command_name, compiler_command_catalog, compiler_command_descriptors,
+    COMPILER_COMMAND_CATALOG_SCHEMA_VERSION,
+};
 use crate::io::{normalize_path, write_json_value};
 use crate::json_ext::{value_string, value_u64};
 use crate::kernel::{COMPILE_KERNEL_TRACE_REPORT_PATH, COMPILE_KERNEL_TRACE_SCHEMA_VERSION};
@@ -88,6 +92,12 @@ fn compiler_fixture_path(name: &str) -> std::path::PathBuf {
         .join(name)
 }
 
+fn core_source_path(relative_path: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join(relative_path)
+}
+
 fn read_fixture_json(path: impl AsRef<Path>) -> serde_json::Value {
     serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }
@@ -132,6 +142,70 @@ fn empty_runtime_summary_without_output() {
     let summary = reports::summarize_runtime_output(None).unwrap();
     assert!(summary.counts.is_empty());
     assert!(summary.sizes.is_empty());
+}
+
+#[test]
+fn compiler_command_catalog_is_cli_dispatch_authority() {
+    let catalog = compiler_command_catalog();
+    let descriptors = compiler_command_descriptors();
+    let descriptor_names = descriptors
+        .iter()
+        .map(|descriptor| descriptor.name())
+        .collect::<Vec<_>>();
+    let required_names = REQUIRED_COMPILER_COMMANDS
+        .iter()
+        .copied()
+        .filter(|name| {
+            descriptors
+                .iter()
+                .any(|descriptor| descriptor.name() == *name && descriptor.required())
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        catalog["schemaVersion"],
+        json!(COMPILER_COMMAND_CATALOG_SCHEMA_VERSION)
+    );
+    assert_eq!(
+        catalog["dispatchPolicy"],
+        json!("static-command-descriptor-ops-table")
+    );
+    assert_eq!(catalog["legacyFallback"], json!("forbidden"));
+    assert_eq!(descriptor_names, COMPILER_COMMANDS);
+    assert_eq!(required_names, REQUIRED_COMPILER_COMMANDS);
+    assert!(descriptors.iter().any(|descriptor| {
+        descriptor.name() == "compile"
+            && descriptor
+                .capabilities()
+                .contains(&"compiler.compile_kernel")
+            && descriptor.outputs().contains(&"runtime-packs")
+    }));
+    assert!(descriptors.iter().any(|descriptor| {
+        descriptor.name() == "schemas"
+            && descriptor.required()
+            && descriptor
+                .capabilities()
+                .contains(&"compiler.schema_catalog")
+    }));
+
+    let command = Command::Compile {
+        input: compiler_fixture_path("raw-export-minimal"),
+        output: tempfile::tempdir().unwrap().path().to_path_buf(),
+        report: tempfile::tempdir()
+            .unwrap()
+            .path()
+            .join("compiler-report.json"),
+        scope: CompileScope::NativeUi,
+        threads: Some(1),
+        strict: false,
+        debug_json: false,
+    };
+    assert_eq!(command_name(&command), "compile");
+
+    let commands_rs = fs::read_to_string(core_source_path("commands.rs")).unwrap();
+    assert!(commands_rs.contains("run_compiler_command(&cli.command)"));
+    assert!(!commands_rs.contains("match cli.command"));
+    assert!(!commands_rs.contains("Command::Compile"));
 }
 
 #[test]
@@ -1710,6 +1784,27 @@ fn stable_cli_inspect_validate_and_schemas_cover_fixture_contracts() {
         schemas["compiler"]["cli"]["commands"],
         json!(COMPILER_COMMANDS)
     );
+    assert_eq!(
+        schemas["compiler"]["cli"]["commandCatalog"]["schemaVersion"],
+        json!(COMPILER_COMMAND_CATALOG_SCHEMA_VERSION)
+    );
+    assert_eq!(
+        schemas["compiler"]["cli"]["commandCatalog"]["dispatchPolicy"],
+        json!("static-command-descriptor-ops-table")
+    );
+    assert_eq!(
+        schemas["compiler"]["cli"]["commandCatalog"]["commands"],
+        schemas["abi"]["compilerCapabilityAbi"]["commandCatalog"]["commands"]
+    );
+    assert!(schemas["compiler"]["cli"]["commandCatalog"]["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|command| command["name"] == json!("compile")
+            && command["capabilities"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("compiler.compile_kernel"))));
     assert_eq!(
         schemas["compiler"]["cli"]["compileScopes"],
         json!(COMPILE_SCOPES)

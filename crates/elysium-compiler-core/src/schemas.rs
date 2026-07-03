@@ -1,5 +1,6 @@
 use crate::abi::abi_catalog;
 use crate::compiler_capability_abi::{COMPILER_COMMANDS, COMPILE_SCOPES};
+use crate::compiler_command_catalog::compiler_command_catalog;
 use crate::io::write_json_value;
 use crate::schema_catalog::{
     dist_data_schema_section, raw_export_schema_section, SCHEMA_CATALOG_SCHEMA_VERSION,
@@ -21,7 +22,8 @@ pub fn schema_catalog() -> Value {
             "metadata": compiler_metadata(),
             "cli": {
                 "commands": COMPILER_COMMANDS,
-                "compileScopes": COMPILE_SCOPES
+                "compileScopes": COMPILE_SCOPES,
+                "commandCatalog": compiler_command_catalog()
             },
             "compileKernel": compile_kernel_catalog()
         },

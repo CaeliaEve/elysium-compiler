@@ -5,12 +5,14 @@
 //! catalog during the external compiler handshake; schema generation consumes it
 //! so the executable's published surface cannot drift from the runtime gate.
 
+use crate::compiler_command_catalog::compiler_command_catalog;
+pub use crate::compiler_command_catalog::{
+    COMPILER_COMMANDS, REQUIRED_COMPILER_COMMANDS, SCHEMA_HASH_COMMANDS_INPUT,
+};
 use crate::native_ui_export_abi_catalog::NATIVE_UI_VALIDATION_DEFAULT_PATH;
 use serde_json::{json, Value};
 
 pub const COMPILER_CAPABILITY_ABI_VERSION: &str = "elysium.compiler.capability.v1";
-pub const COMPILER_COMMANDS: &[&str] = &["compile", "inspect", "validate", "schemas"];
-pub const REQUIRED_COMPILER_COMMANDS: &[&str] = &["schemas", "validate", "compile"];
 pub const COMPILE_SCOPES: &[&str] = &[
     "all",
     "native-ui",
@@ -42,7 +44,6 @@ pub const COMPILER_POLICY_MISSING_CAPABILITY: &str = "fail-fast";
 pub const COMPILER_POLICY_HOT_PATH_ENCODING: &str = "binary-pack-preferred";
 pub const COMPILER_POLICY_FULL_EXPORT_VALIDATION: &str = "milestone-gate-only";
 
-pub const SCHEMA_HASH_COMMANDS_INPUT: &str = "commands=compile,inspect,validate,schemas";
 pub const SCHEMA_HASH_SCOPES_INPUT: &str =
     "scopes=all,native-ui,search,browser,recipes,ui,textures";
 pub const SCHEMA_HASH_COMPILER_CAPABILITY_INPUT: &str =
@@ -53,6 +54,7 @@ pub fn compiler_capability_abi_catalog() -> Value {
         "name": "elysium.compiler.capability",
         "version": COMPILER_CAPABILITY_ABI_VERSION,
         "commands": COMPILER_COMMANDS,
+        "commandCatalog": compiler_command_catalog(),
         "requiredCommands": REQUIRED_COMPILER_COMMANDS,
         "compileScopes": COMPILE_SCOPES,
         "nativeUi": {

@@ -4,6 +4,7 @@ mod binary;
 pub mod cli;
 pub mod commands;
 mod compiler_capability_abi;
+mod compiler_command_catalog;
 mod diagnostics;
 mod io;
 mod json_ext;
