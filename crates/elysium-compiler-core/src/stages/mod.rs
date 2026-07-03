@@ -10,14 +10,10 @@ use crate::native_ui_export_abi_catalog::{
 };
 use crate::native_ui_report::compile_native_ui_layout_report;
 use crate::pack_abi::{purge_out_of_scope_runtime_artifacts, write_pack_abi_validation_report};
-use crate::packs::browser::compile_browser_pack;
-use crate::packs::recipe::compile_recipe_pack;
-use crate::packs::search::compile_search_pack;
-use crate::packs::texture::compile_texture_pack;
-use crate::packs::ui::compile_ui_pack;
 use crate::raw_export_abi::write_raw_export_abi_validation_report;
 use crate::recipe_domain::captured_ui_family_key;
 use crate::runtime::{compile_runtime_reports, purge_debug_json_artifacts};
+use crate::runtime_pack_plan::{compile_runtime_packs, runtime_pack_compiler_catalog};
 use crate::ui_pack_abi::write_ui_pack_abi_validation_report;
 use crate::validation::compile_semantic_validation_report;
 use anyhow::{Context, Result};
@@ -217,6 +213,10 @@ pub fn compile_kernel_catalog() -> Value {
             "execution": "ordered-fail-closed-stage-pipeline",
             "scope": "stage catalog is stable; individual stage emitters gate artifacts by CompileScope"
         },
+        "runtimePackCompilerPolicy": {
+            "selection": "descriptor-scope-table",
+            "compilers": runtime_pack_compiler_catalog()
+        },
         "modules": modules
     })
 }
@@ -244,85 +244,13 @@ fn prepare_output_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
 }
 
 fn emit_runtime_packs_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
-    match context.scope {
-        CompileScope::All => {
-            compile_browser_pack(
-                context.input,
-                context.output,
-                context.strict,
-                context.debug_json,
-            )?;
-            compile_recipe_pack(
-                context.input,
-                context.output,
-                context.strict,
-                context.debug_json,
-            )?;
-            compile_ui_pack(
-                context.input,
-                context.output,
-                context.strict,
-                context.debug_json,
-            )?;
-            compile_texture_pack(
-                context.input,
-                context.output,
-                context.strict,
-                context.debug_json,
-            )?;
-        }
-        CompileScope::NativeUi => {
-            compile_browser_pack(
-                context.input,
-                context.output,
-                context.strict,
-                context.debug_json,
-            )?;
-            compile_recipe_pack(
-                context.input,
-                context.output,
-                context.strict,
-                context.debug_json,
-            )?;
-            compile_ui_pack(
-                context.input,
-                context.output,
-                context.strict,
-                context.debug_json,
-            )?;
-        }
-        CompileScope::Search => compile_search_pack(
-            context.input,
-            context.output,
-            context.strict,
-            context.debug_json,
-        )?,
-        CompileScope::Browser => compile_browser_pack(
-            context.input,
-            context.output,
-            context.strict,
-            context.debug_json,
-        )?,
-        CompileScope::Recipes => compile_recipe_pack(
-            context.input,
-            context.output,
-            context.strict,
-            context.debug_json,
-        )?,
-        CompileScope::Ui => compile_ui_pack(
-            context.input,
-            context.output,
-            context.strict,
-            context.debug_json,
-        )?,
-        CompileScope::Textures => compile_texture_pack(
-            context.input,
-            context.output,
-            context.strict,
-            context.debug_json,
-        )?,
-    }
-    Ok(())
+    compile_runtime_packs(
+        context.input,
+        context.output,
+        context.scope,
+        context.strict,
+        context.debug_json,
+    )
 }
 
 fn raw_export_abi_validation_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {

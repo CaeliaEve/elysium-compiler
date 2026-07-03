@@ -45,6 +45,7 @@ use crate::runtime_manifest_abi::{
     RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION, RUST_RUNTIME_SCHEMA,
     RUST_RUNTIME_SCHEMA_REVISION, SCHEMA_HASH_RUNTIME_MANIFEST_INPUT,
 };
+use crate::runtime_pack_plan::runtime_pack_compilers;
 use crate::schemas;
 use crate::stages::{compile_kernel_catalog, compile_kernel_modules};
 use crate::texture_animation::{
@@ -1484,6 +1485,21 @@ fn stable_cli_inspect_validate_and_schemas_cover_fixture_contracts() {
         schemas["compiler"]["compileKernel"]["stageCount"],
         json!(catalog_stage_count)
     );
+    assert_eq!(
+        schemas["compiler"]["compileKernel"]["runtimePackCompilerPolicy"]["selection"],
+        json!("descriptor-scope-table")
+    );
+    assert!(
+        schemas["compiler"]["compileKernel"]["runtimePackCompilerPolicy"]["compilers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|compiler| compiler["id"] == json!("ui")
+                && compiler["capabilities"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!("compiler.native_ui_pack")))
+    );
     assert!(schemas["compiler"]["compileKernel"]["modules"]
         .as_array()
         .unwrap()
@@ -1551,6 +1567,35 @@ fn stable_cli_inspect_validate_and_schemas_cover_fixture_contracts() {
         schemas["rawExport"]["nativeBackground"]["strictPolicy"],
         json!("a captured nativeBackground.assetRef must point to a materialized raw-export asset")
     );
+}
+
+#[test]
+fn runtime_pack_compiler_catalog_is_scope_authority() {
+    fn compiler_ids(scope: CompileScope) -> Vec<&'static str> {
+        runtime_pack_compilers(scope)
+            .map(|compiler| compiler.id())
+            .collect::<Vec<_>>()
+    }
+
+    assert_eq!(
+        compiler_ids(CompileScope::All),
+        vec!["browser", "recipes", "ui", "texture"]
+    );
+    assert_eq!(
+        compiler_ids(CompileScope::NativeUi),
+        vec!["browser", "recipes", "ui"]
+    );
+    assert_eq!(compiler_ids(CompileScope::Search), vec!["search"]);
+    assert_eq!(compiler_ids(CompileScope::Browser), vec!["browser"]);
+    assert_eq!(compiler_ids(CompileScope::Recipes), vec!["recipes"]);
+    assert_eq!(compiler_ids(CompileScope::Ui), vec!["ui"]);
+    assert_eq!(compiler_ids(CompileScope::Textures), vec!["texture"]);
+
+    let browser = runtime_pack_compilers(CompileScope::Browser)
+        .next()
+        .unwrap();
+    assert!(browser.outputs().contains(&"rust/search.bin"));
+    assert!(browser.capabilities().contains(&"compiler.search_pack"));
 }
 
 #[test]
