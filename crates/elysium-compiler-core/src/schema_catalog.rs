@@ -6,6 +6,7 @@
 //! kernel-style rule that ABI surfaces are tables first and procedural JSON
 //! assembly second.
 
+use crate::manifest::{manifest_collection_catalog, RAW_MANIFEST_PATH_POLICY};
 use crate::native_ui_export_abi_catalog::{
     NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH, NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
     NATIVE_UI_VALIDATION_DEFAULT_PATH, NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
@@ -22,8 +23,6 @@ use std::collections::BTreeSet;
 
 pub const SCHEMA_CATALOG_SCHEMA_VERSION: &str = "elysium-compiler/schema-catalog/v1";
 const RAW_EXPORT_MANIFEST_SCHEMA_VERSION: &str = "neonei/raw-export-manifest/current";
-const RAW_EXPORT_PATH_POLICY: &str =
-    "portable-relative-only; no drive letters, file URLs, absolute paths, '.', or '..' segments";
 const RAW_EXPORT_VALIDATION_POLICY: &str =
     "missing required files, missing declared files, path violations, and legacy fallback are compile blockers";
 const NATIVE_UI_EXPORT_VALIDATION_POLICY: &str =
@@ -124,7 +123,8 @@ pub fn raw_export_schema_section() -> Value {
             "schemaVersion": RAW_EXPORT_MANIFEST_SCHEMA_VERSION,
             "requiredFiles": raw_export_required_manifest_files(),
             "optionalFiles": raw_export_optional_manifest_files(),
-            "pathPolicy": RAW_EXPORT_PATH_POLICY
+            "pathPolicy": RAW_MANIFEST_PATH_POLICY,
+            "collections": manifest_collection_catalog()
         },
         "validationReport": {
             "path": "rust/raw-export-abi-validation-report.json",

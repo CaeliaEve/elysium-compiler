@@ -7,7 +7,9 @@ use crate::json_ext::{
     numeric_value_u64, optional_value_string, optional_value_u64, value_string, value_u64,
 };
 use crate::manifest::{
-    read_json_collection, read_manifest, read_manifest_json, runtime_file_descriptors,
+    read_manifest, read_manifest_collection, read_manifest_json, runtime_file_descriptors,
+    COLLECTION_ANIMATIONS, COLLECTION_BROWSER_ITEMS, COLLECTION_NATIVE_SPRITES,
+    COLLECTION_TEXTURE_ROWS_WITH_MANIFEST,
 };
 use crate::texture_animation::{
     expected_animated_item, expected_animation_reason, promote_animation_facts_to_animated_atlas,
@@ -178,30 +180,11 @@ pub fn compile_texture_pack(
     }
     let atlas = read_manifest_json(input, &manifest, "browserAtlasIndex")?
         .ok_or_else(|| anyhow!("texture compiler blocked: browserAtlasIndex is missing"))?;
-    let animations = read_json_collection(
-        input,
-        &manifest,
-        &["animations", "animationTable"],
-        Some("animations"),
-    )?;
-    let native_sprites = read_json_collection(
-        input,
-        &manifest,
-        &["nativeSprites", "nativeRenderIndex"],
-        Some("sprites"),
-    )?;
-    let texture_rows = read_json_collection(
-        input,
-        &manifest,
-        &["textures", "textureManifest"],
-        Some("textures"),
-    )?;
-    let item_rows = read_json_collection(
-        input,
-        &manifest,
-        &["items", "browserCatalog"],
-        Some("items"),
-    )?;
+    let animations = read_manifest_collection(input, &manifest, COLLECTION_ANIMATIONS)?;
+    let native_sprites = read_manifest_collection(input, &manifest, COLLECTION_NATIVE_SPRITES)?;
+    let texture_rows =
+        read_manifest_collection(input, &manifest, COLLECTION_TEXTURE_ROWS_WITH_MANIFEST)?;
+    let item_rows = read_manifest_collection(input, &manifest, COLLECTION_BROWSER_ITEMS)?;
 
     let animation_by_asset = animations
         .iter()

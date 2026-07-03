@@ -1,7 +1,10 @@
 use crate::binary::{intern_compact_string, push_u32, write_binary_pack_payload};
 use crate::io::write_json_value;
 use crate::json_ext::{value_string, value_u64};
-use crate::manifest::{read_json_collection, read_manifest};
+use crate::manifest::{
+    read_manifest, read_manifest_collection, COLLECTION_BROWSER_GROUPS,
+    COLLECTION_BROWSER_ITEMS_PREFER_CATALOG, COLLECTION_SEARCH_ITEMS,
+};
 use crate::text::{build_pinyin_fields, normalize_search_terms, normalize_text};
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
@@ -186,18 +189,8 @@ pub fn compile_search_pack(
     debug_json: bool,
 ) -> Result<()> {
     let manifest = read_manifest(input)?;
-    let items = read_json_collection(
-        input,
-        &manifest,
-        &["items", "browserCatalog", "searchAll"],
-        Some("items"),
-    )?;
-    let group_rows = read_json_collection(
-        input,
-        &manifest,
-        &["groups", "browserGroups"],
-        Some("groups"),
-    )?;
+    let items = read_manifest_collection(input, &manifest, COLLECTION_SEARCH_ITEMS)?;
+    let group_rows = read_manifest_collection(input, &manifest, COLLECTION_BROWSER_GROUPS)?;
 
     if strict && items.is_empty() {
         return Err(anyhow!(
@@ -296,12 +289,8 @@ pub fn compile_search_pack(
 
     let rust_dir = output.join("rust");
     fs::create_dir_all(&rust_dir)?;
-    let browser_items = read_json_collection(
-        input,
-        &manifest,
-        &["browserCatalog", "items"],
-        Some("items"),
-    )?;
+    let browser_items =
+        read_manifest_collection(input, &manifest, COLLECTION_BROWSER_ITEMS_PREFER_CATALOG)?;
     let string_pack = build_compact_string_payload_from_items(&browser_items)?;
     let search_pack = json!({
         "schemaVersion": "neonei/rust-search-pack/current",

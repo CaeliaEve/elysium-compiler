@@ -2,8 +2,8 @@ use crate::binary::{intern_compact_string, push_u32, write_binary_pack_payload};
 use crate::io::write_json_value;
 use crate::json_ext::{first_non_empty, nested_value_string, value_string, value_u64};
 use crate::manifest::{
-    read_json_collection, read_jsonl_file_values, read_jsonl_values, read_manifest,
-    read_manifest_json, runtime_file_descriptors,
+    read_jsonl_file_values, read_jsonl_values, read_manifest, read_manifest_collection,
+    read_manifest_json, runtime_file_descriptors, COLLECTION_HANDLER_LAYOUTS,
 };
 use crate::recipe_domain::{
     build_recipe_fragmentation_report, build_recipe_handler_metadata_report,
@@ -32,12 +32,7 @@ pub fn compile_recipe_pack(
     let recipe_index = read_manifest_json(input, &manifest, "recipeIndex")?
         .ok_or_else(|| anyhow!("recipe compiler blocked: recipeIndex is missing"))?;
     let handlers = read_jsonl_values(input, &manifest, "neiHandlers")?;
-    let layouts = read_json_collection(
-        input,
-        &manifest,
-        &["neiHandlerLayouts", "recipeLayouts"],
-        Some("handler-layouts"),
-    )?;
+    let layouts = read_manifest_collection(input, &manifest, COLLECTION_HANDLER_LAYOUTS)?;
     let mut recipes = Vec::new();
 
     for shard in recipe_index

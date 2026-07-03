@@ -5,8 +5,10 @@ use crate::binary::{
 use crate::io::write_json_value;
 use crate::json_ext::{value_string, value_u64};
 use crate::manifest::{
-    read_json_collection, read_manifest, read_optional_manifest_json, runtime_file_descriptors,
-    RawManifest,
+    read_manifest, read_manifest_collection, read_optional_manifest_json, runtime_file_descriptors,
+    RawManifest, COLLECTION_BROWSER_GROUPS, COLLECTION_BROWSER_ITEMS,
+    COLLECTION_BROWSER_ITEMS_PREFER_CATALOG, COLLECTION_NEI_ORDER,
+    COLLECTION_SEARCH_ALL_PREFER_INDEX, COLLECTION_TEXTURE_ROWS,
 };
 use crate::packs::search::{
     build_compact_search_payload_from_items, build_compact_string_payload_from_items,
@@ -28,20 +30,10 @@ pub fn compile_browser_pack(
     if manifest.files.contains_key("browserCatalog") {
         return compile_dist_browser_pack(input, output, strict, debug_json);
     }
-    let items = read_json_collection(
-        input,
-        &manifest,
-        &["items", "browserCatalog"],
-        Some("items"),
-    )?;
-    let order_rows = read_json_collection(input, &manifest, &["neiOrder"], None)?;
-    let group_rows = read_json_collection(
-        input,
-        &manifest,
-        &["groups", "browserGroups"],
-        Some("groups"),
-    )?;
-    let texture_rows = read_json_collection(input, &manifest, &["textures"], Some("textures"))?;
+    let items = read_manifest_collection(input, &manifest, COLLECTION_BROWSER_ITEMS)?;
+    let order_rows = read_manifest_collection(input, &manifest, COLLECTION_NEI_ORDER)?;
+    let group_rows = read_manifest_collection(input, &manifest, COLLECTION_BROWSER_GROUPS)?;
+    let texture_rows = read_manifest_collection(input, &manifest, COLLECTION_TEXTURE_ROWS)?;
     let atlas =
         read_optional_manifest_json(input, &manifest, "browserAtlasIndex")?.unwrap_or(Value::Null);
     let atlas = repaired_browser_atlas(&atlas, &texture_rows, &items);
@@ -308,7 +300,7 @@ pub fn compile_browser_pack(
 }
 
 fn build_compact_browser_payload(input: &Path, manifest: &RawManifest) -> Result<Vec<u8>> {
-    let items = read_json_collection(input, manifest, &["browserCatalog", "items"], Some("items"))?;
+    let items = read_manifest_collection(input, manifest, COLLECTION_BROWSER_ITEMS_PREFER_CATALOG)?;
     build_compact_browser_payload_from_items(&items)
 }
 
@@ -545,23 +537,15 @@ pub fn compile_dist_browser_pack(
         "neonei/group-pack/current",
         &group_pack,
     )?;
-    let browser_items = read_json_collection(
-        input,
-        &manifest,
-        &["browserCatalog", "items"],
-        Some("items"),
-    )?;
+    let browser_items =
+        read_manifest_collection(input, &manifest, COLLECTION_BROWSER_ITEMS_PREFER_CATALOG)?;
     let browser_index_by_item = browser_items
         .iter()
         .enumerate()
         .filter_map(|(index, item)| Some((value_string(item, "itemId")?, index as u64)))
         .collect::<BTreeMap<_, _>>();
-    let mut search_rows = read_json_collection(
-        input,
-        &manifest,
-        &["searchAll", "browserCatalog", "items"],
-        Some("items"),
-    )?;
+    let mut search_rows =
+        read_manifest_collection(input, &manifest, COLLECTION_SEARCH_ALL_PREFER_INDEX)?;
     for item in &mut search_rows {
         if let Some(item_object) = item.as_object_mut() {
             if let Some(item_id) = item_object.get("itemId").and_then(Value::as_str) {

@@ -1471,7 +1471,7 @@
       "packAbiVersion": "elysium.pack.v1",
       "rawExportSchemaVersion": "1.0",
       "runtimeAbiVersion": "elysium.runtime.v1",
-      "schemaHash": "sha256:b2726c0933e41937bbb041235d9723b1f674310cadb6b5d0b07c0f95f7818927",
+      "schemaHash": "sha256:943083fcfca47ecbd32703440d1a2f958cbfac852bdb2af62d44cb39f1e4584c",
       "version": "0.1.0"
     },
     "name": "elysium-compiler"
@@ -2090,6 +2090,125 @@
   },
   "rawExport": {
     "manifest": {
+      "collections": {
+        "collections": [
+          {
+            "arrayFields": [
+              "items"
+            ],
+            "id": "browser-items",
+            "logicalNames": [
+              "items",
+              "browserCatalog"
+            ]
+          },
+          {
+            "arrayFields": [
+              "items"
+            ],
+            "id": "browser-items-catalog-first",
+            "logicalNames": [
+              "browserCatalog",
+              "items"
+            ]
+          },
+          {
+            "arrayFields": [
+              "items"
+            ],
+            "id": "search-items",
+            "logicalNames": [
+              "items",
+              "browserCatalog",
+              "searchAll"
+            ]
+          },
+          {
+            "arrayFields": [
+              "items"
+            ],
+            "id": "search-all-index-first",
+            "logicalNames": [
+              "searchAll",
+              "browserCatalog",
+              "items"
+            ]
+          },
+          {
+            "arrayFields": [],
+            "id": "nei-order",
+            "logicalNames": [
+              "neiOrder"
+            ]
+          },
+          {
+            "arrayFields": [
+              "groups"
+            ],
+            "id": "browser-groups",
+            "logicalNames": [
+              "groups",
+              "browserGroups"
+            ]
+          },
+          {
+            "arrayFields": [
+              "textures"
+            ],
+            "id": "texture-rows",
+            "logicalNames": [
+              "textures"
+            ]
+          },
+          {
+            "arrayFields": [
+              "textures"
+            ],
+            "id": "texture-rows-with-manifest",
+            "logicalNames": [
+              "textures",
+              "textureManifest"
+            ]
+          },
+          {
+            "arrayFields": [
+              "handler-layouts"
+            ],
+            "id": "handler-layouts",
+            "logicalNames": [
+              "neiHandlerLayouts",
+              "recipeLayouts"
+            ]
+          },
+          {
+            "arrayFields": [
+              "animations"
+            ],
+            "id": "animations",
+            "logicalNames": [
+              "animations",
+              "animationTable"
+            ]
+          },
+          {
+            "arrayFields": [
+              "sprites"
+            ],
+            "id": "native-sprites",
+            "logicalNames": [
+              "nativeSprites",
+              "nativeRenderIndex"
+            ]
+          }
+        ],
+        "jsonlExtensions": [
+          "jsonl",
+          "gz"
+        ],
+        "pathPolicy": "portable-relative-only; no drive letters, UNC paths, file URLs, '.', or '..' segments",
+        "schemaHashInput": "manifest-collection-catalog=elysium-compiler/manifest-collection-catalog/v1;descriptor-table=v1",
+        "schemaVersion": "elysium-compiler/manifest-collection-catalog/v1"
+      },
       "optionalFiles": [
         "neiOrder",
         "browserGroups",
@@ -2107,7 +2226,7 @@
         "semanticIdentityNormalizationReport",
         "neiHandlerAnomalies"
       ],
-      "pathPolicy": "portable-relative-only; no drive letters, file URLs, absolute paths, '.', or '..' segments",
+      "pathPolicy": "portable-relative-only; no drive letters, UNC paths, file URLs, '.', or '..' segments",
       "requiredFiles": [
         "items",
         "fluids",

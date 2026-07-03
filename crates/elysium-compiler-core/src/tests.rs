@@ -9,6 +9,12 @@ use crate::compiler_capability_abi::{
 use crate::io::{normalize_path, write_json_value};
 use crate::json_ext::{value_string, value_u64};
 use crate::kernel::{COMPILE_KERNEL_TRACE_REPORT_PATH, COMPILE_KERNEL_TRACE_SCHEMA_VERSION};
+use crate::manifest::{
+    manifest_collection_catalog, validate_manifest_collection_descriptors,
+    COLLECTION_BROWSER_ITEMS, COLLECTION_HANDLER_LAYOUTS, COLLECTION_TEXTURE_ROWS_WITH_MANIFEST,
+    MANIFEST_COLLECTION_CATALOG_SCHEMA_VERSION, MANIFEST_COLLECTION_DESCRIPTORS,
+    SCHEMA_HASH_MANIFEST_COLLECTION_INPUT,
+};
 use crate::native_ui_export_abi;
 use crate::native_ui_pack_abi::{
     UI_BINDING_MAGIC, UI_BINDING_PAYLOAD_VERSION, UI_PRIMITIVE_ROW_STRIDE_U32,
@@ -1198,6 +1204,41 @@ fn schema_catalog_sections_are_descriptor_owned() {
     );
     assert_eq!(schemas["rawExport"], raw_export);
     assert_eq!(schemas["distData"], dist_data);
+}
+
+#[test]
+fn manifest_collection_catalog_is_descriptor_owned() {
+    validate_manifest_collection_descriptors();
+    let catalog = manifest_collection_catalog();
+    let collections = catalog["collections"].as_array().unwrap();
+
+    assert_eq!(
+        catalog["schemaVersion"],
+        json!(MANIFEST_COLLECTION_CATALOG_SCHEMA_VERSION)
+    );
+    assert_eq!(
+        catalog["schemaHashInput"],
+        json!(SCHEMA_HASH_MANIFEST_COLLECTION_INPUT)
+    );
+    assert_eq!(collections.len(), MANIFEST_COLLECTION_DESCRIPTORS.len());
+    assert!(collections.iter().any(|collection| {
+        collection["id"] == json!(COLLECTION_BROWSER_ITEMS.id)
+            && collection["logicalNames"] == json!(COLLECTION_BROWSER_ITEMS.logical_names)
+            && collection["arrayFields"] == json!(COLLECTION_BROWSER_ITEMS.array_fields)
+    }));
+    assert!(collections.iter().any(|collection| {
+        collection["id"] == json!(COLLECTION_TEXTURE_ROWS_WITH_MANIFEST.id)
+            && collection["logicalNames"]
+                == json!(COLLECTION_TEXTURE_ROWS_WITH_MANIFEST.logical_names)
+            && collection["arrayFields"] == json!(["textures"])
+    }));
+    assert!(collections.iter().any(|collection| {
+        collection["id"] == json!(COLLECTION_HANDLER_LAYOUTS.id)
+            && collection["arrayFields"] == json!(["handler-layouts"])
+    }));
+
+    let raw_export = raw_export_schema_section();
+    assert_eq!(raw_export["manifest"]["collections"], catalog);
 }
 
 #[test]

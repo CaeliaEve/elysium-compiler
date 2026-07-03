@@ -1,7 +1,7 @@
 use crate::json_ext::{first_non_empty, nested_value_string, value_string};
 use crate::manifest::{
-    read_json_collection, read_jsonl_file_values, read_jsonl_values, read_manifest_json,
-    RawManifest,
+    read_jsonl_file_values, read_jsonl_values, read_manifest_collection, read_manifest_json,
+    RawManifest, COLLECTION_HANDLER_LAYOUTS,
 };
 use crate::recipe_domain::{
     captured_ui_family_key, classify_recipe_family_key, public_recipe_handler,
@@ -54,12 +54,7 @@ pub fn build_raw_recipe_ui_payload_index(
     let recipe_index = read_manifest_json(input, manifest, "recipeIndex")?
         .ok_or_else(|| anyhow!("ui-pack compiler blocked: recipeIndex is missing"))?;
     let handlers = read_jsonl_values(input, manifest, "neiHandlers")?;
-    let layouts = read_json_collection(
-        input,
-        manifest,
-        &["neiHandlerLayouts", "recipeLayouts"],
-        Some("handler-layouts"),
-    )?;
+    let layouts = read_manifest_collection(input, manifest, COLLECTION_HANDLER_LAYOUTS)?;
     let handler_context = RecipeHandlerContext::new(&handlers, &layouts);
     let mut recipes = Vec::new();
     for shard in recipe_index
