@@ -18,8 +18,10 @@ use crate::native_ui_pack_abi::{
 use crate::native_ui_report;
 use crate::pack_abi::{
     runtime_artifact_catalog, runtime_artifact_catalog_specs, runtime_pack_artifact_specs,
-    runtime_summary_artifact_specs, validate_runtime_pack_abi, PACK_ABI_VALIDATION_REPORT_PATH,
-    PACK_ABI_VALIDATION_SCHEMA_VERSION, RUNTIME_ARTIFACT_CATALOG_SCHEMA_VERSION,
+    runtime_summary_artifact_specs, validate_runtime_artifact_catalog_descriptors,
+    validate_runtime_pack_abi, PACK_ABI_VALIDATION_REPORT_PATH, PACK_ABI_VALIDATION_SCHEMA_VERSION,
+    RUNTIME_ARTIFACT_CATALOG_SCHEMA_VERSION, RUNTIME_PACK_PRODUCER_IDS,
+    SCHEMA_HASH_RUNTIME_ARTIFACT_CATALOG_INPUT,
 };
 use crate::packs::browser::build_compact_group_payload_from_groups;
 use crate::packs::recipe::build_compact_recipe_payload_from_pack;
@@ -66,7 +68,7 @@ use crate::ui_templates::{
 };
 use crate::validation::{validate_atlas_bounds, validate_frame_bounds};
 use serde_json::json;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::Path;
 
@@ -1270,12 +1272,18 @@ fn runtime_report_emission_uses_manifest_descriptors() {
 
 #[test]
 fn runtime_artifact_catalog_drives_schema_catalog_and_summary_surfaces() {
+    validate_runtime_artifact_catalog_descriptors();
     let catalog = runtime_artifact_catalog();
     let artifacts = catalog["artifacts"].as_array().unwrap();
     assert_eq!(
         catalog["schemaVersion"],
         json!(RUNTIME_ARTIFACT_CATALOG_SCHEMA_VERSION)
     );
+    assert_eq!(
+        catalog["schemaHashInput"],
+        json!(SCHEMA_HASH_RUNTIME_ARTIFACT_CATALOG_INPUT)
+    );
+    assert_eq!(catalog["producers"], json!(RUNTIME_PACK_PRODUCER_IDS));
     assert_eq!(artifacts.len(), runtime_artifact_catalog_specs().len());
     assert!(artifacts.iter().any(|artifact| {
         artifact["logicalName"] == json!("rustPackValidationReport")
@@ -1285,10 +1293,15 @@ fn runtime_artifact_catalog_drives_schema_catalog_and_summary_surfaces() {
     assert!(artifacts.iter().any(|artifact| {
         artifact["logicalName"] == json!("rustUiTemplatesBin")
             && artifact["path"] == json!("rust/ui-pack/ui_templates.bin")
+            && artifact["producers"] == json!(["ui"])
             && artifact["scopes"]
                 .as_array()
                 .unwrap()
                 .contains(&json!("native-ui"))
+    }));
+    assert!(artifacts.iter().any(|artifact| {
+        artifact["logicalName"] == json!("rustSearchBin")
+            && artifact["producers"] == json!(["browser", "search"])
     }));
 
     let schemas = schemas::schema_catalog();
@@ -1730,6 +1743,63 @@ fn runtime_pack_compiler_catalog_is_scope_authority() {
         .unwrap();
     assert!(browser.outputs().contains(&"rust/search.bin"));
     assert!(browser.capabilities().contains(&"compiler.search_pack"));
+
+    let texture = runtime_pack_compilers(CompileScope::Textures)
+        .next()
+        .unwrap();
+    assert!(texture.outputs().contains(&"rust/textures.bin"));
+    assert!(texture.outputs().contains(&"rust/atlas.meta.bin"));
+    assert!(texture.outputs().contains(&"rust/animations.bin"));
+    assert!(!texture.outputs().contains(&"rust/texture.bin"));
+    assert!(!texture.outputs().contains(&"rust/atlas_meta.bin"));
+    assert!(!texture.outputs().contains(&"rust/animation.bin"));
+
+    let ui = runtime_pack_compilers(CompileScope::Ui).next().unwrap();
+    assert!(ui.outputs().contains(&"rust/ui-pack/ui_templates.bin"));
+    assert!(ui
+        .outputs()
+        .contains(&"rust/ui-pack/ui_assets.manifest.json"));
+    assert!(ui.outputs().contains(&"rust/ui-pack/ui_pack_report.json"));
+    assert!(ui.debug_outputs().is_empty());
+}
+
+#[test]
+fn runtime_pack_compiler_outputs_are_projected_from_artifact_producers() {
+    for scope in [
+        CompileScope::All,
+        CompileScope::NativeUi,
+        CompileScope::Search,
+        CompileScope::Browser,
+        CompileScope::Recipes,
+        CompileScope::Ui,
+        CompileScope::Textures,
+    ] {
+        let active_compilers = runtime_pack_compilers(scope).collect::<Vec<_>>();
+        let active_producers = active_compilers
+            .iter()
+            .map(|compiler| compiler.id())
+            .collect::<BTreeSet<_>>();
+        let actual_outputs = active_compilers
+            .iter()
+            .flat_map(|compiler| compiler.outputs())
+            .collect::<BTreeSet<_>>();
+        let expected_outputs = runtime_pack_artifact_specs(scope, false)
+            .into_iter()
+            .filter(|spec| {
+                spec.producers()
+                    .iter()
+                    .any(|producer| active_producers.contains(producer))
+            })
+            .map(|spec| spec.relative_path)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            actual_outputs,
+            expected_outputs,
+            "runtime pack compiler catalog drift for scope {}",
+            scope.as_str()
+        );
+    }
 }
 
 #[test]

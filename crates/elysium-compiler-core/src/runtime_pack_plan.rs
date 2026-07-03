@@ -1,4 +1,5 @@
 use crate::cli::CompileScope;
+use crate::pack_abi::runtime_pack_artifact_paths_for_producer;
 use crate::packs::browser::compile_browser_pack;
 use crate::packs::recipe::compile_recipe_pack;
 use crate::packs::search::compile_search_pack;
@@ -29,7 +30,6 @@ const SCOPE_SEARCH_ONLY: &[CompileScope] = &[CompileScope::Search];
 pub(crate) struct RuntimePackCompilerDescriptor {
     id: &'static str,
     inputs: &'static [&'static str],
-    outputs: &'static [&'static str],
     capabilities: &'static [&'static str],
     scopes: &'static [CompileScope],
     run: RuntimePackCompilerFn,
@@ -39,7 +39,6 @@ impl RuntimePackCompilerDescriptor {
     const fn new(
         id: &'static str,
         inputs: &'static [&'static str],
-        outputs: &'static [&'static str],
         capabilities: &'static [&'static str],
         scopes: &'static [CompileScope],
         run: RuntimePackCompilerFn,
@@ -47,7 +46,6 @@ impl RuntimePackCompilerDescriptor {
         Self {
             id,
             inputs,
-            outputs,
             capabilities,
             scopes,
             run,
@@ -58,8 +56,15 @@ impl RuntimePackCompilerDescriptor {
         self.id
     }
 
-    pub(crate) fn outputs(self) -> &'static [&'static str] {
-        self.outputs
+    pub(crate) fn outputs(self) -> Vec<&'static str> {
+        runtime_pack_artifact_paths_for_producer(self.id, false)
+    }
+
+    pub(crate) fn debug_outputs(self) -> Vec<&'static str> {
+        runtime_pack_artifact_paths_for_producer(self.id, true)
+            .into_iter()
+            .filter(|path| !self.outputs().contains(path))
+            .collect()
     }
 
     pub(crate) fn capabilities(self) -> &'static [&'static str] {
@@ -79,6 +84,7 @@ impl RuntimePackCompilerDescriptor {
             "id": self.id(),
             "inputs": self.inputs,
             "outputs": self.outputs(),
+            "debugOnlyOutputs": self.debug_outputs(),
             "capabilities": self.capabilities(),
             "scopes": self.scopes.iter().map(|scope| scope.as_str()).collect::<Vec<_>>(),
         })
@@ -89,12 +95,6 @@ const RUNTIME_PACK_COMPILERS: &[RuntimePackCompilerDescriptor] = &[
     RuntimePackCompilerDescriptor::new(
         "browser",
         &["raw-export-manifest", "browser-layout", "browser-atlas"],
-        &[
-            "rust/browser.bin",
-            "rust/groups.bin",
-            "rust/search.bin",
-            "rust/strings.zh_cn.bin",
-        ],
         &["compiler.browser_pack", "compiler.search_pack"],
         SCOPE_ALL_NATIVE_BROWSER,
         compile_browser_pack,
@@ -106,7 +106,6 @@ const RUNTIME_PACK_COMPILERS: &[RuntimePackCompilerDescriptor] = &[
             "recipe-shards",
             "native-ui-capture-facts",
         ],
-        &["rust/recipes.bin"],
         &["compiler.recipe_pack"],
         SCOPE_ALL_NATIVE_RECIPES,
         compile_recipe_pack,
@@ -114,11 +113,6 @@ const RUNTIME_PACK_COMPILERS: &[RuntimePackCompilerDescriptor] = &[
     RuntimePackCompilerDescriptor::new(
         "ui",
         &["native-ui-capture-facts", "ui-template-catalog"],
-        &[
-            "rust/ui-pack/ui_templates.bin",
-            "rust/ui-pack/ui_bindings.bin",
-            "rust/ui-pack/ui_strings.bin",
-        ],
         &["compiler.native_ui_pack"],
         SCOPE_ALL_NATIVE_UI,
         compile_ui_pack,
@@ -126,11 +120,6 @@ const RUNTIME_PACK_COMPILERS: &[RuntimePackCompilerDescriptor] = &[
     RuntimePackCompilerDescriptor::new(
         "texture",
         &["texture-atlas", "texture-animation-facts"],
-        &[
-            "rust/texture.bin",
-            "rust/atlas_meta.bin",
-            "rust/animation.bin",
-        ],
         &["compiler.texture_pack"],
         SCOPE_ALL_TEXTURES,
         compile_texture_pack,
@@ -138,7 +127,6 @@ const RUNTIME_PACK_COMPILERS: &[RuntimePackCompilerDescriptor] = &[
     RuntimePackCompilerDescriptor::new(
         "search",
         &["raw-export-manifest", "browser-layout"],
-        &["rust/search.bin", "rust/strings.zh_cn.bin"],
         &["compiler.search_pack"],
         SCOPE_SEARCH_ONLY,
         compile_search_pack,

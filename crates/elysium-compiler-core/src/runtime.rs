@@ -1,8 +1,9 @@
 use crate::cli::CompileScope;
 use crate::io::{sha256_file, write_json_value};
 use crate::pack_abi::{
-    collect_text_path_violations, runtime_manifest_file_entries, runtime_pack_artifact_specs,
-    PACK_ABI_VALIDATION_REPORT_PATH,
+    collect_text_path_violations, runtime_debug_artifact_specs, runtime_manifest_file_entries,
+    runtime_pack_artifact_specs, PACK_ABI_VALIDATION_REPORT_PATH,
+    RUNTIME_DEBUG_DIRECTORY_ARTIFACTS,
 };
 use crate::runtime_manifest_abi::{
     runtime_capabilities, RuntimeManifestReportDescriptor, RuntimeManifestReportKind,
@@ -19,27 +20,20 @@ use std::fs;
 use std::path::Path;
 
 pub fn purge_debug_json_artifacts(output: &Path) -> Result<()> {
-    let rust_dir = output.join("rust");
-    for artifact_name in [
-        "browser-pack.json",
-        "search-pack.json",
-        "recipe-pack.json",
-        "texture-pack.json",
-    ] {
-        let path = rust_dir.join(artifact_name);
+    for spec in runtime_debug_artifact_specs() {
+        let path = output.join(spec.relative_path);
         if path.exists() {
             fs::remove_file(&path)
                 .with_context(|| format!("remove stale debug artifact {}", path.display()))?;
         }
     }
-    let payload_shards = rust_dir.join("recipe-ui-payload-shards");
-    if payload_shards.exists() {
-        fs::remove_dir_all(&payload_shards).with_context(|| {
-            format!(
-                "remove stale debug shard directory {}",
-                payload_shards.display()
-            )
-        })?;
+    for relative_path in RUNTIME_DEBUG_DIRECTORY_ARTIFACTS {
+        let path = output.join(relative_path);
+        if path.exists() {
+            fs::remove_dir_all(&path).with_context(|| {
+                format!("remove stale debug shard directory {}", path.display())
+            })?;
+        }
     }
     Ok(())
 }

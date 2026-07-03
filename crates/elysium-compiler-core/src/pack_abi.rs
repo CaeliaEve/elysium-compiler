@@ -14,6 +14,7 @@ use crate::version::{COMPILED_DIST_SCHEMA_VERSION, PACK_ABI_VERSION};
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -46,10 +47,33 @@ const SCOPE_ALL_NATIVE_UI: &[CompileScope] =
     &[CompileScope::All, CompileScope::NativeUi, CompileScope::Ui];
 const SCOPE_ALL_TEXTURES: &[CompileScope] = &[CompileScope::All, CompileScope::Textures];
 
+pub const RUNTIME_PACK_PRODUCER_BROWSER: &str = "browser";
+pub const RUNTIME_PACK_PRODUCER_RECIPES: &str = "recipes";
+pub const RUNTIME_PACK_PRODUCER_UI: &str = "ui";
+pub const RUNTIME_PACK_PRODUCER_TEXTURE: &str = "texture";
+pub const RUNTIME_PACK_PRODUCER_SEARCH: &str = "search";
+pub const RUNTIME_PACK_PRODUCER_IDS: &[&str] = &[
+    RUNTIME_PACK_PRODUCER_BROWSER,
+    RUNTIME_PACK_PRODUCER_RECIPES,
+    RUNTIME_PACK_PRODUCER_UI,
+    RUNTIME_PACK_PRODUCER_TEXTURE,
+    RUNTIME_PACK_PRODUCER_SEARCH,
+];
+
+const NO_RUNTIME_PACK_PRODUCER: &[&str] = &[];
+const PRODUCER_BROWSER: &[&str] = &[RUNTIME_PACK_PRODUCER_BROWSER];
+const PRODUCER_RECIPES: &[&str] = &[RUNTIME_PACK_PRODUCER_RECIPES];
+const PRODUCER_UI: &[&str] = &[RUNTIME_PACK_PRODUCER_UI];
+const PRODUCER_TEXTURE: &[&str] = &[RUNTIME_PACK_PRODUCER_TEXTURE];
+const PRODUCERS_BROWSER_SEARCH: &[&str] =
+    &[RUNTIME_PACK_PRODUCER_BROWSER, RUNTIME_PACK_PRODUCER_SEARCH];
+
 pub const PACK_ABI_VALIDATION_SCHEMA_VERSION: &str = "elysium-compiler/pack-abi-validation/v1";
 pub const PACK_ABI_VALIDATION_REPORT_PATH: &str = "rust/pack-validation-report.json";
 pub const RUNTIME_ARTIFACT_CATALOG_SCHEMA_VERSION: &str =
     "elysium-compiler/runtime-artifact-catalog/v1";
+pub const SCHEMA_HASH_RUNTIME_ARTIFACT_CATALOG_INPUT: &str =
+    "runtime-artifact-catalog=elysium-compiler/runtime-artifact-catalog/v1;producer-map=v1";
 pub const RUNTIME_ARTIFACT_STATUS_PRESENT: &str = "present";
 pub const RUNTIME_ARTIFACT_STATUS_MISSING: &str = "missing";
 pub const PACK_ABI_STATUS_OK: &str = "ok";
@@ -57,6 +81,7 @@ pub const PACK_ABI_STATUS_BLOCKED: &str = "blocked";
 pub const PACK_ABI_GENERATED_AT: &str = "deterministic-rust-compiler";
 pub const PACK_ABI_POLICY_MISSING_REQUIRED_ARTIFACT: &str = "fail-closed";
 pub const PACK_ABI_POLICY_LEGACY_FALLBACK: &str = "forbidden";
+pub const RUNTIME_DEBUG_DIRECTORY_ARTIFACTS: &[&str] = &["rust/recipe-ui-payload-shards"];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RuntimeArtifactKind {
@@ -84,6 +109,7 @@ pub struct RuntimeArtifactSpec {
     pub kind: RuntimeArtifactKind,
     pub debug_only: bool,
     scopes: &'static [CompileScope],
+    producers: &'static [&'static str],
 }
 
 impl RuntimeArtifactSpec {
@@ -93,6 +119,7 @@ impl RuntimeArtifactSpec {
         kind: RuntimeArtifactKind,
         debug_only: bool,
         scopes: &'static [CompileScope],
+        producers: &'static [&'static str],
     ) -> Self {
         Self {
             logical_name,
@@ -100,6 +127,7 @@ impl RuntimeArtifactSpec {
             kind,
             debug_only,
             scopes,
+            producers,
         }
     }
 
@@ -110,6 +138,14 @@ impl RuntimeArtifactSpec {
     pub fn scopes(self) -> &'static [CompileScope] {
         self.scopes
     }
+
+    pub fn producers(self) -> &'static [&'static str] {
+        self.producers
+    }
+
+    pub fn produced_by(self, producer_id: &str) -> bool {
+        self.producers.contains(&producer_id)
+    }
 }
 
 pub const RUNTIME_FINAL_REPORT_SPECS: &[RuntimeArtifactSpec] = &[
@@ -119,6 +155,7 @@ pub const RUNTIME_FINAL_REPORT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Manifest,
         false,
         SCOPE_EVERY,
+        NO_RUNTIME_PACK_PRODUCER,
     ),
     RuntimeArtifactSpec::new(
         "rustIntegrity",
@@ -126,6 +163,7 @@ pub const RUNTIME_FINAL_REPORT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
+        NO_RUNTIME_PACK_PRODUCER,
     ),
     RuntimeArtifactSpec::new(
         "rustSizeReport",
@@ -133,6 +171,7 @@ pub const RUNTIME_FINAL_REPORT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
+        NO_RUNTIME_PACK_PRODUCER,
     ),
     RuntimeArtifactSpec::new(
         "rustMissingDataReport",
@@ -140,6 +179,7 @@ pub const RUNTIME_FINAL_REPORT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
+        NO_RUNTIME_PACK_PRODUCER,
     ),
     RuntimeArtifactSpec::new(
         "rustPackValidationReport",
@@ -147,6 +187,7 @@ pub const RUNTIME_FINAL_REPORT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
+        NO_RUNTIME_PACK_PRODUCER,
     ),
     RuntimeArtifactSpec::new(
         "rustMigrationReadiness",
@@ -154,6 +195,7 @@ pub const RUNTIME_FINAL_REPORT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
+        NO_RUNTIME_PACK_PRODUCER,
     ),
     RuntimeArtifactSpec::new(
         "rustDeploymentReport",
@@ -161,6 +203,7 @@ pub const RUNTIME_FINAL_REPORT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
+        NO_RUNTIME_PACK_PRODUCER,
     ),
 ];
 
@@ -171,6 +214,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::BinaryPack,
         false,
         SCOPE_ALL_NATIVE_BROWSER,
+        PRODUCER_BROWSER,
     ),
     RuntimeArtifactSpec::new(
         "rustGroupsBin",
@@ -178,6 +222,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::BinaryPack,
         false,
         SCOPE_ALL_NATIVE_BROWSER,
+        PRODUCER_BROWSER,
     ),
     RuntimeArtifactSpec::new(
         "rustSearchBin",
@@ -185,6 +230,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::BinaryPack,
         false,
         SCOPE_ALL_NATIVE_SEARCH_BROWSER,
+        PRODUCERS_BROWSER_SEARCH,
     ),
     RuntimeArtifactSpec::new(
         "rustRecipeBin",
@@ -192,6 +238,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::BinaryPack,
         false,
         SCOPE_ALL_NATIVE_RECIPES,
+        PRODUCER_RECIPES,
     ),
     RuntimeArtifactSpec::new(
         "rustTextureBin",
@@ -199,6 +246,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::BinaryPack,
         false,
         SCOPE_ALL_TEXTURES,
+        PRODUCER_TEXTURE,
     ),
     RuntimeArtifactSpec::new(
         "rustAtlasMetaBin",
@@ -206,6 +254,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::BinaryPack,
         false,
         SCOPE_ALL_TEXTURES,
+        PRODUCER_TEXTURE,
     ),
     RuntimeArtifactSpec::new(
         "rustAnimationBin",
@@ -213,6 +262,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::BinaryPack,
         false,
         SCOPE_ALL_TEXTURES,
+        PRODUCER_TEXTURE,
     ),
     RuntimeArtifactSpec::new(
         "rustStringsZhCnBin",
@@ -220,6 +270,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::BinaryPack,
         false,
         SCOPE_ALL_NATIVE_SEARCH_BROWSER,
+        PRODUCERS_BROWSER_SEARCH,
     ),
     RuntimeArtifactSpec::new(
         "rustUiTemplatesBin",
@@ -227,6 +278,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::BinaryPack,
         false,
         SCOPE_ALL_NATIVE_UI,
+        PRODUCER_UI,
     ),
     RuntimeArtifactSpec::new(
         "rustUiBindingsBin",
@@ -234,6 +286,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::BinaryPack,
         false,
         SCOPE_ALL_NATIVE_UI,
+        PRODUCER_UI,
     ),
     RuntimeArtifactSpec::new(
         "rustUiStringsBin",
@@ -241,6 +294,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::BinaryPack,
         false,
         SCOPE_ALL_NATIVE_UI,
+        PRODUCER_UI,
     ),
     RuntimeArtifactSpec::new(
         "rustUiAssetsManifest",
@@ -248,6 +302,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Manifest,
         false,
         SCOPE_ALL_NATIVE_UI,
+        PRODUCER_UI,
     ),
     RuntimeArtifactSpec::new(
         "rustUiTemplateCatalog",
@@ -255,6 +310,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Manifest,
         false,
         SCOPE_ALL_NATIVE_UI,
+        PRODUCER_UI,
     ),
     RuntimeArtifactSpec::new(
         "rustUiTemplateBindingIndex",
@@ -262,6 +318,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Manifest,
         false,
         SCOPE_ALL_NATIVE_UI,
+        PRODUCER_UI,
     ),
     RuntimeArtifactSpec::new(
         "rustUiFamilyCensus",
@@ -269,6 +326,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_ALL_NATIVE_UI,
+        PRODUCER_UI,
     ),
     RuntimeArtifactSpec::new(
         "rustUiPackReport",
@@ -276,6 +334,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_ALL_NATIVE_UI,
+        PRODUCER_UI,
     ),
     RuntimeArtifactSpec::new(
         "rustRawExportAbiValidationReport",
@@ -283,6 +342,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
+        NO_RUNTIME_PACK_PRODUCER,
     ),
     RuntimeArtifactSpec::new(
         "rustNativeUiExportAbiValidationReport",
@@ -290,6 +350,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
+        NO_RUNTIME_PACK_PRODUCER,
     ),
     RuntimeArtifactSpec::new(
         "rustUiPackAbiValidationReport",
@@ -297,6 +358,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
+        NO_RUNTIME_PACK_PRODUCER,
     ),
     RuntimeArtifactSpec::new(
         "rustSemanticValidationReport",
@@ -304,6 +366,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_EVERY,
+        NO_RUNTIME_PACK_PRODUCER,
     ),
     RuntimeArtifactSpec::new(
         "rustMissingTextureReport",
@@ -311,6 +374,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_ALL_TEXTURES,
+        PRODUCER_TEXTURE,
     ),
     RuntimeArtifactSpec::new(
         "rustSuspiciousTextureReport",
@@ -318,6 +382,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_ALL_TEXTURES,
+        PRODUCER_TEXTURE,
     ),
     RuntimeArtifactSpec::new(
         "rustRecipeHandlerMetadataReport",
@@ -325,6 +390,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_ALL_NATIVE_RECIPES,
+        PRODUCER_RECIPES,
     ),
     RuntimeArtifactSpec::new(
         "rustRecipeFragmentationReport",
@@ -332,6 +398,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_ALL_NATIVE_RECIPES,
+        PRODUCER_RECIPES,
     ),
     RuntimeArtifactSpec::new(
         "rustNativeUiLayoutReport",
@@ -339,6 +406,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::Report,
         false,
         SCOPE_ALL_NATIVE_RECIPES,
+        NO_RUNTIME_PACK_PRODUCER,
     ),
     RuntimeArtifactSpec::new(
         "rustBrowserPack",
@@ -346,6 +414,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::DebugJsonPack,
         true,
         SCOPE_ALL_NATIVE_BROWSER,
+        PRODUCER_BROWSER,
     ),
     RuntimeArtifactSpec::new(
         "rustSearchPack",
@@ -353,6 +422,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::DebugJsonPack,
         true,
         SCOPE_ALL_NATIVE_SEARCH_BROWSER,
+        PRODUCERS_BROWSER_SEARCH,
     ),
     RuntimeArtifactSpec::new(
         "rustRecipePack",
@@ -360,6 +430,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::DebugJsonPack,
         true,
         SCOPE_ALL_NATIVE_RECIPES,
+        PRODUCER_RECIPES,
     ),
     RuntimeArtifactSpec::new(
         "rustTexturePack",
@@ -367,6 +438,7 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         RuntimeArtifactKind::DebugJsonPack,
         true,
         SCOPE_ALL_TEXTURES,
+        PRODUCER_TEXTURE,
     ),
 ];
 
@@ -421,6 +493,33 @@ pub fn runtime_artifact_catalog_specs() -> Vec<&'static RuntimeArtifactSpec> {
         .collect()
 }
 
+pub fn runtime_pack_artifact_specs_for_producer(
+    producer_id: &str,
+    include_debug: bool,
+) -> Vec<&'static RuntimeArtifactSpec> {
+    RUNTIME_PACK_ARTIFACT_SPECS
+        .iter()
+        .filter(|spec| spec.produced_by(producer_id) && (!spec.debug_only || include_debug))
+        .collect()
+}
+
+pub fn runtime_pack_artifact_paths_for_producer(
+    producer_id: &str,
+    include_debug: bool,
+) -> Vec<&'static str> {
+    runtime_pack_artifact_specs_for_producer(producer_id, include_debug)
+        .into_iter()
+        .map(|spec| spec.relative_path)
+        .collect()
+}
+
+pub fn runtime_debug_artifact_specs() -> Vec<&'static RuntimeArtifactSpec> {
+    RUNTIME_PACK_ARTIFACT_SPECS
+        .iter()
+        .filter(|spec| spec.debug_only)
+        .collect()
+}
+
 pub fn runtime_summary_artifact_specs() -> Vec<(&'static str, &'static str)> {
     let mut specs = vec![("manifest", "manifest.json")];
     specs.extend(
@@ -433,15 +532,19 @@ pub fn runtime_summary_artifact_specs() -> Vec<(&'static str, &'static str)> {
 }
 
 pub fn runtime_artifact_catalog() -> Value {
+    validate_runtime_artifact_catalog_descriptors();
     json!({
         "schemaVersion": RUNTIME_ARTIFACT_CATALOG_SCHEMA_VERSION,
         "packAbiVersion": PACK_ABI_VERSION,
+        "schemaHashInput": SCHEMA_HASH_RUNTIME_ARTIFACT_CATALOG_INPUT,
         "policy": {
             "missingRequiredArtifact": PACK_ABI_POLICY_MISSING_REQUIRED_ARTIFACT,
             "pathPortability": PATH_POLICY_PORTABLE_RELATIVE_ONLY,
             "legacyFallback": PACK_ABI_POLICY_LEGACY_FALLBACK,
-            "registration": "static-runtime-artifact-descriptor-table"
+            "registration": "static-runtime-artifact-descriptor-table",
+            "producerOwnership": "runtime pack compiler catalogs derive outputs from artifact producer descriptors"
         },
+        "producers": RUNTIME_PACK_PRODUCER_IDS,
         "artifacts": runtime_artifact_catalog_specs()
             .into_iter()
             .map(runtime_artifact_descriptor_catalog)
@@ -510,6 +613,7 @@ fn runtime_artifact_descriptor_catalog(spec: &'static RuntimeArtifactSpec) -> Va
         "kind": spec.kind.as_str(),
         "required": true,
         "debugOnly": spec.debug_only,
+        "producers": spec.producers(),
         "scopes": spec.scopes()
             .iter()
             .map(|scope| scope.as_str())
@@ -521,6 +625,7 @@ pub fn runtime_pack_artifact_specs(
     scope: CompileScope,
     debug_json: bool,
 ) -> Vec<&'static RuntimeArtifactSpec> {
+    validate_runtime_artifact_catalog_descriptors();
     RUNTIME_PACK_ARTIFACT_SPECS
         .iter()
         .filter(|spec| spec.applies_to(scope, debug_json))
@@ -679,4 +784,77 @@ pub fn is_text_runtime_artifact(path: &Path) -> bool {
     path.extension()
         .and_then(|value| value.to_str())
         .is_some_and(|extension| matches!(extension, "json" | "txt" | "log"))
+}
+
+pub fn validate_runtime_artifact_catalog_descriptors() {
+    if RUNTIME_PACK_ARTIFACT_SPECS.is_empty() {
+        panic!("runtime pack artifact descriptor catalog must not be empty");
+    }
+
+    let mut logical_names = BTreeSet::new();
+    let mut paths = BTreeSet::new();
+    for spec in runtime_artifact_catalog_specs() {
+        require_non_empty("runtime artifact logical name", spec.logical_name);
+        require_portable_runtime_path(spec.logical_name, spec.relative_path);
+        if !logical_names.insert(spec.logical_name) {
+            panic!(
+                "duplicate runtime artifact logical name: {}",
+                spec.logical_name
+            );
+        }
+        if !paths.insert(spec.relative_path) {
+            panic!("duplicate runtime artifact path: {}", spec.relative_path);
+        }
+        if matches!(
+            spec.kind,
+            RuntimeArtifactKind::BinaryPack | RuntimeArtifactKind::DebugJsonPack
+        ) && spec.producers.is_empty()
+        {
+            panic!(
+                "runtime pack artifact must declare a producer: {}",
+                spec.logical_name
+            );
+        }
+        if spec.debug_only && spec.kind != RuntimeArtifactKind::DebugJsonPack {
+            panic!(
+                "debug-only runtime artifact must use debug-json-pack kind: {}",
+                spec.logical_name
+            );
+        }
+        for producer in spec.producers {
+            require_non_empty("runtime artifact producer id", producer);
+            if !RUNTIME_PACK_PRODUCER_IDS.contains(producer) {
+                panic!(
+                    "unknown runtime artifact producer {} for {}",
+                    producer, spec.logical_name
+                );
+            }
+        }
+    }
+
+    for producer in RUNTIME_PACK_PRODUCER_IDS {
+        let owned_specs = runtime_pack_artifact_specs_for_producer(producer, false);
+        if owned_specs.is_empty() {
+            panic!("runtime pack producer has no production artifacts: {producer}");
+        }
+    }
+}
+
+fn require_portable_runtime_path(logical_name: &str, path: &str) {
+    require_non_empty("runtime artifact path", path);
+    if path.starts_with('/')
+        || path.starts_with('\\')
+        || path.contains('\\')
+        || path.contains(':')
+        || path.contains("://")
+        || path.contains("..")
+    {
+        panic!("runtime artifact path must be portable-relative: {logical_name}");
+    }
+}
+
+fn require_non_empty(label: &str, value: &str) {
+    if value.trim().is_empty() {
+        panic!("{label} must be non-empty");
+    }
 }
