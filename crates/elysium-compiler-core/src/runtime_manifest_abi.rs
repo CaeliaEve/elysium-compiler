@@ -5,6 +5,7 @@
 //! policy in one module so producers, validators, and NeoNEI gates cannot drift.
 
 use crate::cli::CompileScope;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use serde_json::Map;
@@ -32,6 +33,15 @@ pub const PATH_POLICY_PORTABLE_RELATIVE_ONLY: &str =
     "portable-relative-runtime-paths-only; no drive letters, UNC paths, or file URLs";
 pub const SCHEMA_HASH_RUNTIME_MANIFEST_INPUT: &str =
     "runtime-manifest-abi=neonei/rust-runtime-manifest/current;revision=1";
+pub const SCHEMA_HASH_RUNTIME_REPORT_PAYLOAD_POLICY_INPUT: &str =
+    "runtime-report-payload-policy=neonei/rust-runtime-manifest/current;payload-policy=v1";
+
+pub const RUST_RUNTIME_GENERATED_AT: &str = "deterministic-rust-compiler";
+pub const RUST_RUNTIME_INTEGRITY_ALGORITHM: &str = "sha256";
+pub const NATIVE_RUNTIME_STATUS_READY: &str = "ready";
+pub const NATIVE_RUNTIME_AUTHORITY_RUST: &str = "rust";
+pub const DIST_MANIFEST_SCHEMA_VERSION: &str = "neonei/dist-data/current";
+pub const DIST_MANIFEST_SOURCE: &str = "elysium-compiler";
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RuntimeManifestReportKind {
@@ -152,6 +162,17 @@ pub const RUST_RUNTIME_ENTRYPOINTS: &[RuntimeEntrypointSpec] = &[
     },
 ];
 
+pub struct RuntimeReportPayloadInput<'a> {
+    pub integrity: &'a BTreeMap<String, String>,
+    pub sizes: &'a BTreeMap<String, u64>,
+    pub missing: &'a [String],
+    pub path_violations: &'a [String],
+    pub runtime_id: &'a str,
+    pub total_bytes: u64,
+    pub compile_scope: &'a str,
+    pub capabilities: &'a Value,
+}
+
 const CAPABILITIES_ALL: &[&str] = &[
     "atlas.static",
     "atlas.animated",
@@ -248,6 +269,33 @@ pub fn runtime_report_schemas_catalog() -> Value {
     Value::Object(schemas)
 }
 
+pub fn runtime_report_payload_policy_catalog() -> Value {
+    validate_runtime_report_payload_policy();
+    json!({
+        "schemaHashInput": SCHEMA_HASH_RUNTIME_REPORT_PAYLOAD_POLICY_INPUT,
+        "generatedAt": RUST_RUNTIME_GENERATED_AT,
+        "integrityAlgorithm": RUST_RUNTIME_INTEGRITY_ALGORITHM,
+        "nativeRuntime": {
+            "status": NATIVE_RUNTIME_STATUS_READY,
+            "authority": NATIVE_RUNTIME_AUTHORITY_RUST,
+            "schemaVersion": NATIVE_RUNTIME_DIST_SCHEMA_VERSION
+        },
+        "distManifest": {
+            "schemaVersion": DIST_MANIFEST_SCHEMA_VERSION,
+            "source": DIST_MANIFEST_SOURCE
+        },
+        "runtimeManifestPathPolicy": runtime_manifest_path_policy(),
+        "nativeRuntimePathPolicy": native_runtime_dist_path_policy(),
+        "deploymentChecks": [
+            "requiredArtifactsPresent",
+            "pathPortable",
+            "integrityHashesGenerated",
+            "sizeReportGenerated",
+            "capabilitiesGenerated"
+        ]
+    })
+}
+
 pub fn runtime_manifest_abi_catalog() -> Value {
     json!({
         "name": "neonei.runtime.manifest",
@@ -267,7 +315,140 @@ pub fn runtime_manifest_abi_catalog() -> Value {
             "absolutePathsAllowed": false,
             "windowsPathsAllowed": false
         },
+        "reportPayloadPolicy": runtime_report_payload_policy_catalog(),
         "schemaHashInput": SCHEMA_HASH_RUNTIME_MANIFEST_INPUT
+    })
+}
+
+pub fn runtime_manifest_payload(
+    input: &RuntimeReportPayloadInput<'_>,
+    compiler_metadata: Value,
+    files: Vec<Value>,
+    entrypoints: Value,
+) -> Value {
+    validate_runtime_report_payload_policy();
+    json!({
+        "schema": RUST_RUNTIME_SCHEMA,
+        "schemaVersion": RUST_RUNTIME_MANIFEST_SCHEMA_VERSION,
+        "schemaRevision": RUST_RUNTIME_SCHEMA_REVISION,
+        "runtimeId": input.runtime_id,
+        "generatedAt": RUST_RUNTIME_GENERATED_AT,
+        "compiler": compiler_metadata,
+        "capabilities": input.capabilities,
+        "files": files,
+        "compileScope": input.compile_scope,
+        "entrypoints": entrypoints,
+        "pathPolicy": runtime_manifest_path_policy(),
+    })
+}
+
+pub fn runtime_report_payload(
+    descriptor: &RuntimeManifestReportDescriptor,
+    input: &RuntimeReportPayloadInput<'_>,
+) -> Value {
+    validate_runtime_report_payload_policy();
+    match descriptor.kind {
+        RuntimeManifestReportKind::Integrity => json!({
+            "schemaVersion": descriptor.schema_version,
+            "algorithm": RUST_RUNTIME_INTEGRITY_ALGORITHM,
+            "files": input.integrity,
+        }),
+        RuntimeManifestReportKind::Size => json!({
+            "schemaVersion": descriptor.schema_version,
+            "totalBytes": input.total_bytes,
+            "files": input.sizes,
+        }),
+        RuntimeManifestReportKind::MissingData => json!({
+            "schemaVersion": descriptor.schema_version,
+            "missingFiles": input.missing,
+        }),
+        RuntimeManifestReportKind::MigrationReadiness => json!({
+            "schemaVersion": descriptor.schema_version,
+            "ready": input.missing.is_empty() && input.path_violations.is_empty(),
+            "checks": {
+                "requiredArtifactsPresent": input.missing.is_empty(),
+                "pathPortable": input.path_violations.is_empty(),
+                "integrityHashesGenerated": true,
+                "sizeReportGenerated": true,
+            },
+            "pathViolations": input.path_violations,
+        }),
+        RuntimeManifestReportKind::Deployment => json!({
+            "schemaVersion": descriptor.schema_version,
+            "runtimeId": input.runtime_id,
+            "generatedAt": RUST_RUNTIME_GENERATED_AT,
+            "compileScope": input.compile_scope,
+            "runtimeSize": {
+                "totalBytes": input.total_bytes,
+                "files": input.sizes,
+            },
+            "cache": {
+                "immutableRuntimeFiles": input.integrity.len(),
+                "estimatedRuntimeCacheBytes": input.total_bytes,
+                "cacheKeyInputs": {
+                    "runtimeId": input.runtime_id,
+                    "integrityAlgorithm": RUST_RUNTIME_INTEGRITY_ALGORITHM,
+                },
+            },
+            "missingData": {
+                "missingFiles": input.missing,
+                "missingFileCount": input.missing.len(),
+            },
+            "schema": {
+                "runtime": RUST_RUNTIME_SCHEMA,
+                "schemaRevision": RUST_RUNTIME_SCHEMA_REVISION,
+                "capabilities": input.capabilities,
+            },
+            "deploymentChecks": {
+                "requiredArtifactsPresent": input.missing.is_empty(),
+                "pathPortable": input.path_violations.is_empty(),
+                "integrityHashesGenerated": true,
+                "sizeReportGenerated": true,
+                "capabilitiesGenerated": true,
+            },
+            "pathViolations": input.path_violations,
+        }),
+    }
+}
+
+pub fn base_dist_manifest_payload(compiler_metadata: Value) -> Value {
+    validate_runtime_report_payload_policy();
+    json!({
+        "schemaVersion": DIST_MANIFEST_SCHEMA_VERSION,
+        "source": DIST_MANIFEST_SOURCE,
+        "compiler": compiler_metadata,
+        "files": {},
+    })
+}
+
+pub fn native_runtime_dist_payload(input: &RuntimeReportPayloadInput<'_>) -> Value {
+    validate_runtime_report_payload_policy();
+    json!({
+        "schemaVersion": NATIVE_RUNTIME_DIST_SCHEMA_VERSION,
+        "runtimeId": input.runtime_id,
+        "compileScope": input.compile_scope,
+        "status": NATIVE_RUNTIME_STATUS_READY,
+        "authority": NATIVE_RUNTIME_AUTHORITY_RUST,
+        "runtimeManifest": RUST_RUNTIME_MANIFEST_PATH,
+        "totalBytes": input.total_bytes,
+        "files": input.sizes,
+        "hashes": input.integrity,
+        "pathPolicy": native_runtime_dist_path_policy(),
+    })
+}
+
+pub fn runtime_manifest_path_policy() -> Value {
+    json!({
+        "portableRelativePathsOnly": true,
+        "absolutePathsAllowed": false,
+        "windowsPathsAllowed": false,
+    })
+}
+
+pub fn native_runtime_dist_path_policy() -> Value {
+    json!({
+        "portableRelativePathsOnly": true,
+        "absolutePathsAllowed": false,
     })
 }
 
@@ -311,6 +492,22 @@ pub fn validate_runtime_manifest_report_descriptors() {
             );
         }
     }
+}
+
+pub fn validate_runtime_report_payload_policy() {
+    require_non_empty("runtime report generatedAt", RUST_RUNTIME_GENERATED_AT);
+    require_non_empty(
+        "runtime report integrity algorithm",
+        RUST_RUNTIME_INTEGRITY_ALGORITHM,
+    );
+    require_non_empty("native runtime status", NATIVE_RUNTIME_STATUS_READY);
+    require_non_empty("native runtime authority", NATIVE_RUNTIME_AUTHORITY_RUST);
+    require_non_empty("dist manifest schema version", DIST_MANIFEST_SCHEMA_VERSION);
+    require_non_empty("dist manifest source", DIST_MANIFEST_SOURCE);
+    require_non_empty(
+        "runtime report payload policy schema hash input",
+        SCHEMA_HASH_RUNTIME_REPORT_PAYLOAD_POLICY_INPUT,
+    );
 }
 
 fn require_relative_json_path(key: &str, path: &str) {

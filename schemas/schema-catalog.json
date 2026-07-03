@@ -1031,6 +1031,36 @@
         "runtimeManifest": "rust/runtime-manifest.json",
         "sizeReport": "rust/size-report.json"
       },
+      "reportPayloadPolicy": {
+        "deploymentChecks": [
+          "requiredArtifactsPresent",
+          "pathPortable",
+          "integrityHashesGenerated",
+          "sizeReportGenerated",
+          "capabilitiesGenerated"
+        ],
+        "distManifest": {
+          "schemaVersion": "neonei/dist-data/current",
+          "source": "elysium-compiler"
+        },
+        "generatedAt": "deterministic-rust-compiler",
+        "integrityAlgorithm": "sha256",
+        "nativeRuntime": {
+          "authority": "rust",
+          "schemaVersion": "neonei/native-runtime-dist/current",
+          "status": "ready"
+        },
+        "nativeRuntimePathPolicy": {
+          "absolutePathsAllowed": false,
+          "portableRelativePathsOnly": true
+        },
+        "runtimeManifestPathPolicy": {
+          "absolutePathsAllowed": false,
+          "portableRelativePathsOnly": true,
+          "windowsPathsAllowed": false
+        },
+        "schemaHashInput": "runtime-report-payload-policy=neonei/rust-runtime-manifest/current;payload-policy=v1"
+      },
       "reportSchemas": {
         "deploymentReport": "neonei/rust-deployment-report/current",
         "integrity": "neonei/rust-integrity/current",
@@ -1471,7 +1501,7 @@
       "packAbiVersion": "elysium.pack.v1",
       "rawExportSchemaVersion": "1.0",
       "runtimeAbiVersion": "elysium.runtime.v1",
-      "schemaHash": "sha256:943083fcfca47ecbd32703440d1a2f958cbfac852bdb2af62d44cb39f1e4584c",
+      "schemaHash": "sha256:8ad246c8ef4cdbe47bacb0c30ab08ebd639f8c510fc80c268622bed470b5d291",
       "version": "0.1.0"
     },
     "name": "elysium-compiler"

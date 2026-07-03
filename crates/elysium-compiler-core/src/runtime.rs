@@ -6,10 +6,9 @@ use crate::pack_abi::{
     RUNTIME_DEBUG_DIRECTORY_ARTIFACTS,
 };
 use crate::runtime_manifest_abi::{
-    runtime_capabilities, RuntimeManifestReportDescriptor, RuntimeManifestReportKind,
-    NATIVE_RUNTIME_DIST_SCHEMA_VERSION, RUNTIME_MANIFEST_REPORT_DESCRIPTORS,
-    RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_PATH, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION,
-    RUST_RUNTIME_SCHEMA, RUST_RUNTIME_SCHEMA_REVISION,
+    base_dist_manifest_payload, native_runtime_dist_payload, runtime_capabilities,
+    runtime_manifest_payload, runtime_report_payload, RuntimeReportPayloadInput,
+    RUNTIME_MANIFEST_REPORT_DESCRIPTORS, RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_PATH,
 };
 use crate::version::metadata as compiler_metadata;
 use anyhow::{anyhow, Context, Result};
@@ -143,44 +142,31 @@ pub fn compile_runtime_reports(
 
     let total_bytes = sizes.values().sum::<u64>();
     let runtime_id = runtime_id_from_integrity(&integrity);
-    let generated_at = "deterministic-rust-compiler";
     let capabilities = rust_capabilities(scope);
-    write_json_value(
-        &output.join(RUST_RUNTIME_MANIFEST_PATH),
-        &json!({
-            "schema": RUST_RUNTIME_SCHEMA,
-            "schemaVersion": RUST_RUNTIME_MANIFEST_SCHEMA_VERSION,
-            "schemaRevision": RUST_RUNTIME_SCHEMA_REVISION,
-            "runtimeId": runtime_id,
-            "generatedAt": generated_at,
-            "compiler": compiler_metadata(),
-            "capabilities": capabilities,
-            "files": files,
-            "compileScope": scope.as_str(),
-            "entrypoints": rust_entrypoints_from_integrity(&integrity),
-            "pathPolicy": {
-                "portableRelativePathsOnly": true,
-                "absolutePathsAllowed": false,
-                "windowsPathsAllowed": false,
-            },
-        }),
-    )?;
-
-    let report_context = RuntimeReportContext {
+    let report_input = RuntimeReportPayloadInput {
         integrity: &integrity,
         sizes: &sizes,
         missing: &missing,
         path_violations: &path_violations,
         runtime_id: &runtime_id,
-        generated_at,
         total_bytes,
-        scope,
+        compile_scope: scope.as_str(),
         capabilities: &capabilities,
     };
+    write_json_value(
+        &output.join(RUST_RUNTIME_MANIFEST_PATH),
+        &runtime_manifest_payload(
+            &report_input,
+            compiler_metadata(),
+            files,
+            rust_entrypoints_from_integrity(&integrity),
+        ),
+    )?;
+
     for descriptor in RUNTIME_MANIFEST_REPORT_DESCRIPTORS {
         write_json_value(
             &output.join(descriptor.path),
-            &runtime_report_payload(descriptor, &report_context),
+            &runtime_report_payload(descriptor, &report_input),
         )?;
     }
     update_dist_manifest_with_rust_runtime(
@@ -193,86 +179,6 @@ pub fn compile_runtime_reports(
         total_bytes,
     )?;
     Ok(())
-}
-
-struct RuntimeReportContext<'a> {
-    integrity: &'a BTreeMap<String, String>,
-    sizes: &'a BTreeMap<String, u64>,
-    missing: &'a [String],
-    path_violations: &'a [String],
-    runtime_id: &'a str,
-    generated_at: &'static str,
-    total_bytes: u64,
-    scope: CompileScope,
-    capabilities: &'a Value,
-}
-
-fn runtime_report_payload(
-    descriptor: &RuntimeManifestReportDescriptor,
-    context: &RuntimeReportContext<'_>,
-) -> Value {
-    match descriptor.kind {
-        RuntimeManifestReportKind::Integrity => json!({
-            "schemaVersion": descriptor.schema_version,
-            "algorithm": "sha256",
-            "files": context.integrity,
-        }),
-        RuntimeManifestReportKind::Size => json!({
-            "schemaVersion": descriptor.schema_version,
-            "totalBytes": context.total_bytes,
-            "files": context.sizes,
-        }),
-        RuntimeManifestReportKind::MissingData => json!({
-            "schemaVersion": descriptor.schema_version,
-            "missingFiles": context.missing,
-        }),
-        RuntimeManifestReportKind::MigrationReadiness => json!({
-            "schemaVersion": descriptor.schema_version,
-            "ready": context.missing.is_empty() && context.path_violations.is_empty(),
-            "checks": {
-                "requiredArtifactsPresent": context.missing.is_empty(),
-                "pathPortable": context.path_violations.is_empty(),
-                "integrityHashesGenerated": true,
-                "sizeReportGenerated": true,
-            },
-            "pathViolations": context.path_violations,
-        }),
-        RuntimeManifestReportKind::Deployment => json!({
-            "schemaVersion": descriptor.schema_version,
-            "runtimeId": context.runtime_id,
-            "generatedAt": context.generated_at,
-            "compileScope": context.scope.as_str(),
-            "runtimeSize": {
-                "totalBytes": context.total_bytes,
-                "files": context.sizes,
-            },
-            "cache": {
-                "immutableRuntimeFiles": context.integrity.len(),
-                "estimatedRuntimeCacheBytes": context.total_bytes,
-                "cacheKeyInputs": {
-                    "runtimeId": context.runtime_id,
-                    "integrityAlgorithm": "sha256",
-                },
-            },
-            "missingData": {
-                "missingFiles": context.missing,
-                "missingFileCount": context.missing.len(),
-            },
-            "schema": {
-                "runtime": RUST_RUNTIME_SCHEMA,
-                "schemaRevision": RUST_RUNTIME_SCHEMA_REVISION,
-                "capabilities": context.capabilities,
-            },
-            "deploymentChecks": {
-                "requiredArtifactsPresent": context.missing.is_empty(),
-                "pathPortable": context.path_violations.is_empty(),
-                "integrityHashesGenerated": true,
-                "sizeReportGenerated": true,
-                "capabilitiesGenerated": true,
-            },
-            "pathViolations": context.path_violations,
-        }),
-    }
 }
 
 fn update_dist_manifest_with_rust_runtime(
@@ -291,12 +197,7 @@ fn update_dist_manifest_with_rust_runtime(
         serde_json::from_str::<Value>(&text)
             .with_context(|| format!("parse dist manifest {}", manifest_path.display()))?
     } else {
-        json!({
-            "schemaVersion": "neonei/dist-data/current",
-            "source": "elysium-compiler",
-            "compiler": compiler_metadata(),
-            "files": {},
-        })
+        base_dist_manifest_payload(compiler_metadata())
     };
 
     if !manifest.is_object() {
@@ -330,20 +231,15 @@ fn update_dist_manifest_with_rust_runtime(
     }
 
     manifest["compiler"] = compiler_metadata();
-    manifest["nativeRuntime"] = json!({
-        "schemaVersion": NATIVE_RUNTIME_DIST_SCHEMA_VERSION,
-        "runtimeId": runtime_id,
-        "compileScope": scope.as_str(),
-        "status": "ready",
-        "authority": "rust",
-        "runtimeManifest": RUST_RUNTIME_MANIFEST_PATH,
-        "totalBytes": total_bytes,
-        "files": sizes,
-        "hashes": integrity,
-        "pathPolicy": {
-            "portableRelativePathsOnly": true,
-            "absolutePathsAllowed": false,
-        },
+    manifest["nativeRuntime"] = native_runtime_dist_payload(&RuntimeReportPayloadInput {
+        integrity,
+        sizes,
+        missing: &[],
+        path_violations: &[],
+        runtime_id,
+        total_bytes,
+        compile_scope: scope.as_str(),
+        capabilities: &Value::Null,
     });
 
     write_json_value(&manifest_path, &manifest)

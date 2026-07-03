@@ -50,10 +50,14 @@ use crate::recipe_ui_payload::rust_recipe_ui_payload_relative_path;
 use crate::reports;
 use crate::runtime;
 use crate::runtime_manifest_abi::{
-    runtime_manifest_abi_catalog, runtime_manifest_paths_catalog, runtime_report_schemas_catalog,
-    validate_runtime_manifest_report_descriptors, RUNTIME_MANIFEST_REPORT_DESCRIPTORS,
-    RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION, RUST_RUNTIME_SCHEMA,
+    runtime_manifest_abi_catalog, runtime_manifest_path_policy, runtime_manifest_paths_catalog,
+    runtime_report_payload_policy_catalog, runtime_report_schemas_catalog,
+    validate_runtime_manifest_report_descriptors, validate_runtime_report_payload_policy,
+    NATIVE_RUNTIME_AUTHORITY_RUST, NATIVE_RUNTIME_STATUS_READY,
+    RUNTIME_MANIFEST_REPORT_DESCRIPTORS, RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_GENERATED_AT,
+    RUST_RUNTIME_INTEGRITY_ALGORITHM, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION, RUST_RUNTIME_SCHEMA,
     RUST_RUNTIME_SCHEMA_REVISION, SCHEMA_HASH_RUNTIME_MANIFEST_INPUT,
+    SCHEMA_HASH_RUNTIME_REPORT_PAYLOAD_POLICY_INPUT,
 };
 use crate::runtime_pack_plan::runtime_pack_compilers;
 use crate::schema_catalog::{
@@ -1274,6 +1278,36 @@ fn runtime_manifest_report_catalog_is_descriptor_owned() {
 }
 
 #[test]
+fn runtime_report_payload_policy_is_descriptor_owned() {
+    validate_runtime_report_payload_policy();
+    let policy = runtime_report_payload_policy_catalog();
+    let catalog = runtime_manifest_abi_catalog();
+
+    assert_eq!(catalog["reportPayloadPolicy"], policy);
+    assert_eq!(
+        policy["schemaHashInput"],
+        json!(SCHEMA_HASH_RUNTIME_REPORT_PAYLOAD_POLICY_INPUT)
+    );
+    assert_eq!(policy["generatedAt"], json!(RUST_RUNTIME_GENERATED_AT));
+    assert_eq!(
+        policy["integrityAlgorithm"],
+        json!(RUST_RUNTIME_INTEGRITY_ALGORITHM)
+    );
+    assert_eq!(
+        policy["nativeRuntime"]["status"],
+        json!(NATIVE_RUNTIME_STATUS_READY)
+    );
+    assert_eq!(
+        policy["nativeRuntime"]["authority"],
+        json!(NATIVE_RUNTIME_AUTHORITY_RUST)
+    );
+    assert_eq!(
+        policy["runtimeManifestPathPolicy"],
+        runtime_manifest_path_policy()
+    );
+}
+
+#[test]
 fn runtime_report_emission_uses_manifest_descriptors() {
     let output = tempfile::tempdir().unwrap();
     for spec in runtime_pack_artifact_specs(CompileScope::Search, false) {
@@ -1291,6 +1325,29 @@ fn runtime_report_emission_uses_manifest_descriptors() {
 
     runtime::compile_runtime_reports(output.path(), CompileScope::Search, true, false).unwrap();
 
+    let integrity = read_fixture_json(output.path().join("rust/integrity.json"));
+    assert_eq!(
+        integrity["algorithm"],
+        json!(RUST_RUNTIME_INTEGRITY_ALGORITHM)
+    );
+
+    let runtime_manifest = read_fixture_json(output.path().join("rust/runtime-manifest.json"));
+    assert_eq!(
+        runtime_manifest["generatedAt"],
+        json!(RUST_RUNTIME_GENERATED_AT)
+    );
+    assert_eq!(
+        runtime_manifest["pathPolicy"],
+        runtime_manifest_path_policy()
+    );
+
+    let deployment = read_fixture_json(output.path().join("rust/deployment-report.json"));
+    assert_eq!(deployment["generatedAt"], json!(RUST_RUNTIME_GENERATED_AT));
+    assert_eq!(
+        deployment["cache"]["cacheKeyInputs"]["integrityAlgorithm"],
+        json!(RUST_RUNTIME_INTEGRITY_ALGORITHM)
+    );
+
     for descriptor in RUNTIME_MANIFEST_REPORT_DESCRIPTORS {
         let report = read_fixture_json(output.path().join(descriptor.path));
         assert_eq!(
@@ -1302,6 +1359,14 @@ fn runtime_report_emission_uses_manifest_descriptors() {
     }
 
     let manifest = read_fixture_json(output.path().join("manifest.json"));
+    assert_eq!(
+        manifest["nativeRuntime"]["status"],
+        json!(NATIVE_RUNTIME_STATUS_READY)
+    );
+    assert_eq!(
+        manifest["nativeRuntime"]["authority"],
+        json!(NATIVE_RUNTIME_AUTHORITY_RUST)
+    );
     for descriptor in RUNTIME_MANIFEST_REPORT_DESCRIPTORS {
         assert!(manifest["files"]
             .as_object()
