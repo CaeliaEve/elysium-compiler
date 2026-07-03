@@ -33,19 +33,35 @@ pub const PATH_POLICY_PORTABLE_RELATIVE_ONLY: &str =
 pub const SCHEMA_HASH_RUNTIME_MANIFEST_INPUT: &str =
     "runtime-manifest-abi=neonei/rust-runtime-manifest/current;revision=1";
 
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum RuntimeManifestReportKind {
+    Integrity,
+    Size,
+    MissingData,
+    MigrationReadiness,
+    Deployment,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RuntimeManifestReportDescriptor {
     pub key: &'static str,
     pub path: &'static str,
     pub schema_version: &'static str,
+    pub kind: RuntimeManifestReportKind,
 }
 
 impl RuntimeManifestReportDescriptor {
-    const fn new(key: &'static str, path: &'static str, schema_version: &'static str) -> Self {
+    const fn new(
+        key: &'static str,
+        path: &'static str,
+        schema_version: &'static str,
+        kind: RuntimeManifestReportKind,
+    ) -> Self {
         Self {
             key,
             path,
             schema_version,
+            kind,
         }
     }
 }
@@ -55,26 +71,31 @@ pub const RUNTIME_MANIFEST_REPORT_DESCRIPTORS: &[RuntimeManifestReportDescriptor
         "integrity",
         RUST_INTEGRITY_REPORT_PATH,
         RUST_INTEGRITY_SCHEMA_VERSION,
+        RuntimeManifestReportKind::Integrity,
     ),
     RuntimeManifestReportDescriptor::new(
         "sizeReport",
         RUST_SIZE_REPORT_PATH,
         RUST_SIZE_REPORT_SCHEMA_VERSION,
+        RuntimeManifestReportKind::Size,
     ),
     RuntimeManifestReportDescriptor::new(
         "missingDataReport",
         RUST_MISSING_DATA_REPORT_PATH,
         RUST_MISSING_DATA_REPORT_SCHEMA_VERSION,
+        RuntimeManifestReportKind::MissingData,
     ),
     RuntimeManifestReportDescriptor::new(
         "migrationReadiness",
         RUST_MIGRATION_READINESS_REPORT_PATH,
         RUST_MIGRATION_READINESS_SCHEMA_VERSION,
+        RuntimeManifestReportKind::MigrationReadiness,
     ),
     RuntimeManifestReportDescriptor::new(
         "deploymentReport",
         RUST_DEPLOYMENT_REPORT_PATH,
         RUST_DEPLOYMENT_REPORT_SCHEMA_VERSION,
+        RuntimeManifestReportKind::Deployment,
     ),
 ];
 
@@ -257,6 +278,7 @@ pub fn validate_runtime_manifest_report_descriptors() {
     let mut keys = BTreeSet::new();
     let mut paths = BTreeSet::new();
     let mut schemas = BTreeSet::new();
+    let mut kinds = BTreeSet::new();
     for descriptor in RUNTIME_MANIFEST_REPORT_DESCRIPTORS {
         require_non_empty("runtime manifest report descriptor key", descriptor.key);
         require_relative_json_path(descriptor.key, descriptor.path);
@@ -280,6 +302,12 @@ pub fn validate_runtime_manifest_report_descriptors() {
             panic!(
                 "duplicate runtime manifest report descriptor schema version: {}",
                 descriptor.schema_version
+            );
+        }
+        if !kinds.insert(descriptor.kind) {
+            panic!(
+                "duplicate runtime manifest report descriptor kind: {:?}",
+                descriptor.kind
             );
         }
     }

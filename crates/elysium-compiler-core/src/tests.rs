@@ -1231,6 +1231,44 @@ fn runtime_manifest_report_catalog_is_descriptor_owned() {
 }
 
 #[test]
+fn runtime_report_emission_uses_manifest_descriptors() {
+    let output = tempfile::tempdir().unwrap();
+    for spec in runtime_pack_artifact_specs(CompileScope::Search, false) {
+        let path = output.path().join(spec.relative_path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, b"runtime-report-descriptor-artifact").unwrap();
+    }
+    let pack_validation = output.path().join(PACK_ABI_VALIDATION_REPORT_PATH);
+    fs::create_dir_all(pack_validation.parent().unwrap()).unwrap();
+    fs::write(
+        pack_validation,
+        b"runtime-report-descriptor-pack-validation",
+    )
+    .unwrap();
+
+    runtime::compile_runtime_reports(output.path(), CompileScope::Search, true, false).unwrap();
+
+    for descriptor in RUNTIME_MANIFEST_REPORT_DESCRIPTORS {
+        let report = read_fixture_json(output.path().join(descriptor.path));
+        assert_eq!(
+            report["schemaVersion"],
+            json!(descriptor.schema_version),
+            "runtime report schema drift for {}",
+            descriptor.key
+        );
+    }
+
+    let manifest = read_fixture_json(output.path().join("manifest.json"));
+    for descriptor in RUNTIME_MANIFEST_REPORT_DESCRIPTORS {
+        assert!(manifest["files"]
+            .as_object()
+            .unwrap()
+            .values()
+            .any(|value| value == &json!(descriptor.path)));
+    }
+}
+
+#[test]
 fn runtime_artifact_catalog_drives_schema_catalog_and_summary_surfaces() {
     let catalog = runtime_artifact_catalog();
     let artifacts = catalog["artifacts"].as_array().unwrap();

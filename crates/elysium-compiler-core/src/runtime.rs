@@ -5,13 +5,10 @@ use crate::pack_abi::{
     PACK_ABI_VALIDATION_REPORT_PATH,
 };
 use crate::runtime_manifest_abi::{
-    runtime_capabilities, NATIVE_RUNTIME_DIST_SCHEMA_VERSION, RUST_DEPLOYMENT_REPORT_PATH,
-    RUST_DEPLOYMENT_REPORT_SCHEMA_VERSION, RUST_INTEGRITY_REPORT_PATH,
-    RUST_INTEGRITY_SCHEMA_VERSION, RUST_MIGRATION_READINESS_REPORT_PATH,
-    RUST_MIGRATION_READINESS_SCHEMA_VERSION, RUST_MISSING_DATA_REPORT_PATH,
-    RUST_MISSING_DATA_REPORT_SCHEMA_VERSION, RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_PATH,
-    RUST_RUNTIME_MANIFEST_SCHEMA_VERSION, RUST_RUNTIME_SCHEMA, RUST_RUNTIME_SCHEMA_REVISION,
-    RUST_SIZE_REPORT_PATH, RUST_SIZE_REPORT_SCHEMA_VERSION,
+    runtime_capabilities, RuntimeManifestReportDescriptor, RuntimeManifestReportKind,
+    NATIVE_RUNTIME_DIST_SCHEMA_VERSION, RUNTIME_MANIFEST_REPORT_DESCRIPTORS,
+    RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_PATH, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION,
+    RUST_RUNTIME_SCHEMA, RUST_RUNTIME_SCHEMA_REVISION,
 };
 use crate::version::metadata as compiler_metadata;
 use anyhow::{anyhow, Context, Result};
@@ -174,81 +171,24 @@ pub fn compile_runtime_reports(
             },
         }),
     )?;
-    write_json_value(
-        &output.join(RUST_INTEGRITY_REPORT_PATH),
-        &json!({
-            "schemaVersion": RUST_INTEGRITY_SCHEMA_VERSION,
-            "algorithm": "sha256",
-            "files": integrity,
-        }),
-    )?;
-    write_json_value(
-        &output.join(RUST_SIZE_REPORT_PATH),
-        &json!({
-            "schemaVersion": RUST_SIZE_REPORT_SCHEMA_VERSION,
-            "totalBytes": total_bytes,
-            "files": sizes,
-        }),
-    )?;
-    write_json_value(
-        &output.join(RUST_MISSING_DATA_REPORT_PATH),
-        &json!({
-            "schemaVersion": RUST_MISSING_DATA_REPORT_SCHEMA_VERSION,
-            "missingFiles": missing,
-        }),
-    )?;
-    write_json_value(
-        &output.join(RUST_MIGRATION_READINESS_REPORT_PATH),
-        &json!({
-            "schemaVersion": RUST_MIGRATION_READINESS_SCHEMA_VERSION,
-            "ready": missing.is_empty() && path_violations.is_empty(),
-            "checks": {
-                "requiredArtifactsPresent": missing.is_empty(),
-                "pathPortable": path_violations.is_empty(),
-                "integrityHashesGenerated": true,
-                "sizeReportGenerated": true,
-            },
-            "pathViolations": path_violations,
-        }),
-    )?;
-    write_json_value(
-        &output.join(RUST_DEPLOYMENT_REPORT_PATH),
-        &json!({
-            "schemaVersion": RUST_DEPLOYMENT_REPORT_SCHEMA_VERSION,
-            "runtimeId": runtime_id,
-            "generatedAt": generated_at,
-            "compileScope": scope.as_str(),
-            "runtimeSize": {
-                "totalBytes": total_bytes,
-                "files": sizes,
-            },
-            "cache": {
-                "immutableRuntimeFiles": integrity.len(),
-                "estimatedRuntimeCacheBytes": total_bytes,
-                "cacheKeyInputs": {
-                    "runtimeId": runtime_id,
-                    "integrityAlgorithm": "sha256",
-                },
-            },
-            "missingData": {
-                "missingFiles": missing,
-                "missingFileCount": missing.len(),
-            },
-            "schema": {
-                "runtime": RUST_RUNTIME_SCHEMA,
-                "schemaRevision": RUST_RUNTIME_SCHEMA_REVISION,
-                "capabilities": capabilities,
-            },
-            "deploymentChecks": {
-                "requiredArtifactsPresent": missing.is_empty(),
-                "pathPortable": path_violations.is_empty(),
-                "integrityHashesGenerated": true,
-                "sizeReportGenerated": true,
-                "capabilitiesGenerated": true,
-            },
-            "pathViolations": path_violations,
-        }),
-    )?;
+
+    let report_context = RuntimeReportContext {
+        integrity: &integrity,
+        sizes: &sizes,
+        missing: &missing,
+        path_violations: &path_violations,
+        runtime_id: &runtime_id,
+        generated_at,
+        total_bytes,
+        scope,
+        capabilities: &capabilities,
+    };
+    for descriptor in RUNTIME_MANIFEST_REPORT_DESCRIPTORS {
+        write_json_value(
+            &output.join(descriptor.path),
+            &runtime_report_payload(descriptor, &report_context),
+        )?;
+    }
     update_dist_manifest_with_rust_runtime(
         output,
         scope,
@@ -259,6 +199,86 @@ pub fn compile_runtime_reports(
         total_bytes,
     )?;
     Ok(())
+}
+
+struct RuntimeReportContext<'a> {
+    integrity: &'a BTreeMap<String, String>,
+    sizes: &'a BTreeMap<String, u64>,
+    missing: &'a [String],
+    path_violations: &'a [String],
+    runtime_id: &'a str,
+    generated_at: &'static str,
+    total_bytes: u64,
+    scope: CompileScope,
+    capabilities: &'a Value,
+}
+
+fn runtime_report_payload(
+    descriptor: &RuntimeManifestReportDescriptor,
+    context: &RuntimeReportContext<'_>,
+) -> Value {
+    match descriptor.kind {
+        RuntimeManifestReportKind::Integrity => json!({
+            "schemaVersion": descriptor.schema_version,
+            "algorithm": "sha256",
+            "files": context.integrity,
+        }),
+        RuntimeManifestReportKind::Size => json!({
+            "schemaVersion": descriptor.schema_version,
+            "totalBytes": context.total_bytes,
+            "files": context.sizes,
+        }),
+        RuntimeManifestReportKind::MissingData => json!({
+            "schemaVersion": descriptor.schema_version,
+            "missingFiles": context.missing,
+        }),
+        RuntimeManifestReportKind::MigrationReadiness => json!({
+            "schemaVersion": descriptor.schema_version,
+            "ready": context.missing.is_empty() && context.path_violations.is_empty(),
+            "checks": {
+                "requiredArtifactsPresent": context.missing.is_empty(),
+                "pathPortable": context.path_violations.is_empty(),
+                "integrityHashesGenerated": true,
+                "sizeReportGenerated": true,
+            },
+            "pathViolations": context.path_violations,
+        }),
+        RuntimeManifestReportKind::Deployment => json!({
+            "schemaVersion": descriptor.schema_version,
+            "runtimeId": context.runtime_id,
+            "generatedAt": context.generated_at,
+            "compileScope": context.scope.as_str(),
+            "runtimeSize": {
+                "totalBytes": context.total_bytes,
+                "files": context.sizes,
+            },
+            "cache": {
+                "immutableRuntimeFiles": context.integrity.len(),
+                "estimatedRuntimeCacheBytes": context.total_bytes,
+                "cacheKeyInputs": {
+                    "runtimeId": context.runtime_id,
+                    "integrityAlgorithm": "sha256",
+                },
+            },
+            "missingData": {
+                "missingFiles": context.missing,
+                "missingFileCount": context.missing.len(),
+            },
+            "schema": {
+                "runtime": RUST_RUNTIME_SCHEMA,
+                "schemaRevision": RUST_RUNTIME_SCHEMA_REVISION,
+                "capabilities": context.capabilities,
+            },
+            "deploymentChecks": {
+                "requiredArtifactsPresent": context.missing.is_empty(),
+                "pathPortable": context.path_violations.is_empty(),
+                "integrityHashesGenerated": true,
+                "sizeReportGenerated": true,
+                "capabilitiesGenerated": true,
+            },
+            "pathViolations": context.path_violations,
+        }),
+    }
 }
 
 fn update_dist_manifest_with_rust_runtime(
