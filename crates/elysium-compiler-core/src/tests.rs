@@ -46,6 +46,13 @@ use crate::runtime_manifest_abi::{
     RUST_RUNTIME_SCHEMA_REVISION, SCHEMA_HASH_RUNTIME_MANIFEST_INPUT,
 };
 use crate::runtime_pack_plan::runtime_pack_compilers;
+use crate::schema_catalog::{
+    dist_data_schema_section, raw_export_optional_manifest_files,
+    raw_export_required_manifest_files, raw_export_schema_section, runtime_entrypoint_paths,
+    validate_schema_catalog_descriptors, DIST_DATA_SCHEMA_DESCRIPTORS,
+    RAW_EXPORT_MANIFEST_FILE_DESCRIPTORS, SCHEMA_CATALOG_SCHEMA_VERSION,
+    UI_PACK_SCHEMA_DESCRIPTORS,
+};
 use crate::schemas;
 use crate::stages::{compile_kernel_catalog, compile_kernel_modules};
 use crate::texture_animation::{
@@ -1132,6 +1139,61 @@ fn pack_abi_registry_is_scope_specific_and_fail_closed() {
     assert!(report
         .missing_required_artifacts
         .contains(&"rust/search.bin".to_string()));
+}
+
+#[test]
+fn schema_catalog_sections_are_descriptor_owned() {
+    validate_schema_catalog_descriptors();
+
+    let required_manifest_files = raw_export_required_manifest_files();
+    let optional_manifest_files = raw_export_optional_manifest_files();
+    assert_eq!(
+        required_manifest_files,
+        vec!["items", "fluids", "recipeIndex", "browserAtlasIndex"]
+    );
+    assert!(optional_manifest_files.contains(&"nativeUiValidation"));
+    assert!(optional_manifest_files.contains(&"neiBrowserContract"));
+    assert_eq!(
+        required_manifest_files.len() + optional_manifest_files.len(),
+        RAW_EXPORT_MANIFEST_FILE_DESCRIPTORS.len()
+    );
+
+    let raw_export = raw_export_schema_section();
+    assert_eq!(
+        raw_export["manifest"]["requiredFiles"],
+        json!(required_manifest_files)
+    );
+    assert_eq!(
+        raw_export["manifest"]["optionalFiles"],
+        json!(optional_manifest_files)
+    );
+    assert_eq!(
+        raw_export["nativeUiValidationReport"]["policy"],
+        json!("missing native UI validation, blocked geometry reports, and schema mismatches are compile blockers")
+    );
+
+    let dist_data = dist_data_schema_section();
+    for descriptor in DIST_DATA_SCHEMA_DESCRIPTORS {
+        assert_eq!(dist_data[descriptor.key], json!(descriptor.schema_version));
+    }
+    for descriptor in UI_PACK_SCHEMA_DESCRIPTORS {
+        assert_eq!(
+            dist_data["uiPack"][descriptor.key],
+            json!(descriptor.schema_version)
+        );
+    }
+    assert_eq!(
+        dist_data["runtimeEntrypoints"],
+        json!(runtime_entrypoint_paths())
+    );
+
+    let schemas = schemas::schema_catalog();
+    assert_eq!(
+        schemas["schemaVersion"],
+        json!(SCHEMA_CATALOG_SCHEMA_VERSION)
+    );
+    assert_eq!(schemas["rawExport"], raw_export);
+    assert_eq!(schemas["distData"], dist_data);
 }
 
 #[test]

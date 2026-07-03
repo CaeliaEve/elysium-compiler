@@ -1,20 +1,11 @@
 use crate::abi::abi_catalog;
 use crate::compiler_capability_abi::{COMPILER_COMMANDS, COMPILE_SCOPES};
 use crate::io::write_json_value;
-use crate::native_ui_export_abi_catalog::{
-    NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH, NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
-    NATIVE_UI_VALIDATION_DEFAULT_PATH, NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
+use crate::schema_catalog::{
+    dist_data_schema_section, raw_export_schema_section, SCHEMA_CATALOG_SCHEMA_VERSION,
 };
-use crate::pack_abi::{runtime_artifact_catalog, PACK_ABI_VALIDATION_SCHEMA_VERSION};
-use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
-use crate::runtime_manifest_abi::{RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION};
 use crate::stages::compile_kernel_catalog;
-use crate::ui_pack_abi::{
-    UI_PACK_ABI_VALIDATION_REPORT_PATH, UI_PACK_ABI_VALIDATION_SCHEMA_VERSION,
-};
-use crate::version::{
-    metadata as compiler_metadata, COMPILED_DIST_SCHEMA_VERSION, RAW_EXPORT_SCHEMA_VERSION,
-};
+use crate::version::metadata as compiler_metadata;
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::fs;
@@ -22,7 +13,7 @@ use std::path::Path;
 
 pub fn schema_catalog() -> Value {
     json!({
-        "schemaVersion": "elysium-compiler/schema-catalog/v1",
+        "schemaVersion": SCHEMA_CATALOG_SCHEMA_VERSION,
         "abi": abi_catalog(),
         "compiler": {
             "name": "elysium-compiler",
@@ -34,72 +25,8 @@ pub fn schema_catalog() -> Value {
             },
             "compileKernel": compile_kernel_catalog()
         },
-        "rawExport": {
-            "schemaVersion": RAW_EXPORT_SCHEMA_VERSION,
-            "manifest": {
-                "schemaVersion": "neonei/raw-export-manifest/current",
-                "requiredFiles": ["items", "fluids", "recipeIndex", "browserAtlasIndex"],
-                "optionalFiles": [
-                    "neiOrder",
-                    "browserGroups",
-                    "textures",
-                    "animations",
-                    "nativeSprites",
-                    "neiHandlers",
-                    "neiHandlerLayouts",
-                    "uiTemplateCatalog",
-                    "nativeUiValidation",
-                    "exportReport",
-                    "neiBrowserContract",
-                    "semanticFamilyAudit",
-                    "semanticNbtKeyDistribution",
-                    "semanticIdentityNormalizationReport",
-                    "neiHandlerAnomalies"
-                ],
-                "pathPolicy": "portable-relative-only; no drive letters, file URLs, absolute paths, '.', or '..' segments"
-            },
-            "validationReport": {
-                "path": "rust/raw-export-abi-validation-report.json",
-                "schemaVersion": RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
-                "policy": "missing required files, missing declared files, path violations, and legacy fallback are compile blockers"
-            },
-            "nativeUiValidationReport": {
-                "rawExportPath": NATIVE_UI_VALIDATION_DEFAULT_PATH,
-                "compilerReportPath": NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH,
-                "schemaVersion": NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
-                "requiredRawSchemaVersion": NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
-                "policy": "missing native UI validation, blocked geometry reports, and schema mismatches are compile blockers"
-            },
-            "nativeBackground": {
-                "requiredCapturedFields": ["status", "assetRef"],
-                "capturedStatus": "captured",
-                "assetRoot": "assets/ui-backgrounds/",
-                "scaling": ["nine-slice", "stretch", "none"],
-                "strictPolicy": "a captured nativeBackground.assetRef must point to a materialized raw-export asset"
-            }
-        },
-        "distData": {
-            "schemaVersion": COMPILED_DIST_SCHEMA_VERSION,
-            "manifest": "neonei/dist-data/current",
-            "runtimeManifest": RUST_RUNTIME_MANIFEST_SCHEMA_VERSION,
-            "rawExportAbiValidationReport": RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
-            "nativeUiExportAbiValidationReport": NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
-            "packValidationReport": PACK_ABI_VALIDATION_SCHEMA_VERSION,
-            "runtimeEntrypoints": RUST_RUNTIME_ENTRYPOINTS.iter()
-                .map(|spec| spec.path)
-                .collect::<Vec<_>>(),
-            "runtimeArtifacts": runtime_artifact_catalog(),
-            "uiPack": {
-                "assetsManifest": "neonei/ui-assets-manifest/current",
-                "report": "neonei/ui-pack-report/current",
-                "abiValidationReport": UI_PACK_ABI_VALIDATION_SCHEMA_VERSION,
-                "abiValidationReportPath": UI_PACK_ABI_VALIDATION_REPORT_PATH,
-                "templatePackSchema": "neonei/ui-template-pack/current",
-                "bindingPackSchema": "neonei/ui-binding-pack/current",
-                "stringPackSchema": "neonei/ui-string-pack/current"
-            },
-            "recipeUiPayloadIndex": "neonei/recipe-ui-payload-index/v1"
-        }
+        "rawExport": raw_export_schema_section(),
+        "distData": dist_data_schema_section()
     })
 }
 

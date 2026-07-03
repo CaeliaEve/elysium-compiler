@@ -23,6 +23,7 @@ mod reports;
 mod runtime;
 mod runtime_manifest_abi;
 mod runtime_pack_plan;
+mod schema_catalog;
 mod schemas;
 mod stages;
 mod text;
