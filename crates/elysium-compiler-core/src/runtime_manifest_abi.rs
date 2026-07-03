@@ -5,6 +5,9 @@
 //! policy in one module so producers, validators, and NeoNEI gates cannot drift.
 
 use crate::cli::CompileScope;
+use crate::compiler_scope_catalog::{
+    compile_scope_descriptors, compile_scope_runtime_capabilities,
+};
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
@@ -173,74 +176,18 @@ pub struct RuntimeReportPayloadInput<'a> {
     pub capabilities: &'a Value,
 }
 
-const CAPABILITIES_ALL: &[&str] = &[
-    "atlas.static",
-    "atlas.animated",
-    "atlas.meta",
-    "groups.collapse",
-    "groups.semantic-nbt",
-    "recipes.lookup",
-    "recipes.native-ui-layout",
-    "search.zh-cn",
-    "strings.zh-cn",
-    "native-render.webgl2",
-    "recipes.ui-pack",
-];
-
-const CAPABILITIES_NATIVE_UI: &[&str] = &[
-    "groups.collapse",
-    "groups.semantic-nbt",
-    "recipes.lookup",
-    "recipes.native-ui-layout",
-    "recipes.ui-pack",
-    "search.zh-cn",
-    "strings.zh-cn",
-    "native-render.webgl2",
-];
-
-const CAPABILITIES_SEARCH: &[&str] = &["search.zh-cn", "strings.zh-cn"];
-
-const CAPABILITIES_BROWSER: &[&str] = &[
-    "groups.collapse",
-    "groups.semantic-nbt",
-    "search.zh-cn",
-    "strings.zh-cn",
-    "native-render.webgl2",
-];
-
-const CAPABILITIES_RECIPES: &[&str] = &["recipes.lookup", "recipes.native-ui-layout"];
-const CAPABILITIES_UI: &[&str] = &["recipes.ui-pack", "native-render.webgl2"];
-const CAPABILITIES_TEXTURES: &[&str] = &["atlas.static", "atlas.animated", "atlas.meta"];
-
 pub fn runtime_capabilities(scope: CompileScope) -> &'static [&'static str] {
-    match scope {
-        CompileScope::All => CAPABILITIES_ALL,
-        CompileScope::NativeUi => CAPABILITIES_NATIVE_UI,
-        CompileScope::Search => CAPABILITIES_SEARCH,
-        CompileScope::Browser => CAPABILITIES_BROWSER,
-        CompileScope::Recipes => CAPABILITIES_RECIPES,
-        CompileScope::Ui => CAPABILITIES_UI,
-        CompileScope::Textures => CAPABILITIES_TEXTURES,
-    }
+    compile_scope_runtime_capabilities(scope)
 }
 
 fn scope_capability_catalog() -> Value {
-    let scopes = [
-        CompileScope::All,
-        CompileScope::NativeUi,
-        CompileScope::Search,
-        CompileScope::Browser,
-        CompileScope::Recipes,
-        CompileScope::Ui,
-        CompileScope::Textures,
-    ];
     Value::Object(
-        scopes
-            .into_iter()
-            .map(|scope| {
+        compile_scope_descriptors()
+            .iter()
+            .map(|descriptor| {
                 (
-                    scope.as_str().to_string(),
-                    json!(runtime_capabilities(scope)),
+                    descriptor.name().to_string(),
+                    json!(descriptor.runtime_capabilities()),
                 )
             })
             .collect(),

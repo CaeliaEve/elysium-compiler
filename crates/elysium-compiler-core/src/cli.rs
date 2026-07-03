@@ -69,14 +69,6 @@ pub enum CompileScope {
 
 impl CompileScope {
     pub fn as_str(self) -> &'static str {
-        match self {
-            CompileScope::All => "all",
-            CompileScope::NativeUi => "native-ui",
-            CompileScope::Search => "search",
-            CompileScope::Browser => "browser",
-            CompileScope::Recipes => "recipes",
-            CompileScope::Ui => "ui",
-            CompileScope::Textures => "textures",
-        }
+        crate::compiler_scope_catalog::compile_scope_name(self)
     }
 }

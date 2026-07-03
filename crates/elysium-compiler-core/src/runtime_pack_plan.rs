@@ -1,4 +1,7 @@
 use crate::cli::CompileScope;
+use crate::compiler_scope_catalog::{
+    compile_scope_enables_runtime_pack_producer, compile_scopes_for_runtime_pack_producer,
+};
 use crate::pack_abi::runtime_pack_artifact_paths_for_producer;
 use crate::packs::browser::compile_browser_pack;
 use crate::packs::recipe::compile_recipe_pack;
@@ -11,27 +14,11 @@ use std::path::Path;
 
 type RuntimePackCompilerFn = fn(&Path, &Path, bool, bool) -> Result<()>;
 
-const SCOPE_ALL_NATIVE_BROWSER: &[CompileScope] = &[
-    CompileScope::All,
-    CompileScope::NativeUi,
-    CompileScope::Browser,
-];
-const SCOPE_ALL_NATIVE_RECIPES: &[CompileScope] = &[
-    CompileScope::All,
-    CompileScope::NativeUi,
-    CompileScope::Recipes,
-];
-const SCOPE_ALL_NATIVE_UI: &[CompileScope] =
-    &[CompileScope::All, CompileScope::NativeUi, CompileScope::Ui];
-const SCOPE_ALL_TEXTURES: &[CompileScope] = &[CompileScope::All, CompileScope::Textures];
-const SCOPE_SEARCH_ONLY: &[CompileScope] = &[CompileScope::Search];
-
 #[derive(Clone, Copy)]
 pub(crate) struct RuntimePackCompilerDescriptor {
     id: &'static str,
     inputs: &'static [&'static str],
     capabilities: &'static [&'static str],
-    scopes: &'static [CompileScope],
     run: RuntimePackCompilerFn,
 }
 
@@ -40,14 +27,12 @@ impl RuntimePackCompilerDescriptor {
         id: &'static str,
         inputs: &'static [&'static str],
         capabilities: &'static [&'static str],
-        scopes: &'static [CompileScope],
         run: RuntimePackCompilerFn,
     ) -> Self {
         Self {
             id,
             inputs,
             capabilities,
-            scopes,
             run,
         }
     }
@@ -72,7 +57,7 @@ impl RuntimePackCompilerDescriptor {
     }
 
     pub(crate) fn applies_to(self, scope: CompileScope) -> bool {
-        self.scopes.contains(&scope)
+        compile_scope_enables_runtime_pack_producer(scope, self.id)
     }
 
     fn compile(self, input: &Path, output: &Path, strict: bool, debug_json: bool) -> Result<()> {
@@ -86,7 +71,7 @@ impl RuntimePackCompilerDescriptor {
             "outputs": self.outputs(),
             "debugOnlyOutputs": self.debug_outputs(),
             "capabilities": self.capabilities(),
-            "scopes": self.scopes.iter().map(|scope| scope.as_str()).collect::<Vec<_>>(),
+            "scopes": compile_scopes_for_runtime_pack_producer(self.id()),
         })
     }
 }
@@ -96,7 +81,6 @@ const RUNTIME_PACK_COMPILERS: &[RuntimePackCompilerDescriptor] = &[
         "browser",
         &["raw-export-manifest", "browser-layout", "browser-atlas"],
         &["compiler.browser_pack", "compiler.search_pack"],
-        SCOPE_ALL_NATIVE_BROWSER,
         compile_browser_pack,
     ),
     RuntimePackCompilerDescriptor::new(
@@ -107,28 +91,24 @@ const RUNTIME_PACK_COMPILERS: &[RuntimePackCompilerDescriptor] = &[
             "native-ui-capture-facts",
         ],
         &["compiler.recipe_pack"],
-        SCOPE_ALL_NATIVE_RECIPES,
         compile_recipe_pack,
     ),
     RuntimePackCompilerDescriptor::new(
         "ui",
         &["native-ui-capture-facts", "ui-template-catalog"],
         &["compiler.native_ui_pack"],
-        SCOPE_ALL_NATIVE_UI,
         compile_ui_pack,
     ),
     RuntimePackCompilerDescriptor::new(
         "texture",
         &["texture-atlas", "texture-animation-facts"],
         &["compiler.texture_pack"],
-        SCOPE_ALL_TEXTURES,
         compile_texture_pack,
     ),
     RuntimePackCompilerDescriptor::new(
         "search",
         &["raw-export-manifest", "browser-layout"],
         &["compiler.search_pack"],
-        SCOPE_SEARCH_ONLY,
         compile_search_pack,
     ),
 ];

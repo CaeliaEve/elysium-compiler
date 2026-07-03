@@ -1,4 +1,12 @@
 use crate::cli::CompileScope;
+pub use crate::compiler_scope_catalog::{
+    RUNTIME_PACK_PRODUCER_BROWSER, RUNTIME_PACK_PRODUCER_RECIPES, RUNTIME_PACK_PRODUCER_SEARCH,
+    RUNTIME_PACK_PRODUCER_TEXTURE, RUNTIME_PACK_PRODUCER_UI,
+};
+use crate::compiler_scope_catalog::{
+    SCOPE_ALL_NATIVE_BROWSER, SCOPE_ALL_NATIVE_RECIPES, SCOPE_ALL_NATIVE_SEARCH_BROWSER,
+    SCOPE_ALL_NATIVE_UI, SCOPE_ALL_TEXTURES, SCOPE_EVERY,
+};
 use crate::io::{normalize_path, sha256_file, write_json_value};
 use crate::native_ui_export_abi_catalog::NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH;
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_REPORT_PATH;
@@ -18,40 +26,6 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const SCOPE_EVERY: &[CompileScope] = &[
-    CompileScope::All,
-    CompileScope::NativeUi,
-    CompileScope::Search,
-    CompileScope::Browser,
-    CompileScope::Recipes,
-    CompileScope::Ui,
-    CompileScope::Textures,
-];
-const SCOPE_ALL_NATIVE_BROWSER: &[CompileScope] = &[
-    CompileScope::All,
-    CompileScope::NativeUi,
-    CompileScope::Browser,
-];
-const SCOPE_ALL_NATIVE_SEARCH_BROWSER: &[CompileScope] = &[
-    CompileScope::All,
-    CompileScope::NativeUi,
-    CompileScope::Search,
-    CompileScope::Browser,
-];
-const SCOPE_ALL_NATIVE_RECIPES: &[CompileScope] = &[
-    CompileScope::All,
-    CompileScope::NativeUi,
-    CompileScope::Recipes,
-];
-const SCOPE_ALL_NATIVE_UI: &[CompileScope] =
-    &[CompileScope::All, CompileScope::NativeUi, CompileScope::Ui];
-const SCOPE_ALL_TEXTURES: &[CompileScope] = &[CompileScope::All, CompileScope::Textures];
-
-pub const RUNTIME_PACK_PRODUCER_BROWSER: &str = "browser";
-pub const RUNTIME_PACK_PRODUCER_RECIPES: &str = "recipes";
-pub const RUNTIME_PACK_PRODUCER_UI: &str = "ui";
-pub const RUNTIME_PACK_PRODUCER_TEXTURE: &str = "texture";
-pub const RUNTIME_PACK_PRODUCER_SEARCH: &str = "search";
 pub const RUNTIME_PACK_PRODUCER_IDS: &[&str] = &[
     RUNTIME_PACK_PRODUCER_BROWSER,
     RUNTIME_PACK_PRODUCER_RECIPES,

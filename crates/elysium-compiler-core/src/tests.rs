@@ -10,6 +10,9 @@ use crate::compiler_command_catalog::{
     command_name, compiler_command_catalog, compiler_command_descriptors,
     COMPILER_COMMAND_CATALOG_SCHEMA_VERSION,
 };
+use crate::compiler_scope_catalog::{
+    compile_scope_catalog, compile_scope_descriptors, COMPILE_SCOPE_CATALOG_SCHEMA_VERSION,
+};
 use crate::io::{normalize_path, write_json_value};
 use crate::json_ext::{value_string, value_u64};
 use crate::kernel::{COMPILE_KERNEL_TRACE_REPORT_PATH, COMPILE_KERNEL_TRACE_SCHEMA_VERSION};
@@ -54,14 +57,14 @@ use crate::recipe_ui_payload::rust_recipe_ui_payload_relative_path;
 use crate::reports;
 use crate::runtime;
 use crate::runtime_manifest_abi::{
-    runtime_manifest_abi_catalog, runtime_manifest_path_policy, runtime_manifest_paths_catalog,
-    runtime_report_payload_policy_catalog, runtime_report_schemas_catalog,
-    validate_runtime_manifest_report_descriptors, validate_runtime_report_payload_policy,
-    NATIVE_RUNTIME_AUTHORITY_RUST, NATIVE_RUNTIME_STATUS_READY,
-    RUNTIME_MANIFEST_REPORT_DESCRIPTORS, RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_GENERATED_AT,
-    RUST_RUNTIME_INTEGRITY_ALGORITHM, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION, RUST_RUNTIME_SCHEMA,
-    RUST_RUNTIME_SCHEMA_REVISION, SCHEMA_HASH_RUNTIME_MANIFEST_INPUT,
-    SCHEMA_HASH_RUNTIME_REPORT_PAYLOAD_POLICY_INPUT,
+    runtime_capabilities, runtime_manifest_abi_catalog, runtime_manifest_path_policy,
+    runtime_manifest_paths_catalog, runtime_report_payload_policy_catalog,
+    runtime_report_schemas_catalog, validate_runtime_manifest_report_descriptors,
+    validate_runtime_report_payload_policy, NATIVE_RUNTIME_AUTHORITY_RUST,
+    NATIVE_RUNTIME_STATUS_READY, RUNTIME_MANIFEST_REPORT_DESCRIPTORS, RUST_RUNTIME_ENTRYPOINTS,
+    RUST_RUNTIME_GENERATED_AT, RUST_RUNTIME_INTEGRITY_ALGORITHM,
+    RUST_RUNTIME_MANIFEST_SCHEMA_VERSION, RUST_RUNTIME_SCHEMA, RUST_RUNTIME_SCHEMA_REVISION,
+    SCHEMA_HASH_RUNTIME_MANIFEST_INPUT, SCHEMA_HASH_RUNTIME_REPORT_PAYLOAD_POLICY_INPUT,
 };
 use crate::runtime_pack_plan::runtime_pack_compilers;
 use crate::schema_catalog::{
@@ -206,6 +209,64 @@ fn compiler_command_catalog_is_cli_dispatch_authority() {
     assert!(commands_rs.contains("run_compiler_command(&cli.command)"));
     assert!(!commands_rs.contains("match cli.command"));
     assert!(!commands_rs.contains("Command::Compile"));
+}
+
+#[test]
+fn compile_scope_catalog_is_runtime_pack_authority() {
+    let catalog = compile_scope_catalog();
+    let descriptors = compile_scope_descriptors();
+    let descriptor_names = descriptors
+        .iter()
+        .map(|descriptor| descriptor.name())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        catalog["schemaVersion"],
+        json!(COMPILE_SCOPE_CATALOG_SCHEMA_VERSION)
+    );
+    assert_eq!(
+        catalog["selectionPolicy"],
+        json!("static-compile-scope-descriptor-table")
+    );
+    assert_eq!(catalog["legacyFallback"], json!("forbidden"));
+    assert_eq!(descriptor_names, COMPILE_SCOPES);
+
+    for descriptor in descriptors {
+        assert_eq!(
+            descriptor.scope().as_str(),
+            descriptor.name(),
+            "CompileScope::as_str must be catalog-owned for {}",
+            descriptor.name()
+        );
+        assert_eq!(
+            runtime_capabilities(descriptor.scope()),
+            descriptor.runtime_capabilities(),
+            "runtime capabilities drifted for {}",
+            descriptor.name()
+        );
+        let active_producers = runtime_pack_compilers(descriptor.scope())
+            .map(|compiler| compiler.id())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            active_producers,
+            descriptor.runtime_pack_producers(),
+            "runtime pack producer selection drifted for {}",
+            descriptor.name()
+        );
+    }
+
+    let native_ui = descriptors
+        .iter()
+        .find(|descriptor| descriptor.scope() == CompileScope::NativeUi)
+        .unwrap();
+    assert_eq!(
+        native_ui.runtime_pack_producers(),
+        &["browser", "recipes", "ui"]
+    );
+    assert!(native_ui
+        .runtime_capabilities()
+        .contains(&"recipes.ui-pack"));
+    assert!(!native_ui.runtime_pack_producers().contains(&"texture"));
 }
 
 #[test]
@@ -1809,6 +1870,31 @@ fn stable_cli_inspect_validate_and_schemas_cover_fixture_contracts() {
         schemas["compiler"]["cli"]["compileScopes"],
         json!(COMPILE_SCOPES)
     );
+    assert_eq!(
+        schemas["compiler"]["cli"]["compileScopeCatalog"]["schemaVersion"],
+        json!(COMPILE_SCOPE_CATALOG_SCHEMA_VERSION)
+    );
+    assert_eq!(
+        schemas["compiler"]["cli"]["compileScopeCatalog"]["selectionPolicy"],
+        json!("static-compile-scope-descriptor-table")
+    );
+    assert_eq!(
+        schemas["compiler"]["cli"]["compileScopeCatalog"]["scopes"],
+        schemas["abi"]["compilerCapabilityAbi"]["compileScopeCatalog"]["scopes"]
+    );
+    assert!(schemas["compiler"]["cli"]["compileScopeCatalog"]["scopes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|scope| scope["name"] == json!("native-ui")
+            && scope["runtimePackProducers"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("ui"))
+            && scope["runtimeCapabilities"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("recipes.ui-pack"))));
     assert_eq!(
         schemas["compiler"]["compileKernel"]["schemaVersion"],
         json!("elysium-compiler/compile-kernel-catalog/v1")

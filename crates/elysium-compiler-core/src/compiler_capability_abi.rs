@@ -9,19 +9,12 @@ use crate::compiler_command_catalog::compiler_command_catalog;
 pub use crate::compiler_command_catalog::{
     COMPILER_COMMANDS, REQUIRED_COMPILER_COMMANDS, SCHEMA_HASH_COMMANDS_INPUT,
 };
+use crate::compiler_scope_catalog::compile_scope_catalog;
+pub use crate::compiler_scope_catalog::{COMPILE_SCOPES, SCHEMA_HASH_SCOPES_INPUT};
 use crate::native_ui_export_abi_catalog::NATIVE_UI_VALIDATION_DEFAULT_PATH;
 use serde_json::{json, Value};
 
 pub const COMPILER_CAPABILITY_ABI_VERSION: &str = "elysium.compiler.capability.v1";
-pub const COMPILE_SCOPES: &[&str] = &[
-    "all",
-    "native-ui",
-    "search",
-    "browser",
-    "recipes",
-    "ui",
-    "textures",
-];
 
 pub const NATIVE_UI_REQUIRED_CAPABILITIES: &[&str] = &[
     "native_ui.surface",
@@ -44,8 +37,6 @@ pub const COMPILER_POLICY_MISSING_CAPABILITY: &str = "fail-fast";
 pub const COMPILER_POLICY_HOT_PATH_ENCODING: &str = "binary-pack-preferred";
 pub const COMPILER_POLICY_FULL_EXPORT_VALIDATION: &str = "milestone-gate-only";
 
-pub const SCHEMA_HASH_SCOPES_INPUT: &str =
-    "scopes=all,native-ui,search,browser,recipes,ui,textures";
 pub const SCHEMA_HASH_COMPILER_CAPABILITY_INPUT: &str =
     "compiler-capability-abi=elysium.compiler.capability.v1";
 
@@ -57,6 +48,7 @@ pub fn compiler_capability_abi_catalog() -> Value {
         "commandCatalog": compiler_command_catalog(),
         "requiredCommands": REQUIRED_COMPILER_COMMANDS,
         "compileScopes": COMPILE_SCOPES,
+        "compileScopeCatalog": compile_scope_catalog(),
         "nativeUi": {
             "requiredCapabilities": NATIVE_UI_REQUIRED_CAPABILITIES,
             "requiredFiles": NATIVE_UI_REQUIRED_FILES,
