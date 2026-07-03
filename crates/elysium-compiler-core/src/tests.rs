@@ -42,6 +42,8 @@ use crate::recipe_ui_payload::rust_recipe_ui_payload_relative_path;
 use crate::reports;
 use crate::runtime;
 use crate::runtime_manifest_abi::{
+    runtime_manifest_abi_catalog, runtime_manifest_paths_catalog, runtime_report_schemas_catalog,
+    validate_runtime_manifest_report_descriptors, RUNTIME_MANIFEST_REPORT_DESCRIPTORS,
     RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION, RUST_RUNTIME_SCHEMA,
     RUST_RUNTIME_SCHEMA_REVISION, SCHEMA_HASH_RUNTIME_MANIFEST_INPUT,
 };
@@ -1194,6 +1196,38 @@ fn schema_catalog_sections_are_descriptor_owned() {
     );
     assert_eq!(schemas["rawExport"], raw_export);
     assert_eq!(schemas["distData"], dist_data);
+}
+
+#[test]
+fn runtime_manifest_report_catalog_is_descriptor_owned() {
+    validate_runtime_manifest_report_descriptors();
+
+    let paths = runtime_manifest_paths_catalog();
+    let schemas = runtime_report_schemas_catalog();
+    let catalog = runtime_manifest_abi_catalog();
+
+    assert_eq!(catalog["paths"], paths);
+    assert_eq!(catalog["reportSchemas"], schemas);
+    assert_eq!(
+        RUNTIME_MANIFEST_REPORT_DESCRIPTORS.len(),
+        schemas.as_object().unwrap().len()
+    );
+
+    for descriptor in RUNTIME_MANIFEST_REPORT_DESCRIPTORS {
+        assert_eq!(paths[descriptor.key], json!(descriptor.path));
+        assert_eq!(schemas[descriptor.key], json!(descriptor.schema_version));
+        assert!(descriptor.path.starts_with("rust/"));
+        assert!(descriptor.path.ends_with(".json"));
+    }
+
+    assert_eq!(
+        paths["runtimeManifest"],
+        json!("rust/runtime-manifest.json")
+    );
+    assert_eq!(
+        schemas["migrationReadiness"],
+        json!("neonei/rust-migration-readiness/current")
+    );
 }
 
 #[test]
