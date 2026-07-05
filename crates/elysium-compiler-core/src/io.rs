@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
+use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::fs::{self, File};
-use std::io::Read;
+use std::fs::File;
+use std::io::{BufWriter, Read, Write};
 use std::path::Path;
 
 pub fn sha256_file(path: &Path) -> Result<String> {
@@ -20,8 +21,17 @@ pub fn sha256_file(path: &Path) -> Result<String> {
 }
 
 pub fn write_json_value(path: &Path, value: &Value) -> Result<()> {
-    let text = serde_json::to_string_pretty(value)?;
-    fs::write(path, format!("{text}\n")).with_context(|| format!("write {}", path.display()))
+    write_json_serializable(path, value)
+}
+
+pub fn write_json_serializable<T: Serialize + ?Sized>(path: &Path, value: &T) -> Result<()> {
+    let file = File::create(path).with_context(|| format!("create {}", path.display()))?;
+    let mut writer = BufWriter::new(file);
+    serde_json::to_writer_pretty(&mut writer, value)?;
+    writer.write_all(b"\n")?;
+    writer
+        .flush()
+        .with_context(|| format!("write {}", path.display()))
 }
 
 pub fn normalize_path(path: &Path) -> String {

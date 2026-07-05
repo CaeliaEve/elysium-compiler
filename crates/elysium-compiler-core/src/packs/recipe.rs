@@ -1,9 +1,9 @@
 use crate::binary::{intern_compact_string, push_u32, write_binary_pack_payload};
-use crate::io::write_json_value;
+use crate::io::{write_json_serializable, write_json_value};
 use crate::json_ext::{first_non_empty, nested_value_string, value_string, value_u64};
 use crate::manifest::{
-    read_jsonl_file_values, read_jsonl_values, read_manifest, read_manifest_collection,
-    read_manifest_json, runtime_file_descriptors, COLLECTION_HANDLER_LAYOUTS,
+    read_jsonl_values, read_manifest, read_manifest_collection, read_manifest_json,
+    runtime_file_descriptors, COLLECTION_HANDLER_LAYOUTS,
 };
 use crate::recipe_domain::{
     build_recipe_fragmentation_report, build_recipe_handler_metadata_report,
@@ -13,11 +13,104 @@ use crate::recipe_domain::{
     RecipeCategoryAccumulator, RecipeHandlerContext,
 };
 use crate::recipe_ui_payload::{rust_recipe_ui_payload_relative_path, RecipeUiPayloadShardWriters};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
+use flate2::read::GzDecoder;
+use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
-use std::fs;
-use std::path::Path;
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader, Read};
+use std::path::{Path, PathBuf};
+
+#[derive(Serialize)]
+struct HandlerIndexDocument<'a> {
+    #[serde(rename = "schemaVersion")]
+    schema_version: &'static str,
+    handlers: &'a [Value],
+}
+
+#[derive(Serialize)]
+struct HandlerLayoutIndexDocument<'a> {
+    #[serde(rename = "schemaVersion")]
+    schema_version: &'static str,
+    layouts: &'a [Value],
+}
+
+#[derive(Serialize)]
+struct RecipeCategoryIndexDocument<'a> {
+    #[serde(rename = "schemaVersion")]
+    schema_version: &'static str,
+    categories: &'a [Value],
+}
+
+#[derive(Serialize)]
+struct RecipeItemIndexDocument<'a> {
+    #[serde(rename = "schemaVersion")]
+    schema_version: &'static str,
+    items: &'a [Value],
+}
+
+#[derive(Serialize)]
+struct RecipeUiPayloadIndexDocument<'a> {
+    #[serde(rename = "schemaVersion")]
+    schema_version: &'static str,
+    recipes: &'a [Value],
+}
+
+#[derive(Serialize)]
+struct RecipeOutputCounts {
+    recipes: usize,
+    handlers: usize,
+    #[serde(rename = "recipeItemIndexItems")]
+    recipe_item_index_items: usize,
+    #[serde(rename = "uiPayloadIndexItems")]
+    ui_payload_index_items: usize,
+    categories: usize,
+}
+
+#[derive(Serialize)]
+struct RecipeOutputDebugPack<'a> {
+    #[serde(rename = "schemaVersion")]
+    schema_version: &'static str,
+    counts: RecipeOutputCounts,
+    recipes: &'a [Value],
+    handlers: &'a [Value],
+    #[serde(rename = "itemIndex")]
+    item_index: &'a [Value],
+    #[serde(rename = "uiPayloadIndex")]
+    ui_payload_index: &'a [Value],
+    #[serde(rename = "categoryIndex")]
+    category_index: &'a [Value],
+}
+
+fn visit_jsonl_file_values<F>(path: &Path, mut visitor: F) -> Result<usize>
+where
+    F: FnMut(Value) -> Result<()>,
+{
+    let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let reader: Box<dyn Read> = if path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("gz"))
+    {
+        Box::new(GzDecoder::new(file))
+    } else {
+        Box::new(file)
+    };
+    let buf = BufReader::new(reader);
+    let mut count = 0usize;
+    for (index, line) in buf.lines().enumerate() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let value = serde_json::from_str::<Value>(&line)
+            .with_context(|| format!("parse {} line {}", path.display(), index + 1))?;
+        visitor(value)?;
+        count += 1;
+    }
+    Ok(count)
+}
 
 pub fn compile_recipe_pack(
     input: &Path,
@@ -33,33 +126,45 @@ pub fn compile_recipe_pack(
         .ok_or_else(|| anyhow!("recipe compiler blocked: recipeIndex is missing"))?;
     let handlers = read_jsonl_values(input, &manifest, "neiHandlers")?;
     let layouts = read_manifest_collection(input, &manifest, COLLECTION_HANDLER_LAYOUTS)?;
-    let mut recipes = Vec::new();
-
-    for shard in recipe_index
+    let recipe_shards = recipe_index
         .get("shards")
         .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default()
-    {
-        let Some(path) = shard.get("path").and_then(Value::as_str) else {
-            continue;
-        };
-        let shard_path = input.join(path.replace('\\', "/").trim_start_matches('/'));
-        recipes.extend(read_jsonl_file_values(&shard_path)?);
-    }
-
+        .into_iter()
+        .flatten()
+        .filter_map(|shard| {
+            let path = shard.get("path").and_then(Value::as_str)?;
+            Some((
+                input.join(path.replace('\\', "/").trim_start_matches('/')),
+                shard.get("recipeCount").and_then(Value::as_u64),
+            ))
+        })
+        .collect::<Vec<(PathBuf, Option<u64>)>>();
+    let expected_recipe_count = recipe_index.get("recipeCount").and_then(Value::as_u64);
+    let declared_shard_total = recipe_shards
+        .iter()
+        .try_fold(0u64, |total, (_, count)| Some(total + (*count)?));
     if strict {
-        let expected = recipe_index
-            .get("recipeCount")
-            .and_then(Value::as_u64)
-            .unwrap_or(recipes.len() as u64);
-        if expected != recipes.len() as u64 {
+        if recipe_shards.is_empty() {
             return Err(anyhow!(
-                "recipe compiler blocked: recipe count mismatch {} != {}",
-                recipes.len(),
-                expected
+                "recipe compiler blocked: recipe shards are missing"
             ));
         }
+        if let (Some(expected), Some(declared_shard_total)) =
+            (expected_recipe_count, declared_shard_total)
+        {
+            if declared_shard_total != expected {
+                return Err(anyhow!(
+                    "recipe compiler blocked: declared shard recipe count mismatch {} != {}",
+                    declared_shard_total,
+                    expected
+                ));
+            }
+        }
+    }
+
+    let expected_recipe_count = expected_recipe_count.or(declared_shard_total);
+    if strict && expected_recipe_count == Some(0) {
+        return Err(anyhow!("recipe compiler blocked: recipe count is zero"));
     }
 
     let handler_context = RecipeHandlerContext::new(&handlers, &layouts);
@@ -69,11 +174,6 @@ pub fn compile_recipe_pack(
         .map(public_recipe_handler)
         .collect::<Vec<_>>();
     let public_layouts = layouts.iter().map(public_recipe_layout).collect::<Vec<_>>();
-    let handler_pack = if debug_json {
-        public_handlers.clone()
-    } else {
-        Vec::new()
-    };
 
     let mut produced_by: BTreeMap<String, Vec<Value>> = BTreeMap::new();
     let mut used_in: BTreeMap<String, Vec<Value>> = BTreeMap::new();
@@ -83,149 +183,149 @@ pub fn compile_recipe_pack(
     let mut category_map: BTreeMap<String, RecipeCategoryAccumulator> = BTreeMap::new();
     let mut recipe_count = 0usize;
 
-    for recipe in &recipes {
-        recipe_count += 1;
-        let recipe_id = recipe_id(recipe);
-        let (handler, layout) = handler_context.resolve(recipe);
-        let public_handler = handler.map(public_recipe_handler);
-        let public_layout = layout.map(public_recipe_layout);
-        let raw_family_key = first_non_empty(&[
-            value_string(recipe, "family"),
-            value_string(recipe, "sourcePlugin"),
-            value_string(recipe, "recipeType"),
-            nested_value_string(recipe, &["machine", "machineId"]),
-        ])
-        .unwrap_or_else(|| "unknown".to_string());
-        let family_key = captured_ui_family_key(handler, layout)
-            .unwrap_or_else(|| classify_recipe_family_key(recipe, &raw_family_key, handler));
-        let recipe_type = first_non_empty(&[
-            value_string(recipe, "recipeType"),
-            nested_value_string(recipe, &["machine", "machineId"]),
-            Some(family_key.clone()),
-        ])
-        .unwrap_or_else(|| family_key.clone());
-        let machine_type = first_non_empty(&[
-            public_handler
+    for (shard_path, _) in &recipe_shards {
+        visit_jsonl_file_values(shard_path, |recipe_value| {
+            recipe_count += 1;
+            let recipe = &recipe_value;
+            let recipe_id = recipe_id(recipe);
+            let (handler, layout) = handler_context.resolve(recipe);
+            let public_handler = handler.map(public_recipe_handler);
+            let public_layout = layout.map(public_recipe_layout);
+            let raw_family_key = first_non_empty(&[
+                value_string(recipe, "family"),
+                value_string(recipe, "sourcePlugin"),
+                value_string(recipe, "recipeType"),
+                nested_value_string(recipe, &["machine", "machineId"]),
+            ])
+            .unwrap_or_else(|| "unknown".to_string());
+            let family_key = captured_ui_family_key(handler, layout)
+                .unwrap_or_else(|| classify_recipe_family_key(recipe, &raw_family_key, handler));
+            let recipe_type = first_non_empty(&[
+                value_string(recipe, "recipeType"),
+                nested_value_string(recipe, &["machine", "machineId"]),
+                Some(family_key.clone()),
+            ])
+            .unwrap_or_else(|| family_key.clone());
+            let machine_type = first_non_empty(&[
+                public_handler
+                    .as_ref()
+                    .and_then(|handler| value_string(handler, "localizedName")),
+                public_handler
+                    .as_ref()
+                    .and_then(|handler| value_string(handler, "displayName")),
+                nested_value_string(recipe, &["machine", "displayName"]),
+                value_string(recipe, "displayName"),
+                nested_value_string(recipe, &["machine", "machineId"]),
+                Some(recipe_type.clone()),
+            ])
+            .unwrap_or_else(|| recipe_type.clone());
+            let handler_key = public_handler
                 .as_ref()
-                .and_then(|handler| value_string(handler, "localizedName")),
-            public_handler
-                .as_ref()
-                .and_then(|handler| value_string(handler, "displayName")),
-            nested_value_string(recipe, &["machine", "displayName"]),
-            value_string(recipe, "displayName"),
-            nested_value_string(recipe, &["machine", "machineId"]),
-            Some(recipe_type.clone()),
-        ])
-        .unwrap_or_else(|| recipe_type.clone());
-        let handler_key = public_handler
-            .as_ref()
-            .and_then(|handler| value_string(handler, "handlerKey"));
-        let input_item_ids = collect_recipe_item_ids(
-            recipe,
-            &[
-                "inputs",
-                "inputItems",
-                "itemInputs",
-                "ingredients",
-                "catalysts",
-                "input",
-            ],
-        );
-        let output_item_ids = collect_recipe_item_ids(
-            recipe,
-            &[
-                "outputs",
-                "outputItems",
-                "itemOutputs",
-                "results",
-                "result",
-                "output",
-            ],
-        );
-        let machine_icon = recipe_machine_icon(recipe, public_handler.as_ref());
-        let machine_info = json!({
-            "machineType": machine_type,
-            "machineId": nested_value_string(recipe, &["machine", "machineId"]).unwrap_or_else(|| recipe_type.clone()),
-            "category": nested_value_string(recipe, &["machine", "category"]).unwrap_or_else(|| family_key.clone()),
-            "iconInfo": nested_value_string(recipe, &["machine", "iconInfoRaw"]).unwrap_or_default(),
-            "canonicalMachineFamily": public_handler
-                .as_ref()
-                .and_then(|handler| handler.get("canonicalMachineFamily").cloned())
-                .unwrap_or(Value::Null),
-            "catalystItemName": public_handler
-                .as_ref()
-                .and_then(|handler| handler.get("catalystItemName").cloned())
-                .unwrap_or(Value::Null),
-            "preferredMachineItemName": public_handler
-                .as_ref()
-                .and_then(|handler| handler.get("preferredMachineItemName").cloned())
-                .unwrap_or(Value::Null),
-            "gtMultiblockPreferred": public_handler
-                .as_ref()
-                .and_then(|handler| handler.get("gtMultiblockPreferred"))
-                .and_then(Value::as_bool)
-                .unwrap_or(false),
-            "machineIcon": machine_icon.clone().unwrap_or(Value::Null),
-        });
-        let payload_meta = json!({
-            "recipeId": recipe_id,
-            "path": rust_recipe_ui_payload_relative_path(&recipe_id),
-            "payloadKey": recipe_id,
-            "familyKey": family_key,
-            "recipeType": recipe_type,
-            "machineType": machine_type,
-            "handlerKey": handler_key,
-            "handler": public_handler,
-            "machineInfo": machine_info,
-            "machineIcon": machine_icon,
-            "nativeLayout": public_layout,
-            "inputItemIds": input_item_ids,
-            "outputItemIds": output_item_ids,
-            "slotCount": { "input": input_item_ids.len(), "output": output_item_ids.len() },
-            "presentation": {
-                "surface": nested_value_string(recipe, &["machine", "machineId"]).unwrap_or_else(|| recipe_type.clone()),
-                "density": if input_item_ids.len() + output_item_ids.len() > 12 { "dense" } else { "normal" },
-            },
-        });
-        let payload_index_entry = json!({
-            "recipeId": recipe_id,
-            "path": rust_recipe_ui_payload_relative_path(&recipe_id),
-            "payloadKey": recipe_id,
-            "familyKey": family_key,
-            "recipeType": recipe_type,
-            "machineType": machine_type,
-            "handlerKey": handler_key,
-            "nativeLayout": public_layout,
-        });
-        let mut payload_entry = payload_meta;
-        if let Some(payload_object) = payload_entry.as_object_mut() {
-            payload_object.insert(
-                "schemaVersion".to_string(),
-                Value::String("neonei/recipe-ui-payload/v1".to_string()),
+                .and_then(|handler| value_string(handler, "handlerKey"));
+            let input_item_ids = collect_recipe_item_ids(
+                recipe,
+                &[
+                    "inputs",
+                    "inputItems",
+                    "itemInputs",
+                    "ingredients",
+                    "catalysts",
+                    "input",
+                ],
             );
-            if let Some(domain_facts) = compact_fact_object(recipe.get("domainFacts")) {
-                payload_object.insert("domainFacts".to_string(), domain_facts);
+            let output_item_ids = collect_recipe_item_ids(
+                recipe,
+                &[
+                    "outputs",
+                    "outputItems",
+                    "itemOutputs",
+                    "results",
+                    "result",
+                    "output",
+                ],
+            );
+            let machine_icon = recipe_machine_icon(recipe, public_handler.as_ref());
+            let machine_info = json!({
+                "machineType": machine_type,
+                "machineId": nested_value_string(recipe, &["machine", "machineId"]).unwrap_or_else(|| recipe_type.clone()),
+                "category": nested_value_string(recipe, &["machine", "category"]).unwrap_or_else(|| family_key.clone()),
+                "iconInfo": nested_value_string(recipe, &["machine", "iconInfoRaw"]).unwrap_or_default(),
+                "canonicalMachineFamily": public_handler
+                    .as_ref()
+                    .and_then(|handler| handler.get("canonicalMachineFamily").cloned())
+                    .unwrap_or(Value::Null),
+                "catalystItemName": public_handler
+                    .as_ref()
+                    .and_then(|handler| handler.get("catalystItemName").cloned())
+                    .unwrap_or(Value::Null),
+                "preferredMachineItemName": public_handler
+                    .as_ref()
+                    .and_then(|handler| handler.get("preferredMachineItemName").cloned())
+                    .unwrap_or(Value::Null),
+                "gtMultiblockPreferred": public_handler
+                    .as_ref()
+                    .and_then(|handler| handler.get("gtMultiblockPreferred"))
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                "machineIcon": machine_icon.clone().unwrap_or(Value::Null),
+            });
+            let payload_meta = json!({
+                "recipeId": recipe_id,
+                "path": rust_recipe_ui_payload_relative_path(&recipe_id),
+                "payloadKey": recipe_id,
+                "familyKey": family_key,
+                "recipeType": recipe_type,
+                "machineType": machine_type,
+                "handlerKey": handler_key,
+                "handler": public_handler,
+                "machineInfo": machine_info,
+                "machineIcon": machine_icon,
+                "nativeLayout": public_layout,
+                "inputItemIds": input_item_ids,
+                "outputItemIds": output_item_ids,
+                "slotCount": { "input": input_item_ids.len(), "output": output_item_ids.len() },
+                "presentation": {
+                    "surface": nested_value_string(recipe, &["machine", "machineId"]).unwrap_or_else(|| recipe_type.clone()),
+                    "density": if input_item_ids.len() + output_item_ids.len() > 12 { "dense" } else { "normal" },
+                },
+            });
+            let payload_index_entry = json!({
+                "recipeId": recipe_id,
+                "path": rust_recipe_ui_payload_relative_path(&recipe_id),
+                "payloadKey": recipe_id,
+                "familyKey": family_key,
+                "recipeType": recipe_type,
+                "machineType": machine_type,
+                "handlerKey": handler_key,
+                "nativeLayout": public_layout,
+            });
+            let mut payload_entry = payload_meta;
+            if let Some(payload_object) = payload_entry.as_object_mut() {
+                payload_object.insert(
+                    "schemaVersion".to_string(),
+                    Value::String("neonei/recipe-ui-payload/v1".to_string()),
+                );
+                if let Some(domain_facts) = compact_fact_object(recipe.get("domainFacts")) {
+                    payload_object.insert("domainFacts".to_string(), domain_facts);
+                }
+                if let Some(metadata_facts) = compact_fact_object(recipe.get("metadata")) {
+                    payload_object.insert("metadata".to_string(), metadata_facts);
+                }
+                if let Some(layout_facts) = compact_fact_object(recipe.get("layout")) {
+                    payload_object.insert("layout".to_string(), layout_facts);
+                }
+                payload_object.remove("path");
+                payload_object.remove("payloadKey");
             }
-            if let Some(metadata_facts) = compact_fact_object(recipe.get("metadata")) {
-                payload_object.insert("metadata".to_string(), metadata_facts);
-            }
-            if let Some(layout_facts) = compact_fact_object(recipe.get("layout")) {
-                payload_object.insert("layout".to_string(), layout_facts);
-            }
-            payload_object.remove("path");
-            payload_object.remove("payloadKey");
-        }
-        ui_payload_shards.write_payload(&recipe_id, &payload_entry)?;
-        ui_payload_index.push(payload_index_entry);
+            ui_payload_shards.write_payload(&recipe_id, &payload_entry)?;
+            ui_payload_index.push(payload_index_entry);
 
-        let category_display_name = recipe_category_display_name(recipe, handler);
-        let raw_category_id = recipe_category_raw_id(recipe, handler);
-        let category_id =
-            recipe_category_id_from_display_name(&category_display_name, &raw_category_id);
-        let category =
-            category_map
-                .entry(category_id.clone())
-                .or_insert_with(|| RecipeCategoryAccumulator {
+            let category_display_name = recipe_category_display_name(recipe, handler);
+            let raw_category_id = recipe_category_raw_id(recipe, handler);
+            let category_id =
+                recipe_category_id_from_display_name(&category_display_name, &raw_category_id);
+            let category = category_map.entry(category_id.clone()).or_insert_with(|| {
+                RecipeCategoryAccumulator {
                     category_id,
                     recipe_count: 0,
                     display_name: category_display_name.clone(),
@@ -233,33 +333,44 @@ pub fn compile_recipe_pack(
                     handler: public_handler.clone(),
                     native_layout: public_layout.clone(),
                     machine_icon: machine_icon.clone(),
-                });
-        category.recipe_count += 1;
-        if category.machine_icon.is_none() {
-            category.machine_icon = machine_icon.clone();
-        }
-        if !category.source_category_ids.contains(&raw_category_id) {
-            category.source_category_ids.push(raw_category_id.clone());
-        }
+                }
+            });
+            category.recipe_count += 1;
+            if category.machine_icon.is_none() {
+                category.machine_icon = machine_icon.clone();
+            }
+            if !category.source_category_ids.contains(&raw_category_id) {
+                category.source_category_ids.push(raw_category_id.clone());
+            }
 
-        let ref_value = json!({
-            "recipeId": recipe_id,
-            "categoryId": recipe_category_id_from_display_name(&category_display_name, &raw_category_id),
-            "displayName": category_display_name,
-        });
+            let ref_value = json!({
+                "recipeId": recipe_id,
+                "categoryId": recipe_category_id_from_display_name(&category_display_name, &raw_category_id),
+                "displayName": category_display_name,
+            });
 
-        for item_id in input_item_ids {
-            used_in.entry(item_id).or_default().push(ref_value.clone());
-        }
-        for item_id in output_item_ids {
-            produced_by
-                .entry(item_id)
-                .or_default()
-                .push(ref_value.clone());
-        }
-        if debug_json {
-            recipe_pack.push(recipe.clone());
-        }
+            for item_id in input_item_ids {
+                used_in.entry(item_id).or_default().push(ref_value.clone());
+            }
+            for item_id in output_item_ids {
+                produced_by
+                    .entry(item_id)
+                    .or_default()
+                    .push(ref_value.clone());
+            }
+            if debug_json {
+                recipe_pack.push(recipe_value);
+            }
+            Ok(())
+        })?;
+    }
+
+    if strict && expected_recipe_count.is_some_and(|expected| expected != recipe_count as u64) {
+        return Err(anyhow!(
+            "recipe compiler blocked: recipe count mismatch {} != {}",
+            recipe_count,
+            expected_recipe_count.unwrap_or_default()
+        ));
     }
 
     let mut item_ids = produced_by
@@ -307,61 +418,63 @@ pub fn compile_recipe_pack(
     )?;
     let recipes_dir = output.join("recipes");
     fs::create_dir_all(&recipes_dir)?;
-    write_json_value(
+    write_json_serializable(
         &recipes_dir.join("handler-index.json"),
-        &json!({
-            "schemaVersion": "neonei/recipe-handler-index/v1",
-            "handlers": public_handlers.clone(),
-        }),
+        &HandlerIndexDocument {
+            schema_version: "neonei/recipe-handler-index/v1",
+            handlers: &public_handlers,
+        },
     )?;
-    write_json_value(
+    write_json_serializable(
         &recipes_dir.join("handler-layout-index.json"),
-        &json!({
-            "schemaVersion": "neonei/recipe-handler-layout-index/v1",
-            "layouts": public_layouts.clone(),
-        }),
+        &HandlerLayoutIndexDocument {
+            schema_version: "neonei/recipe-handler-layout-index/v1",
+            layouts: &public_layouts,
+        },
     )?;
-    write_json_value(
+    write_json_serializable(
         &recipes_dir.join("recipe-category-index.json"),
-        &json!({
-            "schemaVersion": "neonei/recipe-category-index/v1",
-            "categories": category_index.clone(),
-        }),
+        &RecipeCategoryIndexDocument {
+            schema_version: "neonei/recipe-category-index/v1",
+            categories: &category_index,
+        },
     )?;
-    write_json_value(
+    write_json_serializable(
         &recipes_dir.join("item-index.json"),
-        &json!({
-            "schemaVersion": "neonei/recipe-item-index/v1",
-            "items": item_index.clone(),
-        }),
+        &RecipeItemIndexDocument {
+            schema_version: "neonei/recipe-item-index/v1",
+            items: &item_index,
+        },
     )?;
-    write_json_value(
+    write_json_serializable(
         &recipes_dir.join("ui-payload-index.json"),
-        &json!({
-            "schemaVersion": "neonei/recipe-ui-payload-index/v1",
-            "recipes": ui_payload_index.clone(),
-        }),
+        &RecipeUiPayloadIndexDocument {
+            schema_version: "neonei/recipe-ui-payload-index/v1",
+            recipes: &ui_payload_index,
+        },
     )?;
     ui_payload_shards.finish()?;
-    let recipe_output_pack = json!({
-        "schemaVersion": "neonei/rust-recipe-pack/current",
-        "counts": {
-            "recipes": recipe_count,
-            "handlers": handler_count,
-            "recipeItemIndexItems": item_index.len(),
-            "uiPayloadIndexItems": ui_payload_index.len(),
-            "categories": category_index.len(),
-        },
-        "recipes": recipe_pack,
-        "handlers": handler_pack,
-        "itemIndex": item_index,
-        "uiPayloadIndex": ui_payload_index,
-        "categoryIndex": category_index,
-    });
     if debug_json {
-        write_json_value(&rust_dir.join("recipe-pack.json"), &recipe_output_pack)?;
+        let handler_pack = public_handlers.clone();
+        let debug_pack = RecipeOutputDebugPack {
+            schema_version: "neonei/rust-recipe-pack/current",
+            counts: RecipeOutputCounts {
+                recipes: recipe_count,
+                handlers: handler_count,
+                recipe_item_index_items: item_index.len(),
+                ui_payload_index_items: ui_payload_index.len(),
+                categories: category_index.len(),
+            },
+            recipes: &recipe_pack,
+            handlers: &handler_pack,
+            item_index: &item_index,
+            ui_payload_index: &ui_payload_index,
+            category_index: &category_index,
+        };
+        write_json_serializable(&rust_dir.join("recipe-pack.json"), &debug_pack)?;
     }
-    let compact_recipe_payload = build_compact_recipe_payload_from_pack(&recipe_output_pack)?;
+    let compact_recipe_payload =
+        build_compact_recipe_payload(&item_index, &ui_payload_index, &category_index)?;
     write_binary_pack_payload(
         &rust_dir.join("recipes.bin"),
         "neonei/recipe-pack/current",
@@ -425,6 +538,29 @@ pub fn compile_dist_recipe_pack(
 }
 
 pub fn build_compact_recipe_payload_from_pack(pack: &Value) -> Result<Vec<u8>> {
+    let item_index = pack
+        .get("itemIndex")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let ui_payload_index = pack
+        .get("uiPayloadIndex")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let category_index = pack
+        .get("categoryIndex")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    build_compact_recipe_payload(item_index, ui_payload_index, category_index)
+}
+
+pub fn build_compact_recipe_payload(
+    item_index: &[Value],
+    ui_payload_index: &[Value],
+    category_index: &[Value],
+) -> Result<Vec<u8>> {
     let mut strings = vec![String::new()];
     let mut string_refs = HashMap::new();
     string_refs.insert(String::new(), 0u32);
@@ -434,12 +570,7 @@ pub fn build_compact_recipe_payload_from_pack(pack: &Value) -> Result<Vec<u8>> {
     let mut category_rows = Vec::<[u32; 7]>::new();
     let mut category_sources = Vec::<u32>::new();
 
-    for item in pack
-        .get("itemIndex")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-    {
+    for item in item_index {
         let produced_start = ref_rows.len() as u32;
         for recipe_ref in item
             .get("producedBy")
@@ -501,12 +632,7 @@ pub fn build_compact_recipe_payload_from_pack(pack: &Value) -> Result<Vec<u8>> {
         ]);
     }
 
-    for entry in pack
-        .get("uiPayloadIndex")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-    {
+    for entry in ui_payload_index {
         ui_rows.push([
             intern_compact_string(
                 &mut strings,
@@ -542,12 +668,7 @@ pub fn build_compact_recipe_payload_from_pack(pack: &Value) -> Result<Vec<u8>> {
         ]);
     }
 
-    for category in pack
-        .get("categoryIndex")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-    {
+    for category in category_index {
         let source_start = category_sources.len() as u32;
         for source in category
             .get("sourceCategoryIds")

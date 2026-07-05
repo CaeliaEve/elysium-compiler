@@ -7,19 +7,55 @@ use crate::json_ext::{
     numeric_value_u64, optional_value_string, optional_value_u64, value_string, value_u64,
 };
 use crate::manifest::{
-    read_manifest, read_manifest_collection, read_manifest_json, runtime_file_descriptors,
-    COLLECTION_ANIMATIONS, COLLECTION_BROWSER_ITEMS, COLLECTION_NATIVE_SPRITES,
-    COLLECTION_TEXTURE_ROWS_WITH_MANIFEST,
+    read_manifest, read_manifest_collection, read_manifest_json, resolve_manifest_path,
+    runtime_file_descriptors, RawManifest, COLLECTION_ANIMATIONS, COLLECTION_BROWSER_ITEMS,
+    COLLECTION_NATIVE_SPRITES, COLLECTION_TEXTURE_ROWS_WITH_MANIFEST,
 };
 use crate::texture_animation::{
     expected_animated_item, expected_animation_reason, promote_animation_facts_to_animated_atlas,
 };
 use crate::validation::{validate_atlas_bounds, validate_atlas_ref, validate_frame_bounds};
 use anyhow::{anyhow, Context, Result};
+use flate2::read::GzDecoder;
+use serde::Serialize;
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap};
-use std::fs;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::path::Path;
+
+const NATIVE_RENDER_INDEX_PATH: &str = "render/index.json";
+
+#[derive(Clone, Debug, Default)]
+struct NativeRenderIndexStats {
+    texture_sprites: usize,
+    item_renderers: usize,
+    shader_items: usize,
+    framebuffer_captures: usize,
+    item_renderer_by_item_id: usize,
+    shader_by_item_id: usize,
+    sprite_by_icon_name: usize,
+    shader_items_needing_capture: usize,
+    missing_required_captures: usize,
+    required_captures_without_frames: usize,
+    required_captures_without_timeline: usize,
+}
+
+#[derive(Clone, Debug)]
+struct ShaderCaptureRequirement {
+    item_id: String,
+    renderer_kind: Option<String>,
+    renderer_class: Option<String>,
+    shader_family: Option<String>,
+    preferred_export: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct CaptureProbe {
+    frame_count: u64,
+    frames: usize,
+    timeline: usize,
+}
 
 #[derive(Clone, Debug, Default)]
 struct AtlasMetaRow {
@@ -168,6 +204,588 @@ pub fn copy_runtime_atlas_assets(
     Ok(())
 }
 
+fn stable_value_i64(value: Option<&Value>, fallback: i64) -> i64 {
+    value
+        .and_then(|value| {
+            value
+                .as_i64()
+                .or_else(|| value.as_u64().and_then(|value| i64::try_from(value).ok()))
+                .or_else(|| value.as_f64().map(|value| value as i64))
+                .or_else(|| {
+                    value
+                        .as_str()
+                        .and_then(|value| value.parse::<f64>().ok())
+                        .map(|value| value as i64)
+                })
+        })
+        .unwrap_or(fallback)
+}
+
+fn stable_value_u64(value: Option<&Value>, fallback: u64) -> u64 {
+    let parsed = stable_value_i64(value, fallback as i64);
+    if parsed < 0 {
+        fallback
+    } else {
+        parsed as u64
+    }
+}
+
+fn value_bool(value: &Value, key: &str) -> bool {
+    value.get(key).and_then(Value::as_bool).unwrap_or(false)
+}
+
+fn value_or_null(value: &Value, key: &str) -> Value {
+    value.get(key).cloned().unwrap_or(Value::Null)
+}
+
+fn compact_framebuffer_capture(row: &Value) -> Value {
+    json!({
+        "assetId": value_or_null(row, "assetId"),
+        "variantKey": value_or_null(row, "variantKey"),
+        "rendererFamily": value_or_null(row, "rendererFamily"),
+        "renderMode": value_or_null(row, "renderMode"),
+        "animationMode": value_or_null(row, "animationMode"),
+        "captureMethod": value_or_null(row, "captureMethod"),
+        "primaryArtifact": value_or_null(row, "primaryArtifact"),
+        "framePattern": value_or_null(row, "framePattern"),
+        "frameCount": stable_value_u64(
+            row.get("frameCount"),
+            stable_value_u64(row.get("capturedFrameCount"), 0),
+        ),
+        "frameDurationMs": stable_value_u64(row.get("frameDurationMs"), 50),
+        "timeline": row.get("timeline").and_then(Value::as_array).cloned().unwrap_or_default(),
+        "frames": row.get("frames").and_then(Value::as_array).cloned().unwrap_or_default(),
+    })
+}
+
+fn normalize_animation_timeline(
+    source_timeline: Option<&Value>,
+    frame_count: u64,
+    fallback_duration_ms: u64,
+) -> Vec<Value> {
+    let normalize_frame_index = |value: Option<&Value>, index: usize| -> u64 {
+        let raw_index = stable_value_i64(value, index as i64);
+        if raw_index < 0 {
+            return index as u64;
+        }
+        let raw_index = raw_index as u64;
+        if frame_count > 0 && raw_index >= frame_count {
+            raw_index % frame_count
+        } else {
+            raw_index
+        }
+    };
+    if let Some(timeline) = source_timeline
+        .and_then(Value::as_array)
+        .filter(|value| !value.is_empty())
+    {
+        return timeline
+            .iter()
+            .enumerate()
+            .filter_map(|(index, frame)| {
+                let (frame_index, duration_ms) = if let Some(values) = frame.as_array() {
+                    (
+                        normalize_frame_index(values.first(), index),
+                        stable_value_u64(values.get(1), fallback_duration_ms),
+                    )
+                } else {
+                    (
+                        normalize_frame_index(
+                            frame.get("frameIndex").or_else(|| frame.get("index")),
+                            index,
+                        ),
+                        stable_value_u64(
+                            frame
+                                .get("durationMs")
+                                .or_else(|| frame.get("duration"))
+                                .or_else(|| frame.get("timeMs")),
+                            fallback_duration_ms,
+                        ),
+                    )
+                };
+                Some(json!({
+                    "frameIndex": frame_index,
+                    "durationMs": duration_ms.max(16),
+                }))
+            })
+            .collect();
+    }
+    (0..frame_count)
+        .map(|index| {
+            json!({
+                "frameIndex": index,
+                "durationMs": fallback_duration_ms.max(16),
+            })
+        })
+        .collect()
+}
+
+fn capture_probe_for_item_id<'a>(
+    item_id: &str,
+    captures_by_asset_id: &'a BTreeMap<String, CaptureProbe>,
+    captures_by_variant_key: &'a BTreeMap<String, CaptureProbe>,
+) -> Option<&'a CaptureProbe> {
+    captures_by_asset_id
+        .get(&format!("nesqlpp:item/{item_id}"))
+        .or_else(|| captures_by_variant_key.get(item_id))
+}
+
+fn read_manifest_jsonl_stream<F>(
+    input: &Path,
+    manifest: &RawManifest,
+    logical_name: &str,
+    mut visitor: F,
+) -> Result<usize>
+where
+    F: FnMut(Value) -> Result<()>,
+{
+    let Some(path) = resolve_manifest_path(input, manifest, logical_name) else {
+        return Ok(0);
+    };
+    let file = File::open(&path).with_context(|| format!("open {}", path.display()))?;
+    let reader: Box<dyn Read> = if path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("gz"))
+    {
+        Box::new(GzDecoder::new(file))
+    } else {
+        Box::new(file)
+    };
+    let buf = BufReader::new(reader);
+    let mut count = 0usize;
+    for (index, line) in buf.lines().enumerate() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let value = serde_json::from_str::<Value>(&line)
+            .with_context(|| format!("parse {} line {}", path.display(), index + 1))?;
+        visitor(value)?;
+        count += 1;
+    }
+    Ok(count)
+}
+
+fn write_json_field_name<W: Write>(writer: &mut W, first: &mut bool, key: &str) -> Result<()> {
+    if !*first {
+        writer.write_all(b",")?;
+    }
+    *first = false;
+    serde_json::to_writer(&mut *writer, key)?;
+    writer.write_all(b":")?;
+    Ok(())
+}
+
+fn write_json_field<W: Write, T: Serialize + ?Sized>(
+    writer: &mut W,
+    first: &mut bool,
+    key: &str,
+    value: &T,
+) -> Result<()> {
+    write_json_field_name(writer, first, key)?;
+    serde_json::to_writer(writer, value)?;
+    Ok(())
+}
+
+fn write_json_map_entry<W: Write>(
+    writer: &mut W,
+    first: &mut bool,
+    key: &str,
+    value: &Value,
+) -> Result<()> {
+    if !*first {
+        writer.write_all(b",")?;
+    }
+    *first = false;
+    serde_json::to_writer(&mut *writer, key)?;
+    writer.write_all(b":")?;
+    serde_json::to_writer(writer, value)?;
+    Ok(())
+}
+
+fn compact_item_renderer_entry(row: &Value) -> Value {
+    json!({
+        "rendererClass": value_or_null(row, "rendererClass"),
+        "rendererKind": value_or_null(row, "rendererKind"),
+        "usesShader": value_bool(row, "usesShader"),
+        "requiresFramebufferCapture": value_bool(row, "requiresFramebufferCapture"),
+        "supportsNativeAtlas": value_bool(row, "supportsNativeAtlas"),
+        "stackResolved": value_bool(row, "stackResolved"),
+        "hasNbt": value_bool(row, "hasNbt"),
+    })
+}
+
+fn compact_shader_item_entry(row: &Value) -> Value {
+    json!({
+        "rendererKind": value_or_null(row, "rendererKind"),
+        "rendererClass": value_or_null(row, "rendererClass"),
+        "shaderFamily": value_or_null(row, "shaderFamily"),
+        "timeSource": value_or_null(row, "timeSource"),
+        "captureRequired": value_bool(row, "captureRequired"),
+        "preferredExport": value_or_null(row, "preferredExport"),
+        "browserReimplementationAllowed": value_bool(row, "browserReimplementationAllowed"),
+    })
+}
+
+fn compact_sprite_entry(row: &Value) -> Value {
+    let frame_count = stable_value_u64(row.get("frameCount"), 1);
+    let fallback_duration_ms = stable_value_u64(row.get("defaultFrameTimeTicks"), 1) * 50;
+    json!({
+        "atlas": value_or_null(row, "atlas"),
+        "spriteKey": value_or_null(row, "spriteKey"),
+        "iconName": value_or_null(row, "iconName"),
+        "spriteClass": value_or_null(row, "spriteClass"),
+        "originX": stable_value_i64(row.get("originX"), -1),
+        "originY": stable_value_i64(row.get("originY"), -1),
+        "width": stable_value_i64(row.get("width"), -1),
+        "height": stable_value_i64(row.get("height"), -1),
+        "animated": value_bool(row, "animated"),
+        "frameCount": frame_count,
+        "defaultFrameTimeTicks": value_or_null(row, "defaultFrameTimeTicks"),
+        "metadataFrameCount": value_or_null(row, "metadataFrameCount"),
+        "interpolate": value_bool(row, "interpolate"),
+        "timeline": normalize_animation_timeline(row.get("timeline"), frame_count, fallback_duration_ms),
+    })
+}
+
+fn capture_probe_from_compact(capture: &Value) -> CaptureProbe {
+    CaptureProbe {
+        frame_count: stable_value_u64(capture.get("frameCount"), 0),
+        frames: capture
+            .get("frames")
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or(0),
+        timeline: capture
+            .get("timeline")
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or(0),
+    }
+}
+
+fn capture_sample_requirement(
+    requirement: &ShaderCaptureRequirement,
+    capture: Option<&CaptureProbe>,
+) -> Value {
+    json!({
+        "itemId": requirement.item_id,
+        "expectedAssetId": format!("nesqlpp:item/{}", requirement.item_id),
+        "rendererKind": requirement.renderer_kind,
+        "rendererClass": requirement.renderer_class,
+        "shaderFamily": requirement.shader_family,
+        "preferredExport": requirement.preferred_export,
+        "capture": capture.map(|capture| json!({
+            "frameCount": capture.frame_count,
+            "frames": capture.frames,
+            "timeline": capture.timeline,
+        })).unwrap_or(Value::Null),
+    })
+}
+
+fn native_render_validation(
+    shader_requirements: &[ShaderCaptureRequirement],
+    framebuffer_capture_count: usize,
+    captures_by_asset_id: &BTreeMap<String, CaptureProbe>,
+    captures_by_variant_key: &BTreeMap<String, CaptureProbe>,
+    stats: &mut NativeRenderIndexStats,
+) -> Value {
+    let mut missing_required_captures = Vec::new();
+    let mut required_captures_without_frames = Vec::new();
+    let mut required_captures_without_timeline = Vec::new();
+    for requirement in shader_requirements {
+        let capture = capture_probe_for_item_id(
+            &requirement.item_id,
+            captures_by_asset_id,
+            captures_by_variant_key,
+        );
+        match capture {
+            None => missing_required_captures.push(requirement),
+            Some(capture) if capture.frames == 0 => {
+                required_captures_without_frames.push((requirement, capture));
+            }
+            Some(capture) if capture.frame_count > 1 && capture.timeline == 0 => {
+                required_captures_without_timeline.push((requirement, capture));
+            }
+            _ => {}
+        }
+    }
+
+    stats.shader_items_needing_capture = shader_requirements.len();
+    stats.missing_required_captures = missing_required_captures.len();
+    stats.required_captures_without_frames = required_captures_without_frames.len();
+    stats.required_captures_without_timeline = required_captures_without_timeline.len();
+    let capture_gate_ready = missing_required_captures.is_empty()
+        && required_captures_without_frames.is_empty()
+        && required_captures_without_timeline.is_empty();
+    let summary = if shader_requirements.is_empty() {
+        "No shader/custom renderer capture is required by the export.".to_string()
+    } else {
+        format!(
+            "{} shader/custom renderer item(s) require capture; {} capture asset(s) compiled; missing={}; withoutFrames={}; withoutTimeline={}.",
+            shader_requirements.len(),
+            framebuffer_capture_count,
+            missing_required_captures.len(),
+            required_captures_without_frames.len(),
+            required_captures_without_timeline.len()
+        )
+    };
+    let sample_limit = 20usize;
+    json!({
+        "status": if shader_requirements.is_empty() || capture_gate_ready { "ready" } else { "blocked" },
+        "shaderItemsNeedingCapture": shader_requirements.len(),
+        "framebufferCaptures": framebuffer_capture_count,
+        "missingRequiredCaptures": missing_required_captures.len(),
+        "requiredCapturesWithoutFrames": required_captures_without_frames.len(),
+        "requiredCapturesWithoutTimeline": required_captures_without_timeline.len(),
+        "samples": {
+            "missingRequiredCaptures": missing_required_captures
+                .iter()
+                .take(sample_limit)
+                .map(|requirement| capture_sample_requirement(requirement, None))
+                .collect::<Vec<_>>(),
+            "requiredCapturesWithoutFrames": required_captures_without_frames
+                .iter()
+                .take(sample_limit)
+                .map(|(requirement, capture)| capture_sample_requirement(requirement, Some(capture)))
+                .collect::<Vec<_>>(),
+            "requiredCapturesWithoutTimeline": required_captures_without_timeline
+                .iter()
+                .take(sample_limit)
+                .map(|(requirement, capture)| capture_sample_requirement(requirement, Some(capture)))
+                .collect::<Vec<_>>(),
+        },
+        "summary": summary,
+    })
+}
+
+fn write_native_render_index(
+    input: &Path,
+    manifest: &RawManifest,
+    output: &Path,
+) -> Result<NativeRenderIndexStats> {
+    let native_render_path = output.join(NATIVE_RENDER_INDEX_PATH);
+    if let Some(parent) = native_render_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let file = File::create(&native_render_path)
+        .with_context(|| format!("create {}", native_render_path.display()))?;
+    let mut writer = BufWriter::new(file);
+    let backend = read_manifest_json(input, manifest, "renderBackend")?.unwrap_or(Value::Null);
+    let mut stats = NativeRenderIndexStats::default();
+
+    writer.write_all(b"{")?;
+    let mut field_first = true;
+    write_json_field(
+        &mut writer,
+        &mut field_first,
+        "schemaVersion",
+        "neonei/native-render-index/v1",
+    )?;
+    write_json_field(&mut writer, &mut field_first, "backend", &backend)?;
+
+    write_json_field_name(&mut writer, &mut field_first, "itemRendererByItemId")?;
+    writer.write_all(b"{")?;
+    let mut map_first = true;
+    let mut item_renderer_keys = HashSet::<String>::new();
+    stats.item_renderers =
+        read_manifest_jsonl_stream(input, manifest, "renderItemRenderers", |row| {
+            let Some(item_id) = value_string(&row, "itemId") else {
+                return Ok(());
+            };
+            if item_renderer_keys.insert(item_id.clone()) {
+                write_json_map_entry(
+                    &mut writer,
+                    &mut map_first,
+                    &item_id,
+                    &compact_item_renderer_entry(&row),
+                )?;
+            }
+            Ok(())
+        })?;
+    stats.item_renderer_by_item_id = item_renderer_keys.len();
+    writer.write_all(b"}")?;
+
+    write_json_field_name(&mut writer, &mut field_first, "shaderByItemId")?;
+    writer.write_all(b"{")?;
+    let mut map_first = true;
+    let mut shader_keys = HashSet::<String>::new();
+    let mut shader_requirements = Vec::<ShaderCaptureRequirement>::new();
+    stats.shader_items = read_manifest_jsonl_stream(input, manifest, "renderShaderItems", |row| {
+        let Some(item_id) = value_string(&row, "itemId") else {
+            return Ok(());
+        };
+        if value_bool(&row, "captureRequired") {
+            shader_requirements.push(ShaderCaptureRequirement {
+                item_id: item_id.clone(),
+                renderer_kind: value_string(&row, "rendererKind"),
+                renderer_class: value_string(&row, "rendererClass"),
+                shader_family: value_string(&row, "shaderFamily"),
+                preferred_export: value_string(&row, "preferredExport"),
+            });
+        }
+        if shader_keys.insert(item_id.clone()) {
+            write_json_map_entry(
+                &mut writer,
+                &mut map_first,
+                &item_id,
+                &compact_shader_item_entry(&row),
+            )?;
+        }
+        Ok(())
+    })?;
+    stats.shader_by_item_id = shader_keys.len();
+    writer.write_all(b"}")?;
+
+    write_json_field_name(&mut writer, &mut field_first, "capturesByAssetId")?;
+    writer.write_all(b"{")?;
+    let mut map_first = true;
+    let mut capture_asset_keys = HashSet::<String>::new();
+    let mut captures_by_asset_id = BTreeMap::<String, CaptureProbe>::new();
+    let mut captures_by_variant_key = BTreeMap::<String, CaptureProbe>::new();
+    stats.framebuffer_captures =
+        read_manifest_jsonl_stream(input, manifest, "renderFramebufferCaptures", |row| {
+            let compact = compact_framebuffer_capture(&row);
+            let probe = capture_probe_from_compact(&compact);
+            if let Some(asset_id) = value_string(&compact, "assetId") {
+                captures_by_asset_id.insert(asset_id.clone(), probe.clone());
+                if capture_asset_keys.insert(asset_id.clone()) {
+                    write_json_map_entry(&mut writer, &mut map_first, &asset_id, &compact)?;
+                }
+            }
+            if let Some(variant_key) = value_string(&compact, "variantKey") {
+                captures_by_variant_key.insert(variant_key, probe);
+            }
+            Ok(())
+        })?;
+    writer.write_all(b"}")?;
+
+    write_json_field_name(&mut writer, &mut field_first, "capturesByVariantKey")?;
+    writer.write_all(b"{")?;
+    let mut map_first = true;
+    let mut capture_variant_keys = HashSet::<String>::new();
+    read_manifest_jsonl_stream(input, manifest, "renderFramebufferCaptures", |row| {
+        let compact = compact_framebuffer_capture(&row);
+        let Some(variant_key) = value_string(&compact, "variantKey") else {
+            return Ok(());
+        };
+        if capture_variant_keys.insert(variant_key.clone()) {
+            write_json_map_entry(&mut writer, &mut map_first, &variant_key, &compact)?;
+        }
+        Ok(())
+    })?;
+    writer.write_all(b"}")?;
+
+    write_json_field_name(&mut writer, &mut field_first, "spriteByIconName")?;
+    writer.write_all(b"{")?;
+    let mut map_first = true;
+    let mut sprite_keys = HashSet::<String>::new();
+    stats.texture_sprites =
+        read_manifest_jsonl_stream(input, manifest, "renderTextureSprites", |row| {
+            let Some(key) =
+                value_string(&row, "iconName").or_else(|| value_string(&row, "spriteKey"))
+            else {
+                return Ok(());
+            };
+            if sprite_keys.insert(key.clone()) {
+                write_json_map_entry(
+                    &mut writer,
+                    &mut map_first,
+                    &key,
+                    &compact_sprite_entry(&row),
+                )?;
+            }
+            Ok(())
+        })?;
+    stats.sprite_by_icon_name = sprite_keys.len();
+    writer.write_all(b"}")?;
+
+    let validation = native_render_validation(
+        &shader_requirements,
+        stats.framebuffer_captures,
+        &captures_by_asset_id,
+        &captures_by_variant_key,
+        &mut stats,
+    );
+    write_json_field(
+        &mut writer,
+        &mut field_first,
+        "counts",
+        &json!({
+            "textureSprites": stats.texture_sprites,
+            "itemRenderers": stats.item_renderers,
+            "shaderItems": stats.shader_items,
+            "framebufferCaptures": stats.framebuffer_captures,
+            "itemRendererByItemId": stats.item_renderer_by_item_id,
+            "shaderByItemId": stats.shader_by_item_id,
+            "spriteByIconName": stats.sprite_by_icon_name,
+        }),
+    )?;
+    write_json_field(&mut writer, &mut field_first, "validation", &validation)?;
+    writer.write_all(b"}\n")?;
+    writer
+        .flush()
+        .with_context(|| format!("write {}", native_render_path.display()))?;
+    Ok(stats)
+}
+
+fn copy_or_write_empty_native_render_index(
+    input: &Path,
+    manifest: &RawManifest,
+    output: &Path,
+) -> Result<()> {
+    let native_render_path = output.join(NATIVE_RENDER_INDEX_PATH);
+    if let Some(parent) = native_render_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    if let Some(source_path) =
+        resolve_manifest_path(input, manifest, "nativeRenderIndex").filter(|path| path.is_file())
+    {
+        fs::copy(&source_path, &native_render_path).with_context(|| {
+            format!(
+                "copy native render index {} -> {}",
+                source_path.display(),
+                native_render_path.display()
+            )
+        })?;
+        return Ok(());
+    }
+    let empty_index = json!({
+        "schemaVersion": "neonei/native-render-index/v1",
+        "backend": Value::Null,
+        "counts": {
+            "textureSprites": 0,
+            "itemRenderers": 0,
+            "shaderItems": 0,
+            "framebufferCaptures": 0,
+            "itemRendererByItemId": 0,
+            "shaderByItemId": 0,
+            "spriteByIconName": 0,
+        },
+        "itemRendererByItemId": {},
+        "shaderByItemId": {},
+        "capturesByAssetId": {},
+        "capturesByVariantKey": {},
+        "spriteByIconName": {},
+        "validation": {
+            "status": "ready",
+            "shaderItemsNeedingCapture": 0,
+            "framebufferCaptures": 0,
+            "missingRequiredCaptures": 0,
+            "requiredCapturesWithoutFrames": 0,
+            "requiredCapturesWithoutTimeline": 0,
+            "samples": {
+                "missingRequiredCaptures": [],
+                "requiredCapturesWithoutFrames": [],
+                "requiredCapturesWithoutTimeline": [],
+            },
+            "summary": "No shader/custom renderer capture is required by the export.",
+        },
+    });
+    write_json_value(&native_render_path, &empty_index)
+}
+
 pub fn compile_texture_pack(
     input: &Path,
     output: &Path,
@@ -185,21 +803,36 @@ pub fn compile_texture_pack(
     let texture_rows =
         read_manifest_collection(input, &manifest, COLLECTION_TEXTURE_ROWS_WITH_MANIFEST)?;
     let item_rows = read_manifest_collection(input, &manifest, COLLECTION_BROWSER_ITEMS)?;
+    let animation_count = animations.len();
+    let native_sprite_count = native_sprites.len();
+    let texture_row_count = texture_rows.len();
 
     let animation_by_asset = animations
         .iter()
         .filter_map(|row| Some((value_string(row, "assetId")?, row.clone())))
         .collect::<BTreeMap<_, _>>();
+    drop(animations);
     let native_sprite_by_asset = native_sprites
         .iter()
         .filter_map(|row| Some((value_string(row, "assetId")?, row.clone())))
         .collect::<BTreeMap<_, _>>();
-    let texture_by_asset = texture_rows
-        .iter()
-        .filter_map(|row| Some((value_string(row, "assetId")?, row.clone())))
-        .collect::<BTreeMap<_, _>>();
+    drop(native_sprites);
+    let texture_by_asset = if debug_json {
+        Some(
+            texture_rows
+                .iter()
+                .filter_map(|row| Some((value_string(row, "assetId")?, row.clone())))
+                .collect::<BTreeMap<_, _>>(),
+        )
+    } else {
+        None
+    };
 
     let atlas = repaired_browser_atlas(&atlas, &texture_rows, &item_rows);
+    drop(item_rows);
+    if !debug_json {
+        drop(texture_rows);
+    }
     let atlas = promote_animation_facts_to_animated_atlas(
         &atlas,
         &animation_by_asset,
@@ -210,6 +843,7 @@ pub fn compile_texture_pack(
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
+    let debug_atlas = if debug_json { Some(atlas) } else { None };
 
     let mut static_items = 0u64;
     let mut animated_items = 0u64;
@@ -219,7 +853,11 @@ pub fn compile_texture_pack(
     let mut invalid_frame_bounds = Vec::new();
     let mut actionable_texture_issues = Vec::new();
     let mut animation_table = Vec::new();
-    let mut atlas_map = BTreeMap::new();
+    let mut atlas_map = if debug_json {
+        Some(BTreeMap::new())
+    } else {
+        None
+    };
 
     for item in &atlas_items {
         let item_id = value_string(item, "itemId").unwrap_or_default();
@@ -313,14 +951,21 @@ pub fn compile_texture_pack(
                     .unwrap_or(Value::Null),
             }));
         }
-        atlas_map.insert(
-            item_id,
-            json!({
-                "assetId": asset_id,
-                "atlas": item,
-                "texture": texture_by_asset.get(&asset_id).cloned().unwrap_or(Value::Null),
-            }),
-        );
+        if let Some(atlas_map) = atlas_map.as_mut() {
+            let texture = texture_by_asset
+                .as_ref()
+                .and_then(|values| values.get(&asset_id))
+                .cloned()
+                .unwrap_or(Value::Null);
+            atlas_map.insert(
+                item_id,
+                json!({
+                    "assetId": asset_id,
+                    "atlas": item,
+                    "texture": texture,
+                }),
+            );
+        }
     }
     copy_runtime_atlas_assets(input, output, &atlas_items, &mut missing_atlas_asset_files)?;
 
@@ -341,31 +986,7 @@ pub fn compile_texture_pack(
 
     let rust_dir = output.join("rust");
     fs::create_dir_all(&rust_dir)?;
-    let texture_output_pack = json!({
-        "schemaVersion": "neonei/rust-texture-pack/current",
-        "counts": {
-            "atlasItems": atlas_items.len(),
-            "staticAtlasItems": static_items,
-            "animatedAtlasItems": animated_items,
-            "animationRows": animations.len(),
-            "nativeSpriteRows": native_sprites.len(),
-            "textureRows": texture_rows.len(),
-            "missingAtlasFileRefs": missing_atlas_file_refs.len(),
-            "missingAtlasAssetFiles": missing_atlas_asset_files.len(),
-            "invalidAtlasBounds": invalid_atlas_bounds.len(),
-            "invalidFrameBounds": invalid_frame_bounds.len(),
-            "atlasMapItems": atlas_map.len(),
-        },
-        "atlas": atlas,
-        "atlasMap": atlas_map,
-        "animationTable": animation_table,
-        "validation": {
-            "missingAtlasFileRefs": missing_atlas_file_refs.clone(),
-            "missingAtlasAssetFiles": missing_atlas_asset_files.clone(),
-            "invalidAtlasBounds": invalid_atlas_bounds.clone(),
-            "invalidFrameBounds": invalid_frame_bounds.clone(),
-        },
-    });
+    let native_render_stats = write_native_render_index(input, &manifest, output)?;
     let texture_report_status = if actionable_texture_issues.is_empty()
         && missing_atlas_file_refs.is_empty()
         && missing_atlas_asset_files.is_empty()
@@ -422,6 +1043,37 @@ pub fn compile_texture_pack(
         &suspicious_texture_report,
     )?;
     if debug_json {
+        let atlas_map = atlas_map.unwrap_or_default();
+        let texture_output_pack = json!({
+            "schemaVersion": "neonei/rust-texture-pack/current",
+            "counts": {
+                "atlasItems": atlas_items.len(),
+                "staticAtlasItems": static_items,
+                "animatedAtlasItems": animated_items,
+                "animationRows": animation_count,
+                "nativeSpriteRows": native_sprite_count,
+                "textureRows": texture_row_count,
+                "missingAtlasFileRefs": suspicious_texture_report["counts"]["missingAtlasFileRefs"].clone(),
+                "missingAtlasAssetFiles": suspicious_texture_report["counts"]["missingAtlasAssetFiles"].clone(),
+                "invalidAtlasBounds": suspicious_texture_report["counts"]["invalidAtlasBounds"].clone(),
+                "invalidFrameBounds": suspicious_texture_report["counts"]["invalidFrameBounds"].clone(),
+                "atlasMapItems": atlas_map.len(),
+                "renderTextureSprites": native_render_stats.texture_sprites,
+                "renderItemRenderers": native_render_stats.item_renderers,
+                "renderShaderItems": native_render_stats.shader_items,
+                "renderFramebufferCaptures": native_render_stats.framebuffer_captures,
+            },
+            "atlas": debug_atlas.as_ref().unwrap_or(&Value::Null),
+            "atlasMap": atlas_map,
+            "animationTable": &animation_table,
+            "nativeRenderIndexPath": NATIVE_RENDER_INDEX_PATH,
+            "validation": {
+                "missingAtlasFileRefs": suspicious_texture_report["missingAtlasFileRefs"].clone(),
+                "missingAtlasAssetFiles": suspicious_texture_report["missingAtlasAssetFiles"].clone(),
+                "invalidAtlasBounds": suspicious_texture_report["invalidAtlasBounds"].clone(),
+                "invalidFrameBounds": suspicious_texture_report["invalidFrameBounds"].clone(),
+            },
+        });
         write_json_value(&rust_dir.join("texture-pack.json"), &texture_output_pack)?;
     }
     let texture_payload = build_compact_texture_payload_from_atlas_items(&atlas_items)?;
@@ -493,6 +1145,7 @@ pub fn compile_dist_texture_pack(
 
     let rust_dir = output.join("rust");
     fs::create_dir_all(&rust_dir)?;
+    copy_or_write_empty_native_render_index(input, &manifest, output)?;
     if debug_json {
         write_json_value(&rust_dir.join("texture-pack.json"), &texture_pack)?;
     }
@@ -560,10 +1213,10 @@ pub fn build_compact_animation_payload_from_table(animation_table: &[Value]) -> 
     let mut rows = Vec::<[u32; 5]>::new();
     let mut frames = Vec::<[u32; 2]>::new();
 
-    let mut sorted_animations = animation_table.to_vec();
-    sorted_animations.sort_by_key(|left| value_string(left, "itemId"));
+    let mut sorted_animations = animation_table.iter().collect::<Vec<_>>();
+    sorted_animations.sort_by_key(|left| value_string(*left, "itemId"));
 
-    for animation in &sorted_animations {
+    for animation in sorted_animations {
         let item_id = intern_compact_string(
             &mut strings,
             &mut string_refs,
@@ -646,10 +1299,10 @@ pub fn build_compact_texture_payload_from_atlas_items(atlas_items: &[Value]) -> 
     let mut rows = Vec::<[u32; 10]>::new();
     let mut frames = Vec::<[u32; 5]>::new();
 
-    let mut sorted_items = atlas_items.to_vec();
-    sorted_items.sort_by_key(|left| value_string(left, "itemId"));
+    let mut sorted_items = atlas_items.iter().collect::<Vec<_>>();
+    sorted_items.sort_by_key(|left| value_string(*left, "itemId"));
 
-    for item in &sorted_items {
+    for item in sorted_items {
         let item_id =
             intern_compact_string(&mut strings, &mut string_refs, value_string(item, "itemId"));
         let static_atlas = item.get("staticAtlas").filter(|value| value.is_object());
@@ -669,19 +1322,19 @@ pub fn build_compact_texture_payload_from_atlas_items(atlas_items: &[Value]) -> 
             optional_value_u64(animated_atlas, "frameDurationMs").unwrap_or(0) as u32;
 
         if let Some(animated_atlas) = animated_atlas {
-            let frame_values = animated_atlas
-                .get("frames")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default();
             let timeline = normalize_timeline(
                 Some(animated_atlas),
                 optional_value_u64(Some(animated_atlas), "frameDurationMs"),
             );
-            let timeline_values = timeline.as_array().cloned().unwrap_or_default();
-            for (index, frame) in frame_values.iter().enumerate() {
+            let timeline_values = timeline.as_array();
+            let frame_values = animated_atlas
+                .get("frames")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten();
+            for (index, frame) in frame_values.enumerate() {
                 let duration_ms = timeline_values
-                    .get(index)
+                    .and_then(|values| values.get(index))
                     .and_then(|value| value_u64(value, "durationMs"))
                     .unwrap_or(frame_duration_ms as u64)
                     .max(16) as u32;

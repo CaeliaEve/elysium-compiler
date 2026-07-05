@@ -239,6 +239,14 @@ pub const RUNTIME_PACK_ARTIFACT_SPECS: &[RuntimeArtifactSpec] = &[
         PRODUCER_TEXTURE,
     ),
     RuntimeArtifactSpec::new(
+        "nativeRenderIndex",
+        "render/index.json",
+        RuntimeArtifactKind::Manifest,
+        false,
+        SCOPE_ALL_TEXTURES,
+        PRODUCER_TEXTURE,
+    ),
+    RuntimeArtifactSpec::new(
         "rustStringsZhCnBin",
         "rust/strings.zh_cn.bin",
         RuntimeArtifactKind::BinaryPack,

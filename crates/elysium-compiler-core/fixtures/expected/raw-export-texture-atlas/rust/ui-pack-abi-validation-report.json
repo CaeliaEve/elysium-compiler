@@ -142,14 +142,14 @@
       "version": null
     },
     {
-      "bytes": 2586,
+      "bytes": 2672,
       "envelopeSchema": null,
       "kind": "report",
       "logicalName": "rustUiPackReport",
       "path": "rust/ui-pack/ui_pack_report.json",
       "payloadMagic": null,
       "sections": [],
-      "sha256": "920d6530fb53a69789248a73399515236672de4aaeb9d845e75448d6552ef693",
+      "sha256": "6bac9408dff48a436e1fd87d68564daffa2d2f3c2a0159a9530bde3acd826b70",
       "status": "present",
       "version": null
     }

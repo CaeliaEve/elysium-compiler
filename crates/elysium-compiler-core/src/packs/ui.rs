@@ -3,8 +3,8 @@ use crate::io::write_json_value;
 use crate::json_ext::{value_i64, value_string, value_u64};
 use crate::manifest::{read_manifest, read_manifest_json};
 use crate::native_ui_pack_abi::{
-    ui_pack_format_report, NATIVE_UI_ANCHOR, NATIVE_UI_BACKGROUND_SCALING_NINE_SLICE,
-    NATIVE_UI_COORDINATE_SPACE, NATIVE_UI_GT_BACKGROUND_KIND,
+    ui_pack_format_report, NATIVE_UI_ANCHOR, NATIVE_UI_BACKGROUND_KINDS,
+    NATIVE_UI_BACKGROUND_SCALING_NINE_SLICE, NATIVE_UI_COORDINATE_SPACE,
     NATIVE_UI_INTERACTION_KIND_ITEM_CLICK, NATIVE_UI_INTERACTION_KIND_NONE,
     NATIVE_UI_INTERACTION_PAYLOAD_SCHEMA, NATIVE_UI_INTERACTION_TARGET_ITEM,
     NATIVE_UI_INTERACTION_TARGET_NONE, NATIVE_UI_SCALE_MODE, UI_BINDING_MAGIC,
@@ -582,12 +582,13 @@ fn validate_ui_template_background_contracts(templates: &[Value]) -> Result<()> 
                 "{label}.nativeBackground status must be captured or semantic, got {status}"
             ));
         }
-        required_contract_string(
-            background,
-            "kind",
-            NATIVE_UI_GT_BACKGROUND_KIND,
-            &format!("{label}.nativeBackground"),
-        )?;
+        let kind = required_string(background, "kind", &format!("{label}.nativeBackground"))?;
+        if !NATIVE_UI_BACKGROUND_KINDS.contains(&kind.as_str()) {
+            return Err(anyhow!(
+                "{label}.nativeBackground unsupported kind: {}",
+                kind
+            ));
+        }
         required_contract_string(
             background,
             "scaling",

@@ -24,6 +24,10 @@
       "recipeBackgroundOffset",
       "recipeBackgroundSize"
     ],
+    "backgroundKinds": [
+      "gt-modular-ui",
+      "canonical-nei-template"
+    ],
     "dynamicPrimitiveGeometryFields": [
       "kind",
       "role",

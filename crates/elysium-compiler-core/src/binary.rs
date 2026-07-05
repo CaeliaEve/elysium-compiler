@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
-use std::fs;
+use std::fs::File;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 
 pub fn push_u32(bytes: &mut Vec<u8>, value: u32) {
@@ -18,14 +19,17 @@ pub fn write_binary_pack(path: &Path, schema: &str, value: &Value) -> Result<()>
 
 pub fn write_binary_pack_payload(path: &Path, schema: &str, payload: &[u8]) -> Result<()> {
     let schema_bytes = schema.as_bytes();
-    let mut bytes = Vec::with_capacity(24 + schema_bytes.len() + payload.len());
-    bytes.extend_from_slice(b"NNEIBIN\0");
-    bytes.extend_from_slice(&1u32.to_le_bytes());
-    bytes.extend_from_slice(&(schema_bytes.len() as u32).to_le_bytes());
-    bytes.extend_from_slice(&(payload.len() as u64).to_le_bytes());
-    bytes.extend_from_slice(schema_bytes);
-    bytes.extend_from_slice(payload);
-    fs::write(path, bytes).with_context(|| format!("write {}", path.display()))
+    let file = File::create(path).with_context(|| format!("create {}", path.display()))?;
+    let mut writer = BufWriter::new(file);
+    writer.write_all(b"NNEIBIN\0")?;
+    writer.write_all(&1u32.to_le_bytes())?;
+    writer.write_all(&(schema_bytes.len() as u32).to_le_bytes())?;
+    writer.write_all(&(payload.len() as u64).to_le_bytes())?;
+    writer.write_all(schema_bytes)?;
+    writer.write_all(payload)?;
+    writer
+        .flush()
+        .with_context(|| format!("write {}", path.display()))
 }
 
 pub fn intern_compact_string(

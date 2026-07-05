@@ -35,6 +35,11 @@ pub const NATIVE_UI_COORDINATE_SPACE: &str = "nei_pixels";
 pub const NATIVE_UI_ANCHOR: &str = "top-left";
 pub const NATIVE_UI_SCALE_MODE: &str = "uniform-scale";
 pub const NATIVE_UI_GT_BACKGROUND_KIND: &str = "gt-modular-ui";
+pub const NATIVE_UI_CANONICAL_NEI_BACKGROUND_KIND: &str = "canonical-nei-template";
+pub const NATIVE_UI_BACKGROUND_KINDS: &[&str] = &[
+    NATIVE_UI_GT_BACKGROUND_KIND,
+    NATIVE_UI_CANONICAL_NEI_BACKGROUND_KIND,
+];
 pub const NATIVE_UI_BACKGROUND_SCALING_NINE_SLICE: &str = "nine-slice";
 pub const NATIVE_UI_INTERACTION_KIND_NONE: &str = "none";
 pub const NATIVE_UI_INTERACTION_KIND_ITEM_CLICK: &str = "item-click";
@@ -113,6 +118,7 @@ pub fn ui_pack_format_report() -> Value {
         "rectGeometryFields": RECT_GEOMETRY_FIELDS,
         "interactionContractFields": INTERACTION_CONTRACT_FIELDS,
         "backgroundContractFields": BACKGROUND_CONTRACT_FIELDS,
+        "backgroundKinds": NATIVE_UI_BACKGROUND_KINDS,
         "templateBackgroundField": TEMPLATE_BACKGROUND_FIELD,
     })
 }

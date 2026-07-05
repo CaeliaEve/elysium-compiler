@@ -121,13 +121,13 @@
       "status": "present"
     },
     {
-      "bytes": 2586,
+      "bytes": 2672,
       "debugOnly": false,
       "kind": "report",
       "logicalName": "rustUiPackReport",
       "path": "rust/ui-pack/ui_pack_report.json",
       "required": true,
-      "sha256": "920d6530fb53a69789248a73399515236672de4aaeb9d845e75448d6552ef693",
+      "sha256": "6bac9408dff48a436e1fd87d68564daffa2d2f3c2a0159a9530bde3acd826b70",
       "status": "present"
     },
     {
@@ -157,7 +157,7 @@
       "logicalName": "rustUiPackAbiValidationReport",
       "path": "rust/ui-pack-abi-validation-report.json",
       "required": true,
-      "sha256": "6ee345753e55a6075841bc7da495a4422b56a47e57331c8e9f4bc12ac4615ed1",
+      "sha256": "c1659cccdf00340d9ff6246779fd943ef86e5721bd1a2bd7e224516ecf2dd941",
       "status": "present"
     },
     {
