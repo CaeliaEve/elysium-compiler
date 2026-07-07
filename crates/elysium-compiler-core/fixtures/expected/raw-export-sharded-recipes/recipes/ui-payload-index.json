@@ -1,9 +1,21 @@
 {
+  "schemaVersion": "neonei/recipe-ui-payload-index/v1",
   "recipes": [
     {
       "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
       "handlerKey": "gt.recipe.test",
       "machineType": "Test GT Machine",
+      "nativeFrame": {
+        "assetRef": "assets/nei-native-frames/fixture/r_fixture_shard_a.png",
+        "coordinateSpace": "nei_pixels",
+        "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
+        "handlerKey": "gt.recipe.test",
+        "height": 90,
+        "recipeId": "r_fixture_shard_a",
+        "source": "in-game-nei-render",
+        "status": "captured",
+        "width": 176
+      },
       "nativeLayout": {
         "canonicalMachineFamily": "gregtech-machine",
         "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
@@ -67,6 +79,17 @@
       "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
       "handlerKey": "gt.recipe.test",
       "machineType": "Test GT Machine",
+      "nativeFrame": {
+        "assetRef": "assets/nei-native-frames/fixture/r_fixture_shard_b.png",
+        "coordinateSpace": "nei_pixels",
+        "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
+        "handlerKey": "gt.recipe.test",
+        "height": 90,
+        "recipeId": "r_fixture_shard_b",
+        "source": "in-game-nei-render",
+        "status": "captured",
+        "width": 176
+      },
       "nativeLayout": {
         "canonicalMachineFamily": "gregtech-machine",
         "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
@@ -126,6 +149,5 @@
       "recipeId": "r_fixture_shard_b",
       "recipeType": "gt.recipe.test"
     }
-  ],
-  "schemaVersion": "neonei/recipe-ui-payload-index/v1"
+  ]
 }

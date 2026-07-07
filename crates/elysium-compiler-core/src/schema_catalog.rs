@@ -29,6 +29,8 @@ const NATIVE_UI_EXPORT_VALIDATION_POLICY: &str =
     "missing native UI validation, blocked geometry reports, and schema mismatches are compile blockers";
 const NATIVE_BACKGROUND_STRICT_POLICY: &str =
     "a captured nativeBackground.assetRef must point to a materialized raw-export asset";
+const NATIVE_FRAME_STRICT_POLICY: &str =
+    "every recipe UI payload must include captured nativeFrame metadata whose assetRef points to a materialized in-game NEI frame asset";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RawExportManifestFileDescriptor {
@@ -144,6 +146,14 @@ pub fn raw_export_schema_section() -> Value {
             "assetRoot": "assets/ui-backgrounds/",
             "scaling": ["nine-slice", "stretch", "none"],
             "strictPolicy": NATIVE_BACKGROUND_STRICT_POLICY
+        },
+        "nativeFrame": {
+            "requiredCapturedFields": ["status", "assetRef", "width", "height", "coordinateSpace"],
+            "capturedStatus": "captured",
+            "coordinateSpace": "nei_pixels",
+            "assetRoot": "assets/nei-native-frames/",
+            "source": "in-game-nei-render",
+            "strictPolicy": NATIVE_FRAME_STRICT_POLICY
         }
     })
 }

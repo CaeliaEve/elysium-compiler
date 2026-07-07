@@ -52,8 +52,13 @@ use crate::packs::ui::{
 };
 use crate::raw_export;
 use crate::raw_export_abi;
-use crate::recipe_domain::{captured_ui_family_key, public_recipe_layout, RecipeHandlerContext};
-use crate::recipe_ui_payload::rust_recipe_ui_payload_relative_path;
+use crate::recipe_domain::{
+    captured_ui_family_key, collect_recipe_item_ids, public_recipe_layout, RecipeHandlerContext,
+};
+use crate::recipe_ui_payload::{
+    materialize_native_frame_assets, public_recipe_native_frame,
+    rust_recipe_ui_payload_relative_path,
+};
 use crate::reports;
 use crate::runtime;
 use crate::runtime_manifest_abi::{
@@ -738,6 +743,39 @@ fn compact_recipe_pack_uses_native_binary_payload() {
 }
 
 #[test]
+fn recipe_item_id_collector_supports_raw_item_input_variants() {
+    let recipe = json!({
+        "recipeId": "r~aMY5AipXMtWIL3tAQPCNgg==",
+        "itemInputs": [{
+            "slotIndex": 0,
+            "groupId": "ig~XK1983d_NXCakt6S8nNPSg==",
+            "variants": [{
+                "itemId": "i~minecraft~cobblestone~0",
+                "publicItemId": "item:i~minecraft~cobblestone~0",
+                "variantId": null,
+                "stackSize": 1
+            }]
+        }],
+        "itemOutputs": [{
+            "slotIndex": 0,
+            "itemId": "i~minecraft~stone~0",
+            "publicItemId": "item:i~minecraft~stone~0",
+            "stackSize": 1,
+            "probability": 1.0
+        }]
+    });
+
+    assert_eq!(
+        collect_recipe_item_ids(&recipe, &["itemInputs"]),
+        vec!["i~minecraft~cobblestone~0"]
+    );
+    assert_eq!(
+        collect_recipe_item_ids(&recipe, &["itemOutputs"]),
+        vec!["i~minecraft~stone~0"]
+    );
+}
+
+#[test]
 fn rust_recipe_ui_payload_paths_match_raw_export_sha1_shards() {
     assert_eq!(
         rust_recipe_ui_payload_relative_path("r1"),
@@ -946,6 +984,87 @@ fn ui_assets_manifest_and_materializer_include_native_background_assets() {
     );
     assert_eq!(materialized["copied"].as_array().unwrap().len(), 1);
     assert_eq!(materialized["missing"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn recipe_native_frame_assets_are_public_and_materialized() {
+    let public_layout = json!({
+        "width": 166,
+        "height": 135,
+        "handlerKey": "gt.recipe.compressor",
+        "handlerClass": "gregtech.nei.GTNEIDefaultHandler"
+    });
+    let public_handler = json!({
+        "handlerKey": "gt.recipe.compressor",
+        "handlerClass": "gregtech.nei.GTNEIDefaultHandler"
+    });
+    let recipe = json!({
+        "recipeId": "r~frame",
+        "nativeFrame": {
+            "status": "captured",
+            "assetRef": "assets/nei-native-frames/73/r~frame.png",
+            "coordinateSpace": "nei_pixels",
+            "source": "in-game-nei-render"
+        }
+    });
+    let frame = public_recipe_native_frame(
+        "r~frame",
+        &recipe,
+        Some(&public_layout),
+        Some(&public_handler),
+    )
+    .unwrap();
+    assert_eq!(
+        frame["assetRef"],
+        json!("assets/nei-native-frames/73/r~frame.png")
+    );
+    assert_eq!(frame["width"], json!(166));
+    assert_eq!(frame["height"], json!(135));
+    assert_eq!(frame["handlerKey"], json!("gt.recipe.compressor"));
+
+    let input = tempfile::tempdir().unwrap();
+    let output = tempfile::tempdir().unwrap();
+    let source = input.path().join("assets/nei-native-frames/73/r~frame.png");
+    fs::create_dir_all(source.parent().unwrap()).unwrap();
+    fs::write(&source, b"native-frame").unwrap();
+    let recipe_ui_index = vec![json!({
+        "recipeId": "r~frame",
+        "nativeFrame": frame,
+    })];
+
+    let materialized =
+        materialize_native_frame_assets(input.path(), output.path(), &recipe_ui_index).unwrap();
+
+    assert_eq!(
+        fs::read(
+            output
+                .path()
+                .join("assets/nei-native-frames/73/r~frame.png")
+        )
+        .unwrap(),
+        b"native-frame"
+    );
+    assert_eq!(materialized["copied"].as_array().unwrap().len(), 1);
+    assert_eq!(materialized["missing"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn recipe_native_frame_assets_require_every_recipe_payload_to_have_frame() {
+    let input = tempfile::tempdir().unwrap();
+    let output = tempfile::tempdir().unwrap();
+    let recipe_ui_index = vec![json!({
+        "recipeId": "r~missing-frame",
+        "familyKey": "furnace",
+    })];
+
+    let materialized =
+        materialize_native_frame_assets(input.path(), output.path(), &recipe_ui_index).unwrap();
+
+    assert_eq!(materialized["copied"].as_array().unwrap().len(), 0);
+    let missing = materialized["missing"].as_array().unwrap();
+    assert_eq!(missing.len(), 1);
+    assert_eq!(missing[0]["reason"], json!("native-frame-payload-missing"));
+    assert_eq!(missing[0]["required"], json!("nativeFrame"));
 }
 
 #[test]
@@ -2000,6 +2119,16 @@ fn stable_cli_inspect_validate_and_schemas_cover_fixture_contracts() {
     assert_eq!(
         schemas["rawExport"]["nativeBackground"]["strictPolicy"],
         json!("a captured nativeBackground.assetRef must point to a materialized raw-export asset")
+    );
+    assert_eq!(
+        schemas["rawExport"]["nativeFrame"]["assetRoot"],
+        json!("assets/nei-native-frames/")
+    );
+    assert_eq!(
+        schemas["rawExport"]["nativeFrame"]["strictPolicy"],
+        json!(
+            "every recipe UI payload must include captured nativeFrame metadata whose assetRef points to a materialized in-game NEI frame asset"
+        )
     );
 }
 

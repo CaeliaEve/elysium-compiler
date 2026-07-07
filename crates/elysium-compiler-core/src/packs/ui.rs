@@ -14,7 +14,8 @@ use crate::native_ui_pack_abi::{
     UI_TEMPLATE_ROW_STRIDE_U32, UI_TEMPLATE_SCHEMA, UI_TEXT_ROW_STRIDE_U32,
 };
 use crate::recipe_ui_payload::{
-    build_raw_recipe_ui_payload_index, read_compiled_recipe_ui_payload_index,
+    build_raw_recipe_ui_payload_index, materialize_native_frame_assets,
+    read_compiled_recipe_ui_payload_index,
 };
 use crate::ui_templates::{
     build_ui_assets_manifest, build_ui_family_census_report,
@@ -92,7 +93,13 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
     let binding_index_report = build_ui_template_binding_index_report(&bindings, &templates);
     let family_census_report = build_ui_family_census_report(&templates);
     let ui_background_assets = materialize_ui_background_assets(input, output, &assets_manifest)?;
+    let native_frame_assets = materialize_native_frame_assets(input, output, &recipe_ui_index)?;
     let missing_ui_background_assets = ui_background_assets
+        .get("missing")
+        .and_then(Value::as_array)
+        .map(|items| items.len())
+        .unwrap_or(0);
+    let missing_native_frame_assets = native_frame_assets
         .get("missing")
         .and_then(Value::as_array)
         .map(|items| items.len())
@@ -100,6 +107,11 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
     if strict && missing_ui_background_assets > 0 {
         return Err(anyhow!(
             "ui-pack compiler blocked: {missing_ui_background_assets} native UI background asset(s) are missing"
+        ));
+    }
+    if strict && missing_native_frame_assets > 0 {
+        return Err(anyhow!(
+            "ui-pack compiler blocked: {missing_native_frame_assets} native NEI frame asset(s) are missing"
         ));
     }
     let unbound_recipes = bindings

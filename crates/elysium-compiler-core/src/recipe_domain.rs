@@ -656,8 +656,8 @@ fn collect_recipe_item_ids_from_value(value: Option<&Value>, ids: &mut Vec<Strin
             if let Some(item_id) = map.get("itemId").and_then(Value::as_str) {
                 ids.push(item_id.to_string());
             }
-            for key in ["items", "item", "input", "output", "ingredients", "results"] {
-                collect_recipe_item_ids_from_value(map.get(key), ids);
+            for nested_value in map.values() {
+                collect_recipe_item_ids_from_value(Some(nested_value), ids);
             }
         }
         _ => {}

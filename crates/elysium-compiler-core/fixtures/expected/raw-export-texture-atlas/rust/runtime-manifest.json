@@ -66,6 +66,10 @@
       "path": "rust/animations.bin"
     },
     {
+      "bytes": 705,
+      "path": "render/index.json"
+    },
+    {
       "bytes": 208,
       "path": "rust/strings.zh_cn.bin"
     },
@@ -138,7 +142,7 @@
       "path": "rust/native-ui-layout-report.json"
     },
     {
-      "bytes": 8409,
+      "bytes": 8705,
       "path": "rust/pack-validation-report.json"
     },
     {
@@ -152,7 +156,7 @@
     "portableRelativePathsOnly": true,
     "windowsPathsAllowed": false
   },
-  "runtimeId": "rust-59fc7266bd46451d",
+  "runtimeId": "rust-c4e41d68622e73ea",
   "schema": "neonei/runtime/current",
   "schemaRevision": 1,
   "schemaVersion": "neonei/rust-runtime-manifest/current"
