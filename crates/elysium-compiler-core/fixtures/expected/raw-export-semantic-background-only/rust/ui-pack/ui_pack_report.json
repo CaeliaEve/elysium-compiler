@@ -9,7 +9,9 @@
     "uiBackgrounds": {
       "copied": [],
       "missing": [],
-      "schemaVersion": "neonei/ui-background-assets/current"
+      "reason": "NEI background PNG materialization retired; web-authored UI uses semantic nativeBackground geometry only",
+      "schemaVersion": "neonei/ui-background-assets/retired",
+      "status": "retired"
     }
   },
   "format": {

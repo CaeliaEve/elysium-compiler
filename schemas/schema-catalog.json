@@ -1,12 +1,212 @@
 {
   "abi": {
     "compilerCapabilityAbi": {
+      "commandCatalog": {
+        "commands": [
+          {
+            "capabilities": [
+              "compiler.compile_kernel",
+              "compiler.diagnostics.compile"
+            ],
+            "inputs": [
+              "raw-export-tree",
+              "compile-options"
+            ],
+            "name": "compile",
+            "outputs": [
+              "runtime-packs",
+              "compiler-report"
+            ],
+            "required": true
+          },
+          {
+            "capabilities": [
+              "compiler.diagnostics.inspect"
+            ],
+            "inputs": [
+              "raw-export-tree"
+            ],
+            "name": "inspect",
+            "outputs": [
+              "diagnostics-report"
+            ],
+            "required": false
+          },
+          {
+            "capabilities": [
+              "compiler.diagnostics.validate"
+            ],
+            "inputs": [
+              "raw-export-tree",
+              "optional-runtime-output"
+            ],
+            "name": "validate",
+            "outputs": [
+              "diagnostics-report"
+            ],
+            "required": true
+          },
+          {
+            "capabilities": [
+              "compiler.schema_catalog"
+            ],
+            "inputs": [
+              "compiler-binary"
+            ],
+            "name": "schemas",
+            "outputs": [
+              "schema-catalog"
+            ],
+            "required": true
+          }
+        ],
+        "dispatchPolicy": "static-command-descriptor-ops-table",
+        "legacyFallback": "forbidden",
+        "schemaHashInput": "commands=compile,inspect,validate,schemas",
+        "schemaVersion": "elysium-compiler/command-catalog/v1"
+      },
       "commands": [
         "compile",
         "inspect",
         "validate",
         "schemas"
       ],
+      "compileScopeCatalog": {
+        "legacyFallback": "forbidden",
+        "schemaHashInput": "scopes=all,native-ui,search,browser,recipes,ui,textures",
+        "schemaVersion": "elysium-compiler/compile-scope-catalog/v1",
+        "scopes": [
+          {
+            "capabilities": [
+              "compiler.browser_pack",
+              "compiler.recipe_pack",
+              "compiler.native_ui_pack",
+              "compiler.texture_pack"
+            ],
+            "name": "all",
+            "policy": "emit every production runtime pack",
+            "runtimeCapabilities": [
+              "atlas.static",
+              "atlas.animated",
+              "atlas.meta",
+              "groups.collapse",
+              "groups.semantic-nbt",
+              "recipes.lookup",
+              "recipes.native-ui-layout",
+              "search.zh-cn",
+              "strings.zh-cn",
+              "native-render.webgl2",
+              "recipes.ui-pack"
+            ],
+            "runtimePackProducers": [
+              "browser",
+              "recipes",
+              "ui",
+              "texture"
+            ]
+          },
+          {
+            "capabilities": [
+              "compiler.browser_pack",
+              "compiler.recipe_pack",
+              "compiler.native_ui_pack"
+            ],
+            "name": "native-ui",
+            "policy": "emit the browser, recipe, and native UI packs required by native UI rendering",
+            "runtimeCapabilities": [
+              "groups.collapse",
+              "groups.semantic-nbt",
+              "recipes.lookup",
+              "recipes.native-ui-layout",
+              "recipes.ui-pack",
+              "search.zh-cn",
+              "strings.zh-cn",
+              "native-render.webgl2"
+            ],
+            "runtimePackProducers": [
+              "browser",
+              "recipes",
+              "ui"
+            ]
+          },
+          {
+            "capabilities": [
+              "compiler.search_pack"
+            ],
+            "name": "search",
+            "policy": "emit the standalone search hot path only",
+            "runtimeCapabilities": [
+              "search.zh-cn",
+              "strings.zh-cn"
+            ],
+            "runtimePackProducers": [
+              "search"
+            ]
+          },
+          {
+            "capabilities": [
+              "compiler.browser_pack",
+              "compiler.search_pack"
+            ],
+            "name": "browser",
+            "policy": "emit browser/search packs needed by item browsing",
+            "runtimeCapabilities": [
+              "groups.collapse",
+              "groups.semantic-nbt",
+              "search.zh-cn",
+              "strings.zh-cn",
+              "native-render.webgl2"
+            ],
+            "runtimePackProducers": [
+              "browser"
+            ]
+          },
+          {
+            "capabilities": [
+              "compiler.recipe_pack"
+            ],
+            "name": "recipes",
+            "policy": "emit recipe graph/runtime packs only",
+            "runtimeCapabilities": [
+              "recipes.lookup",
+              "recipes.native-ui-layout"
+            ],
+            "runtimePackProducers": [
+              "recipes"
+            ]
+          },
+          {
+            "capabilities": [
+              "compiler.native_ui_pack"
+            ],
+            "name": "ui",
+            "policy": "emit native UI binary and sidecar packs only",
+            "runtimeCapabilities": [
+              "recipes.ui-pack",
+              "native-render.webgl2"
+            ],
+            "runtimePackProducers": [
+              "ui"
+            ]
+          },
+          {
+            "capabilities": [
+              "compiler.texture_pack"
+            ],
+            "name": "textures",
+            "policy": "emit texture atlas and animation packs only",
+            "runtimeCapabilities": [
+              "atlas.static",
+              "atlas.animated",
+              "atlas.meta"
+            ],
+            "runtimePackProducers": [
+              "texture"
+            ]
+          }
+        ],
+        "selectionPolicy": "static-compile-scope-descriptor-table"
+      },
       "compileScopes": [
         "all",
         "native-ui",
@@ -19,11 +219,11 @@
       "name": "elysium.compiler.capability",
       "nativeUi": {
         "coordinateSpace": "nei_pixels",
-        "fallbackPolicy": "missing required native UI capture is a validation error",
+        "fallbackPolicy": "NEI frame/background PNG fallback is retired; missing hand-written UI mappings fail closed",
         "requiredCapabilities": [
           "native_ui.surface",
           "native_ui.design_space_coordinates",
-          "native_ui.background_asset"
+          "native_ui.semantic_layout"
         ],
         "requiredFiles": [
           "native-ui/families.jsonl.zst",
@@ -91,11 +291,11 @@
       "name": "elysium.export",
       "nativeUi": {
         "coordinateSpace": "nei_pixels",
-        "fallbackPolicy": "missing required native UI capture is a validation error",
+        "fallbackPolicy": "NEI frame/background PNG fallback is retired; missing hand-written UI mappings fail closed",
         "requiredCapabilities": [
           "native_ui.surface",
           "native_ui.design_space_coordinates",
-          "native_ui.background_asset"
+          "native_ui.semantic_layout"
         ],
         "requiredFiles": [
           "native-ui/families.jsonl.zst",
@@ -508,6 +708,20 @@
             "kind": "binary-pack",
             "logicalName": "rustAnimationBin",
             "path": "rust/animations.bin",
+            "producers": [
+              "texture"
+            ],
+            "required": true,
+            "scopes": [
+              "all",
+              "textures"
+            ]
+          },
+          {
+            "debugOnly": false,
+            "kind": "manifest",
+            "logicalName": "nativeRenderIndex",
+            "path": "render/index.json",
             "producers": [
               "texture"
             ],
@@ -1125,12 +1339,212 @@
   },
   "compiler": {
     "cli": {
+      "commandCatalog": {
+        "commands": [
+          {
+            "capabilities": [
+              "compiler.compile_kernel",
+              "compiler.diagnostics.compile"
+            ],
+            "inputs": [
+              "raw-export-tree",
+              "compile-options"
+            ],
+            "name": "compile",
+            "outputs": [
+              "runtime-packs",
+              "compiler-report"
+            ],
+            "required": true
+          },
+          {
+            "capabilities": [
+              "compiler.diagnostics.inspect"
+            ],
+            "inputs": [
+              "raw-export-tree"
+            ],
+            "name": "inspect",
+            "outputs": [
+              "diagnostics-report"
+            ],
+            "required": false
+          },
+          {
+            "capabilities": [
+              "compiler.diagnostics.validate"
+            ],
+            "inputs": [
+              "raw-export-tree",
+              "optional-runtime-output"
+            ],
+            "name": "validate",
+            "outputs": [
+              "diagnostics-report"
+            ],
+            "required": true
+          },
+          {
+            "capabilities": [
+              "compiler.schema_catalog"
+            ],
+            "inputs": [
+              "compiler-binary"
+            ],
+            "name": "schemas",
+            "outputs": [
+              "schema-catalog"
+            ],
+            "required": true
+          }
+        ],
+        "dispatchPolicy": "static-command-descriptor-ops-table",
+        "legacyFallback": "forbidden",
+        "schemaHashInput": "commands=compile,inspect,validate,schemas",
+        "schemaVersion": "elysium-compiler/command-catalog/v1"
+      },
       "commands": [
         "compile",
         "inspect",
         "validate",
         "schemas"
       ],
+      "compileScopeCatalog": {
+        "legacyFallback": "forbidden",
+        "schemaHashInput": "scopes=all,native-ui,search,browser,recipes,ui,textures",
+        "schemaVersion": "elysium-compiler/compile-scope-catalog/v1",
+        "scopes": [
+          {
+            "capabilities": [
+              "compiler.browser_pack",
+              "compiler.recipe_pack",
+              "compiler.native_ui_pack",
+              "compiler.texture_pack"
+            ],
+            "name": "all",
+            "policy": "emit every production runtime pack",
+            "runtimeCapabilities": [
+              "atlas.static",
+              "atlas.animated",
+              "atlas.meta",
+              "groups.collapse",
+              "groups.semantic-nbt",
+              "recipes.lookup",
+              "recipes.native-ui-layout",
+              "search.zh-cn",
+              "strings.zh-cn",
+              "native-render.webgl2",
+              "recipes.ui-pack"
+            ],
+            "runtimePackProducers": [
+              "browser",
+              "recipes",
+              "ui",
+              "texture"
+            ]
+          },
+          {
+            "capabilities": [
+              "compiler.browser_pack",
+              "compiler.recipe_pack",
+              "compiler.native_ui_pack"
+            ],
+            "name": "native-ui",
+            "policy": "emit the browser, recipe, and native UI packs required by native UI rendering",
+            "runtimeCapabilities": [
+              "groups.collapse",
+              "groups.semantic-nbt",
+              "recipes.lookup",
+              "recipes.native-ui-layout",
+              "recipes.ui-pack",
+              "search.zh-cn",
+              "strings.zh-cn",
+              "native-render.webgl2"
+            ],
+            "runtimePackProducers": [
+              "browser",
+              "recipes",
+              "ui"
+            ]
+          },
+          {
+            "capabilities": [
+              "compiler.search_pack"
+            ],
+            "name": "search",
+            "policy": "emit the standalone search hot path only",
+            "runtimeCapabilities": [
+              "search.zh-cn",
+              "strings.zh-cn"
+            ],
+            "runtimePackProducers": [
+              "search"
+            ]
+          },
+          {
+            "capabilities": [
+              "compiler.browser_pack",
+              "compiler.search_pack"
+            ],
+            "name": "browser",
+            "policy": "emit browser/search packs needed by item browsing",
+            "runtimeCapabilities": [
+              "groups.collapse",
+              "groups.semantic-nbt",
+              "search.zh-cn",
+              "strings.zh-cn",
+              "native-render.webgl2"
+            ],
+            "runtimePackProducers": [
+              "browser"
+            ]
+          },
+          {
+            "capabilities": [
+              "compiler.recipe_pack"
+            ],
+            "name": "recipes",
+            "policy": "emit recipe graph/runtime packs only",
+            "runtimeCapabilities": [
+              "recipes.lookup",
+              "recipes.native-ui-layout"
+            ],
+            "runtimePackProducers": [
+              "recipes"
+            ]
+          },
+          {
+            "capabilities": [
+              "compiler.native_ui_pack"
+            ],
+            "name": "ui",
+            "policy": "emit native UI binary and sidecar packs only",
+            "runtimeCapabilities": [
+              "recipes.ui-pack",
+              "native-render.webgl2"
+            ],
+            "runtimePackProducers": [
+              "ui"
+            ]
+          },
+          {
+            "capabilities": [
+              "compiler.texture_pack"
+            ],
+            "name": "textures",
+            "policy": "emit texture atlas and animation packs only",
+            "runtimeCapabilities": [
+              "atlas.static",
+              "atlas.animated",
+              "atlas.meta"
+            ],
+            "runtimePackProducers": [
+              "texture"
+            ]
+          }
+        ],
+        "selectionPolicy": "static-compile-scope-descriptor-table"
+      },
       "compileScopes": [
         "all",
         "native-ui",
@@ -1455,6 +1869,7 @@
               "rust/textures.bin",
               "rust/atlas.meta.bin",
               "rust/animations.bin",
+              "render/index.json",
               "rust/missing-texture-report.json",
               "rust/suspicious-texture-report.json"
             ],
@@ -1728,6 +2143,20 @@
           "kind": "binary-pack",
           "logicalName": "rustAnimationBin",
           "path": "rust/animations.bin",
+          "producers": [
+            "texture"
+          ],
+          "required": true,
+          "scopes": [
+            "all",
+            "textures"
+          ]
+        },
+        {
+          "debugOnly": false,
+          "kind": "manifest",
+          "logicalName": "nativeRenderIndex",
+          "path": "render/index.json",
           "producers": [
             "texture"
           ],
@@ -2266,18 +2695,34 @@
       "schemaVersion": "neonei/raw-export-manifest/current"
     },
     "nativeBackground": {
-      "assetRoot": "assets/ui-backgrounds/",
-      "capturedStatus": "captured",
-      "requiredCapturedFields": [
+      "assetRefPolicy": "ignored-if-present",
+      "requiredSemanticFields": [
         "status",
-        "assetRef"
+        "kind",
+        "width",
+        "height",
+        "coordinateSpace"
       ],
       "scaling": [
         "nine-slice",
         "stretch",
         "none"
       ],
-      "strictPolicy": "a captured nativeBackground.assetRef must point to a materialized raw-export asset"
+      "strictPolicy": "nativeBackground is semantic layout metadata only; background PNG assets are retired and are not materialized",
+      "supportedStatus": [
+        "semantic",
+        "captured"
+      ]
+    },
+    "nativeFrame": {
+      "assetRootPolicy": "retired",
+      "coordinateSpace": "nei_pixels",
+      "required": false,
+      "retiredArtifacts": [
+        "nei-frame-png"
+      ],
+      "status": "retired",
+      "strictPolicy": "nativeFrame PNG capture is retired; recipe UI payloads must not depend on in-game NEI frame assets"
     },
     "nativeUiValidationReport": {
       "compilerReportPath": "rust/native-ui-export-abi-validation-report.json",

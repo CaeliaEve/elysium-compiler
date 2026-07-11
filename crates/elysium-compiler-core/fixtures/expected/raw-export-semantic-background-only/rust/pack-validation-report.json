@@ -71,33 +71,33 @@
       "status": "present"
     },
     {
-      "bytes": 1133,
+      "bytes": 1065,
       "debugOnly": false,
       "kind": "binary-pack",
       "logicalName": "rustUiStringsBin",
       "path": "rust/ui-pack/ui_strings.bin",
       "required": true,
-      "sha256": "f042c9ada9a4aece5077c62d6fa445690019db3b76cd0a2510f24dc46d47ca28",
+      "sha256": "3bc08d9b214be4324e8f4ca7c1301f8fb16a80af371b5e0e104e2c45efd7e15f",
       "status": "present"
     },
     {
-      "bytes": 123,
+      "bytes": 267,
       "debugOnly": false,
       "kind": "manifest",
       "logicalName": "rustUiAssetsManifest",
       "path": "rust/ui-pack/ui_assets.manifest.json",
       "required": true,
-      "sha256": "0be44a35213be439ab9e3591a8589d7737898bf33999d4dc69e49e3b7c276145",
+      "sha256": "c3ec316952359637cc197b74aa84560544f9e9d5baff06d0608ec5f36aa52cb3",
       "status": "present"
     },
     {
-      "bytes": 2913,
+      "bytes": 2835,
       "debugOnly": false,
       "kind": "manifest",
       "logicalName": "rustUiTemplateCatalog",
       "path": "rust/ui-pack/ui_template_catalog.json",
       "required": true,
-      "sha256": "95f2c8638edd47143e7cbc4eed20879d1c511c654c50f92a3f8ce50b7c124a23",
+      "sha256": "a7cb9530f5f09d9567582a22d61b8e83998ea46f74f970ca9624c03bf4846cbf",
       "status": "present"
     },
     {
@@ -121,13 +121,13 @@
       "status": "present"
     },
     {
-      "bytes": 2494,
+      "bytes": 2645,
       "debugOnly": false,
       "kind": "report",
       "logicalName": "rustUiPackReport",
       "path": "rust/ui-pack/ui_pack_report.json",
       "required": true,
-      "sha256": "c66baf65cbd8d6e07a11efaab0f7f170b78c652899cbe096edf163b24b12dad5",
+      "sha256": "cd10b8410e50bca578c321f265a3a6cd00b8833d1ac8ae896db9c9ecd8cc9882",
       "status": "present"
     },
     {
@@ -157,7 +157,7 @@
       "logicalName": "rustUiPackAbiValidationReport",
       "path": "rust/ui-pack-abi-validation-report.json",
       "required": true,
-      "sha256": "27a8d3df6bb6ce96d0d558f1d1ecdeeaef0080067de66dabe01317f89afdad32",
+      "sha256": "a6ae6f35fc53c7bc305199c3a977d35d53196bd47b7c2e665f7216e2001480c0",
       "status": "present"
     },
     {

@@ -16,7 +16,7 @@ use crate::packs::search::{
 use crate::text::{build_pinyin_fields, normalize_search_terms, normalize_text};
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
@@ -109,11 +109,29 @@ pub fn compile_browser_pack(
         })
         .collect::<Vec<_>>();
 
-    let mut alias_map = BTreeMap::new();
-    let mut search_items = Vec::new();
-    let mut browser_items = items
+    let browser_item_ids = collect_browser_item_ids(&order_rows, &group_rows);
+    let browser_source_items = items
         .iter()
         .enumerate()
+        .filter(|(_, item)| {
+            if browser_item_ids.is_empty() {
+                return true;
+            }
+            value_string(item, "itemId")
+                .as_ref()
+                .is_some_and(|item_id| browser_item_ids.contains(item_id))
+        })
+        .collect::<Vec<_>>();
+    if strict && !browser_item_ids.is_empty() && browser_source_items.is_empty() {
+        return Err(anyhow!(
+            "browser compiler blocked: NEI browser contract selected zero items from raw item stream"
+        ));
+    }
+
+    let mut alias_map = BTreeMap::new();
+    let mut search_items = Vec::new();
+    let mut browser_items = browser_source_items
+        .iter()
         .map(|item| {
             let (search_rank, item) = item;
             let item_id = value_string(item, "itemId").unwrap_or_default();
@@ -239,9 +257,11 @@ pub fn compile_browser_pack(
         "schemaVersion": "neonei/rust-browser-pack/current",
         "counts": {
             "items": browser_items.len(),
+            "rawItems": items.len(),
             "groups": groups.len(),
             "aliasItems": alias_map.len(),
             "orderedItems": order_by_item.len(),
+            "browserContractItems": browser_item_ids.len(),
             "atlasItems": atlas_items,
             "missingAtlas": browser_items.iter().filter(|item| item.get("atlas") == Some(&Value::Null)).count(),
         },
@@ -297,6 +317,28 @@ pub fn compile_browser_pack(
         &string_pack,
     )?;
     Ok(())
+}
+
+fn collect_browser_item_ids(order_rows: &[Value], group_rows: &[Value]) -> HashSet<String> {
+    let mut ids = HashSet::new();
+    for row in order_rows {
+        if let Some(item_id) = value_string(row, "itemId") {
+            ids.insert(item_id);
+        }
+    }
+    for row in group_rows {
+        if let Some(representative) = value_string(row, "representativeItemId") {
+            ids.insert(representative);
+        }
+        if let Some(members) = row.get("memberItemIds").and_then(Value::as_array) {
+            for member in members {
+                if let Some(item_id) = member.as_str() {
+                    ids.insert(item_id.to_string());
+                }
+            }
+        }
+    }
+    ids
 }
 
 fn build_compact_browser_payload(input: &Path, manifest: &RawManifest) -> Result<Vec<u8>> {

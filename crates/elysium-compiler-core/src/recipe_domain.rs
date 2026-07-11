@@ -185,12 +185,25 @@ pub fn public_recipe_layout(layout: &Value) -> Value {
         "maxRecipesPerPage": value_u64(layout, "maxRecipesPerPage").unwrap_or(1),
         "imageResource": value_string(layout, "imageResource"),
         "imageRegion": layout.get("imageRegion").cloned().unwrap_or(Value::Null),
-        "nativeBackground": layout.get("nativeBackground").cloned().unwrap_or(Value::Null),
+        "nativeBackground": public_native_background(layout.get("nativeBackground")),
         "slots": layout.get("slots").and_then(Value::as_array).cloned().unwrap_or_default(),
         "textOverlays": layout.get("textOverlays").and_then(Value::as_array).cloned().unwrap_or_default(),
         "hotspots": layout.get("hotspots").and_then(Value::as_array).cloned().unwrap_or_default(),
         "viewports": layout.get("viewports").and_then(Value::as_array).cloned().unwrap_or_default(),
     })
+}
+
+fn public_native_background(background: Option<&Value>) -> Value {
+    let Some(background) = background else {
+        return Value::Null;
+    };
+    let Some(object) = background.as_object() else {
+        return Value::Null;
+    };
+    let mut public = object.clone();
+    public.remove("assetRef");
+    public.remove("resource");
+    Value::Object(public)
 }
 
 fn has_value_text(value: &Value, key: &str) -> bool {
@@ -613,6 +626,42 @@ pub fn captured_ui_family_key(handler: Option<&Value>, layout: Option<&Value>) -
         max_recipes_per_page,
         normalize_ui_family_key_part(&image_resource)
     ))
+}
+
+pub fn should_skip_redundant_nei_workbench_recipe(recipe: &Value, handler: Option<&Value>) -> bool {
+    let descriptor = [
+        handler.and_then(|handler| value_string(handler, "handlerKey")),
+        handler.and_then(|handler| value_string(handler, "handlerClass")),
+        handler.and_then(|handler| value_string(handler, "displayName")),
+        handler.and_then(|handler| value_string(handler, "localizedName")),
+        value_string(recipe, "family"),
+        value_string(recipe, "sourcePlugin"),
+        value_string(recipe, "recipeType"),
+        value_string(recipe, "displayName"),
+        nested_value_string(recipe, &["machine", "machineId"]),
+        nested_value_string(recipe, &["machine", "displayName"]),
+        nested_value_string(recipe, &["metadata", "handlerKey"]),
+        nested_value_string(recipe, &["metadata", "handlerClass"]),
+        nested_value_string(recipe, &["metadata", "handler"]),
+        nested_value_string(recipe, &["additionalData", "handlerKey"]),
+        nested_value_string(recipe, &["additionalData", "handlerClass"]),
+        nested_value_string(recipe, &["additionalData", "handler"]),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" ")
+    .to_lowercase();
+
+    includes_any(
+        &descriptor,
+        &[
+            "codechicken.nei.recipe.shapedrecipehandler",
+            "codechicken.nei.recipe.shapelessrecipehandler",
+            "codechicken_nei_recipe_shaped",
+            "codechicken_nei_recipe_shapeless",
+        ],
+    )
 }
 
 fn normalize_ui_family_key_part(value: &str) -> String {

@@ -10,12 +10,9 @@ use crate::recipe_domain::{
     captured_ui_family_key, classify_recipe_family_key, collect_recipe_item_ids,
     compact_fact_object, public_recipe_handler, public_recipe_layout, recipe_category_display_name,
     recipe_category_id_from_display_name, recipe_category_raw_id, recipe_id, recipe_machine_icon,
-    RecipeCategoryAccumulator, RecipeHandlerContext,
+    should_skip_redundant_nei_workbench_recipe, RecipeCategoryAccumulator, RecipeHandlerContext,
 };
-use crate::recipe_ui_payload::{
-    materialize_native_frame_assets, public_recipe_native_frame,
-    rust_recipe_ui_payload_relative_path, RecipeUiPayloadShardWriters,
-};
+use crate::recipe_ui_payload::{rust_recipe_ui_payload_relative_path, RecipeUiPayloadShardWriters};
 use anyhow::{anyhow, Context, Result};
 use flate2::read::GzDecoder;
 use serde::Serialize;
@@ -192,6 +189,9 @@ pub fn compile_recipe_pack(
             let recipe = &recipe_value;
             let recipe_id = recipe_id(recipe);
             let (handler, layout) = handler_context.resolve(recipe);
+            if should_skip_redundant_nei_workbench_recipe(recipe, handler) {
+                return Ok(());
+            }
             let public_handler = handler.map(public_recipe_handler);
             let public_layout = layout.map(public_recipe_layout);
             let raw_family_key = first_non_empty(&[
@@ -225,12 +225,6 @@ pub fn compile_recipe_pack(
             let handler_key = public_handler
                 .as_ref()
                 .and_then(|handler| value_string(handler, "handlerKey"));
-            let native_frame = public_recipe_native_frame(
-                &recipe_id,
-                recipe,
-                public_layout.as_ref(),
-                public_handler.as_ref(),
-            );
             let input_item_ids = collect_recipe_item_ids(
                 recipe,
                 &[
@@ -278,7 +272,7 @@ pub fn compile_recipe_pack(
                     .unwrap_or(false),
                 "machineIcon": machine_icon.clone().unwrap_or(Value::Null),
             });
-            let mut payload_meta = json!({
+            let payload_meta = json!({
                 "recipeId": recipe_id,
                 "path": rust_recipe_ui_payload_relative_path(&recipe_id),
                 "payloadKey": recipe_id,
@@ -298,12 +292,7 @@ pub fn compile_recipe_pack(
                     "density": if input_item_ids.len() + output_item_ids.len() > 12 { "dense" } else { "normal" },
                 },
             });
-            if let Some(frame) = native_frame.clone() {
-                if let Some(object) = payload_meta.as_object_mut() {
-                    object.insert("nativeFrame".to_string(), frame);
-                }
-            }
-            let mut payload_index_entry = json!({
+            let payload_index_entry = json!({
                 "recipeId": recipe_id,
                 "path": rust_recipe_ui_payload_relative_path(&recipe_id),
                 "payloadKey": recipe_id,
@@ -313,11 +302,6 @@ pub fn compile_recipe_pack(
                 "handlerKey": handler_key,
                 "nativeLayout": public_layout,
             });
-            if let Some(frame) = native_frame.clone() {
-                if let Some(object) = payload_index_entry.as_object_mut() {
-                    object.insert("nativeFrame".to_string(), frame);
-                }
-            }
             let mut payload_entry = payload_meta;
             if let Some(payload_object) = payload_entry.as_object_mut() {
                 payload_object.insert(
@@ -427,21 +411,6 @@ pub fn compile_recipe_pack(
 
     let rust_dir = output.join("rust");
     fs::create_dir_all(&rust_dir)?;
-    let native_frame_assets = materialize_native_frame_assets(input, output, &ui_payload_index)?;
-    let missing_native_frame_assets = native_frame_assets
-        .get("missing")
-        .and_then(Value::as_array)
-        .map(|items| items.len())
-        .unwrap_or(0);
-    if strict && missing_native_frame_assets > 0 {
-        return Err(anyhow!(
-            "recipe compiler blocked: {missing_native_frame_assets} native NEI frame asset(s) are missing"
-        ));
-    }
-    write_json_value(
-        &rust_dir.join("recipe-native-frame-assets.json"),
-        &native_frame_assets,
-    )?;
     write_json_value(
         &rust_dir.join("recipe-handler-metadata-report.json"),
         &build_recipe_handler_metadata_report(&public_handlers, &public_layouts, &category_index),

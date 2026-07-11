@@ -53,12 +53,10 @@ use crate::packs::ui::{
 use crate::raw_export;
 use crate::raw_export_abi;
 use crate::recipe_domain::{
-    captured_ui_family_key, collect_recipe_item_ids, public_recipe_layout, RecipeHandlerContext,
+    captured_ui_family_key, collect_recipe_item_ids, public_recipe_layout,
+    should_skip_redundant_nei_workbench_recipe, RecipeHandlerContext,
 };
-use crate::recipe_ui_payload::{
-    materialize_native_frame_assets, public_recipe_native_frame,
-    rust_recipe_ui_payload_relative_path,
-};
+use crate::recipe_ui_payload::rust_recipe_ui_payload_relative_path;
 use crate::reports;
 use crate::runtime;
 use crate::runtime_manifest_abi::{
@@ -85,9 +83,7 @@ use crate::texture_animation::{
     expected_animated_item, expected_animation_reason, promote_animation_facts_to_animated_atlas,
 };
 use crate::ui_pack_abi;
-use crate::ui_templates::{
-    build_ui_assets_manifest, build_ui_template_bindings, materialize_ui_background_assets,
-};
+use crate::ui_templates::{build_ui_assets_manifest, build_ui_template_bindings};
 use crate::validation::{validate_atlas_bounds, validate_frame_bounds};
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -898,9 +894,11 @@ fn public_recipe_layout_preserves_static_surface_fields_only() {
         json!("gregtech-machine")
     );
     assert_eq!(public_layout["imageRegion"]["x"], json!(4));
+    assert!(public_layout["nativeBackground"].get("assetRef").is_none());
+    assert!(public_layout["nativeBackground"].get("resource").is_none());
     assert_eq!(
-        public_layout["nativeBackground"]["assetRef"],
-        json!("assets/ui-backgrounds/gregtech/nei_single_recipe.png")
+        public_layout["nativeBackground"]["kind"],
+        json!("gt-modular-ui")
     );
     assert!(public_layout.get("progressBars").is_none());
     assert!(public_layout.get("fluidBars").is_none());
@@ -944,7 +942,7 @@ fn ui_template_bindings_use_captured_family_keys_not_simple_recipe_families() {
 }
 
 #[test]
-fn ui_assets_manifest_and_materializer_include_native_background_assets() {
+fn ui_assets_manifest_retires_native_background_png_assets() {
     let templates = vec![json!({
         "templateKey": "gt-machine@default",
         "imageResource": "",
@@ -956,115 +954,73 @@ fn ui_assets_manifest_and_materializer_include_native_background_assets() {
         }
     })];
     let manifest = build_ui_assets_manifest(&templates);
-    assert_eq!(manifest["assets"].as_array().unwrap().len(), 1);
+    assert_eq!(manifest["assetPolicy"], json!("web-authored-ui-only"));
     assert_eq!(
-        manifest["assets"][0]["assetRef"],
-        json!("assets/ui-backgrounds/gregtech/nei_single_recipe.png")
+        manifest["retiredNativeArtifacts"],
+        json!(["nei-background-png", "nei-frame-png"])
     );
-
-    let input = tempfile::tempdir().unwrap();
-    let output = tempfile::tempdir().unwrap();
-    let source = input
-        .path()
-        .join("assets/ui-backgrounds/gregtech/nei_single_recipe.png");
-    fs::create_dir_all(source.parent().unwrap()).unwrap();
-    fs::write(&source, b"png").unwrap();
-
-    let materialized =
-        materialize_ui_background_assets(input.path(), output.path(), &manifest).unwrap();
-
-    assert_eq!(
-        fs::read(
-            output
-                .path()
-                .join("assets/ui-backgrounds/gregtech/nei_single_recipe.png")
-        )
-        .unwrap(),
-        b"png"
-    );
-    assert_eq!(materialized["copied"].as_array().unwrap().len(), 1);
-    assert_eq!(materialized["missing"].as_array().unwrap().len(), 0);
+    assert!(manifest["assets"].as_array().unwrap().is_empty());
 }
 
 #[test]
-fn recipe_native_frame_assets_are_public_and_materialized() {
-    let public_layout = json!({
-        "width": 166,
-        "height": 135,
-        "handlerKey": "gt.recipe.compressor",
-        "handlerClass": "gregtech.nei.GTNEIDefaultHandler"
-    });
-    let public_handler = json!({
-        "handlerKey": "gt.recipe.compressor",
-        "handlerClass": "gregtech.nei.GTNEIDefaultHandler"
-    });
+fn recipe_domain_skips_redundant_codechicken_workbench_nei_recipes() {
     let recipe = json!({
-        "recipeId": "r~frame",
-        "nativeFrame": {
-            "status": "captured",
-            "assetRef": "assets/nei-native-frames/73/r~frame.png",
-            "coordinateSpace": "nei_pixels",
-            "source": "in-game-nei-render"
+        "recipeId": "r_codechicken_shaped",
+        "recipeType": "rt~minecraft~codechicken_nei_recipe_shaped recipehandler",
+        "family": "crafting-table",
+        "machine": {
+            "displayName": "Shaped"
         }
     });
-    let frame = public_recipe_native_frame(
-        "r~frame",
+    let handler = json!({
+        "handlerKey": "codechicken.nei.recipe.ShapedRecipeHandler",
+        "handlerClass": "codechicken.nei.recipe.ShapedRecipeHandler",
+        "displayName": "Shaped"
+    });
+
+    assert!(should_skip_redundant_nei_workbench_recipe(
         &recipe,
-        Some(&public_layout),
-        Some(&public_handler),
-    )
-    .unwrap();
-    assert_eq!(
-        frame["assetRef"],
-        json!("assets/nei-native-frames/73/r~frame.png")
-    );
-    assert_eq!(frame["width"], json!(166));
-    assert_eq!(frame["height"], json!(135));
-    assert_eq!(frame["handlerKey"], json!("gt.recipe.compressor"));
-
-    let input = tempfile::tempdir().unwrap();
-    let output = tempfile::tempdir().unwrap();
-    let source = input.path().join("assets/nei-native-frames/73/r~frame.png");
-    fs::create_dir_all(source.parent().unwrap()).unwrap();
-    fs::write(&source, b"native-frame").unwrap();
-    let recipe_ui_index = vec![json!({
-        "recipeId": "r~frame",
-        "nativeFrame": frame,
-    })];
-
-    let materialized =
-        materialize_native_frame_assets(input.path(), output.path(), &recipe_ui_index).unwrap();
-
-    assert_eq!(
-        fs::read(
-            output
-                .path()
-                .join("assets/nei-native-frames/73/r~frame.png")
-        )
-        .unwrap(),
-        b"native-frame"
-    );
-    assert_eq!(materialized["copied"].as_array().unwrap().len(), 1);
-    assert_eq!(materialized["missing"].as_array().unwrap().len(), 0);
+        Some(&handler)
+    ));
 }
 
 #[test]
-fn recipe_native_frame_assets_require_every_recipe_payload_to_have_frame() {
-    let input = tempfile::tempdir().unwrap();
-    let output = tempfile::tempdir().unwrap();
-    let recipe_ui_index = vec![json!({
-        "recipeId": "r~missing-frame",
-        "familyKey": "furnace",
-    })];
+fn recipe_domain_keeps_non_vanilla_crafting_like_nei_handlers() {
+    let recipe = json!({
+        "recipeId": "r_ae_shaped",
+        "recipeType": "rt~appliedenergistics2~nei_ae_shaped",
+        "family": "crafting-table",
+        "machine": {
+            "displayName": "NEIAEShaped"
+        }
+    });
+    let handler = json!({
+        "handlerKey": "appeng.integration.modules.NEIHelpers.NEIAEShapedRecipeHandler",
+        "handlerClass": "appeng.integration.modules.NEIHelpers.NEIAEShapedRecipeHandler",
+        "displayName": "NEIAEShaped"
+    });
 
-    let materialized =
-        materialize_native_frame_assets(input.path(), output.path(), &recipe_ui_index).unwrap();
+    assert!(!should_skip_redundant_nei_workbench_recipe(
+        &recipe,
+        Some(&handler)
+    ));
+}
 
-    assert_eq!(materialized["copied"].as_array().unwrap().len(), 0);
-    let missing = materialized["missing"].as_array().unwrap();
-    assert_eq!(missing.len(), 1);
-    assert_eq!(missing[0]["reason"], json!("native-frame-payload-missing"));
-    assert_eq!(missing[0]["required"], json!("nativeFrame"));
+#[test]
+fn native_ui_compile_ignores_legacy_nei_frame_png_assets() {
+    let output = compile_fixture("raw-export-native-ui-gt", CompileScope::NativeUi, true);
+    let ui_payload_index = read_fixture_json(output.path().join("recipes/ui-payload-index.json"));
+    assert!(ui_payload_index["recipes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|entry| entry.get("nativeFrame").is_none()));
+    assert!(!output
+        .path()
+        .join("rust/recipe-native-frame-assets.json")
+        .exists());
+    assert!(!output.path().join("assets/nei-native-frames").exists());
+    assert!(!output.path().join("assets/ui-backgrounds").exists());
 }
 
 #[test]
@@ -1334,7 +1290,7 @@ fn native_ui_layout_report_tracks_gregtech_backgrounds_without_inline_primitives
     assert!(report["samples"]
         .get("gregtechRecipePayloadsMissingProgressBars")
         .is_none());
-    assert_eq!(report["backgroundStatus"], json!("captured"));
+    assert_eq!(report["backgroundStatus"], json!("semantic"));
     assert_eq!(
         report["counts"]["gregtechRecipeUiPayloadsWithNativeBackgrounds"],
         json!(1)
@@ -2118,16 +2074,18 @@ fn stable_cli_inspect_validate_and_schemas_cover_fixture_contracts() {
         .any(|spec| spec.key == "uiTemplates" && spec.path == "rust/ui-pack/ui_templates.bin"));
     assert_eq!(
         schemas["rawExport"]["nativeBackground"]["strictPolicy"],
-        json!("a captured nativeBackground.assetRef must point to a materialized raw-export asset")
+        json!(
+            "nativeBackground is semantic layout metadata only; background PNG assets are retired and are not materialized"
+        )
     );
     assert_eq!(
-        schemas["rawExport"]["nativeFrame"]["assetRoot"],
-        json!("assets/nei-native-frames/")
+        schemas["rawExport"]["nativeFrame"]["status"],
+        json!("retired")
     );
     assert_eq!(
         schemas["rawExport"]["nativeFrame"]["strictPolicy"],
         json!(
-            "every recipe UI payload must include captured nativeFrame metadata whose assetRef points to a materialized in-game NEI frame asset"
+            "nativeFrame PNG capture is retired; recipe UI payloads must not depend on in-game NEI frame assets"
         )
     );
 }
@@ -2304,7 +2262,7 @@ fn minimal_native_ui_fixture_compiles_through_stable_cli_boundary() {
                 .as_array()
                 .unwrap()
                 .contains(&json!("compiler.pack_abi_validator"))));
-    assert!(output
+    assert!(!output
         .path()
         .join("assets/ui-backgrounds/gregtech/nei_single_recipe.png")
         .exists());
@@ -2551,7 +2509,7 @@ fn scoped_compile_purges_out_of_scope_runtime_artifacts() {
 }
 
 #[test]
-fn native_ui_gt_fixture_matches_expected_reports_and_copies_background_asset() {
+fn native_ui_gt_fixture_matches_expected_reports_without_background_png_asset() {
     let output = compile_fixture("raw-export-native-ui-gt", CompileScope::NativeUi, true);
     for relative_path in [
         "recipes/ui-payload-index.json",
@@ -2570,7 +2528,7 @@ fn native_ui_gt_fixture_matches_expected_reports_and_copies_background_asset() {
     ] {
         assert_expected_json_matches("raw-export-native-ui-gt", output.path(), relative_path);
     }
-    assert!(output
+    assert!(!output
         .path()
         .join("assets/ui-backgrounds/gregtech/nei_single_recipe.png")
         .is_file());
@@ -2684,12 +2642,12 @@ fn texture_atlas_fixture_materializes_runtime_atlas_without_missing_refs() {
 }
 
 #[test]
-fn missing_captured_ui_background_fixture_fails_strict_compile() {
+fn missing_captured_ui_background_fixture_compiles_without_png_materialization() {
     let output = tempfile::tempdir().unwrap();
     let report = output.path().join("compiler-report.json");
     let raw = compiler_fixture_path("raw-export-missing-background-should-fail");
 
-    let error = run_command(Cli {
+    run_command(Cli {
         command: Command::Compile {
             input: raw,
             output: output.path().to_path_buf(),
@@ -2700,16 +2658,8 @@ fn missing_captured_ui_background_fixture_fails_strict_compile() {
             debug_json: false,
         },
     })
-    .expect_err(
-        "strict compile must fail when a captured UI background asset is declared but missing",
-    );
+    .unwrap();
 
-    let message = format!("{error:#}");
-    assert!(
-        message.contains("ui-pack compiler blocked")
-            && message.contains("native UI background asset")
-            && message.contains("missing"),
-        "unexpected error: {message}"
-    );
-    assert!(!output.path().join("rust/runtime-manifest.json").exists());
+    assert!(output.path().join("rust/runtime-manifest.json").exists());
+    assert!(!output.path().join("assets/ui-backgrounds").exists());
 }

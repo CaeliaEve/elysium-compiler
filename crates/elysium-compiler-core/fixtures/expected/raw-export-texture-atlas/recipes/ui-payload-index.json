@@ -5,17 +5,6 @@
       "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
       "handlerKey": "gt.recipe.test",
       "machineType": "Test GT Machine",
-      "nativeFrame": {
-        "assetRef": "assets/nei-native-frames/fixture/r_fixture_gt.png",
-        "coordinateSpace": "nei_pixels",
-        "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
-        "handlerKey": "gt.recipe.test",
-        "height": 90,
-        "recipeId": "r_fixture_gt",
-        "source": "in-game-nei-render",
-        "status": "captured",
-        "width": 176
-      },
       "nativeLayout": {
         "canonicalMachineFamily": "gregtech-machine",
         "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
@@ -33,7 +22,6 @@
         "maxRecipesPerPage": 1,
         "nativeBackground": {
           "anchor": "top-left",
-          "assetRef": "assets/ui-backgrounds/gregtech/nei_single_recipe.png",
           "canonicalMachineFamily": "gregtech-machine",
           "captureRequired": false,
           "coordinateSpace": "nei_pixels",
@@ -49,7 +37,6 @@
             "height": 84,
             "width": 170
           },
-          "resource": "gregtech:textures/gui/background/nei_single_recipe.png",
           "scaleMode": "uniform-scale",
           "scaling": "nine-slice",
           "schemaVersion": "nesqlpp/raw-export/alpha1/ui-family-census/native-ui-background",

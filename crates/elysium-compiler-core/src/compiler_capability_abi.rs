@@ -19,7 +19,7 @@ pub const COMPILER_CAPABILITY_ABI_VERSION: &str = "elysium.compiler.capability.v
 pub const NATIVE_UI_REQUIRED_CAPABILITIES: &[&str] = &[
     "native_ui.surface",
     "native_ui.design_space_coordinates",
-    "native_ui.background_asset",
+    "native_ui.semantic_layout",
 ];
 pub const NATIVE_UI_REQUIRED_FILES: &[&str] = &[
     "native-ui/families.jsonl.zst",
@@ -30,7 +30,7 @@ pub const NATIVE_UI_REQUIRED_FILES: &[&str] = &[
 pub const NATIVE_UI_COORDINATE_SPACE: &str = "nei_pixels";
 pub const NATIVE_UI_RUNTIME_TRANSFORM: &str = "uniform-scale-to-fit-only";
 pub const NATIVE_UI_FALLBACK_POLICY: &str =
-    "missing required native UI capture is a validation error";
+    "NEI frame/background PNG fallback is retired; missing hand-written UI mappings fail closed";
 
 pub const COMPILER_POLICY_LEGACY_FALLBACK: &str = "forbidden";
 pub const COMPILER_POLICY_MISSING_CAPABILITY: &str = "fail-fast";

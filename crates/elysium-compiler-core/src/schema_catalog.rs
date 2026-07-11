@@ -28,9 +28,9 @@ const RAW_EXPORT_VALIDATION_POLICY: &str =
 const NATIVE_UI_EXPORT_VALIDATION_POLICY: &str =
     "missing native UI validation, blocked geometry reports, and schema mismatches are compile blockers";
 const NATIVE_BACKGROUND_STRICT_POLICY: &str =
-    "a captured nativeBackground.assetRef must point to a materialized raw-export asset";
+    "nativeBackground is semantic layout metadata only; background PNG assets are retired and are not materialized";
 const NATIVE_FRAME_STRICT_POLICY: &str =
-    "every recipe UI payload must include captured nativeFrame metadata whose assetRef points to a materialized in-game NEI frame asset";
+    "nativeFrame PNG capture is retired; recipe UI payloads must not depend on in-game NEI frame assets";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RawExportManifestFileDescriptor {
@@ -141,18 +141,18 @@ pub fn raw_export_schema_section() -> Value {
             "policy": NATIVE_UI_EXPORT_VALIDATION_POLICY
         },
         "nativeBackground": {
-            "requiredCapturedFields": ["status", "assetRef"],
-            "capturedStatus": "captured",
-            "assetRoot": "assets/ui-backgrounds/",
+            "requiredSemanticFields": ["status", "kind", "width", "height", "coordinateSpace"],
+            "supportedStatus": ["semantic", "captured"],
+            "assetRefPolicy": "ignored-if-present",
             "scaling": ["nine-slice", "stretch", "none"],
             "strictPolicy": NATIVE_BACKGROUND_STRICT_POLICY
         },
         "nativeFrame": {
-            "requiredCapturedFields": ["status", "assetRef", "width", "height", "coordinateSpace"],
-            "capturedStatus": "captured",
+            "status": "retired",
+            "required": false,
             "coordinateSpace": "nei_pixels",
-            "assetRoot": "assets/nei-native-frames/",
-            "source": "in-game-nei-render",
+            "assetRootPolicy": "retired",
+            "retiredArtifacts": ["nei-frame-png"],
             "strictPolicy": NATIVE_FRAME_STRICT_POLICY
         }
     })

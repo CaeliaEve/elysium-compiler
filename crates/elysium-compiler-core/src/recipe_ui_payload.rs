@@ -1,17 +1,17 @@
-use crate::io::normalize_path;
-use crate::json_ext::{first_non_empty, nested_value_string, value_string, value_u64};
+use crate::json_ext::{first_non_empty, nested_value_string, value_string};
 use crate::manifest::{
-    portable_relative_path, read_jsonl_file_values, read_jsonl_values, read_manifest_collection,
-    read_manifest_json, RawManifest, COLLECTION_HANDLER_LAYOUTS,
+    read_jsonl_file_values, read_jsonl_values, read_manifest_collection, read_manifest_json,
+    RawManifest, COLLECTION_HANDLER_LAYOUTS,
 };
 use crate::recipe_domain::{
     captured_ui_family_key, classify_recipe_family_key, public_recipe_handler,
-    public_recipe_layout, recipe_id, RecipeHandlerContext,
+    public_recipe_layout, recipe_id, should_skip_redundant_nei_workbench_recipe,
+    RecipeHandlerContext,
 };
 use anyhow::{anyhow, Context, Result};
 use serde_json::json;
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -29,179 +29,6 @@ pub fn encode_recipe_file_name(value: &str) -> String {
 pub fn rust_recipe_ui_payload_relative_path(recipe_id: &str) -> String {
     let shard = sha1_hex_prefix(recipe_id.as_bytes(), 2);
     format!("recipes/ui-payload-shards/{shard}.json")
-}
-
-pub const NATIVE_NEI_FRAME_ASSET_PREFIX: &str = "assets/nei-native-frames/";
-
-pub fn public_recipe_native_frame(
-    recipe_id: &str,
-    recipe: &Value,
-    public_layout: Option<&Value>,
-    public_handler: Option<&Value>,
-) -> Option<Value> {
-    let source_value = recipe
-        .get("nativeFrame")
-        .or_else(|| recipe.get("nativeNeiFrame"))
-        .or_else(|| recipe.get("metadata").and_then(|metadata| metadata.get("nativeFrame")))
-        .or_else(|| {
-            recipe
-                .get("additionalData")
-                .and_then(|additional_data| additional_data.get("nativeFrame"))
-        })?;
-    let source = source_value.as_object()?;
-    let status = value_string(source_value, "status").unwrap_or_else(|| "captured".to_string());
-    let asset_ref = source
-        .get("assetRef")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())?
-        .to_string();
-    let width = source
-        .get("width")
-        .and_then(Value::as_u64)
-        .or_else(|| public_layout.and_then(|layout| value_u64(layout, "width")))
-        .unwrap_or(166);
-    let height = source
-        .get("height")
-        .and_then(Value::as_u64)
-        .or_else(|| public_layout.and_then(|layout| value_u64(layout, "height")))
-        .unwrap_or(65);
-    let coordinate_space = source
-        .get("coordinateSpace")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or("nei_pixels");
-
-    let mut frame = serde_json::Map::new();
-    for (key, value) in source {
-        frame.insert(key.clone(), value.clone());
-    }
-    frame.insert("status".to_string(), Value::String(status));
-    frame.insert("assetRef".to_string(), Value::String(asset_ref));
-    frame.insert("width".to_string(), json!(width));
-    frame.insert("height".to_string(), json!(height));
-    frame.insert(
-        "coordinateSpace".to_string(),
-        Value::String(coordinate_space.to_string()),
-    );
-    frame
-        .entry("source".to_string())
-        .or_insert_with(|| Value::String("in-game-nei-render".to_string()));
-    frame
-        .entry("recipeId".to_string())
-        .or_insert_with(|| Value::String(recipe_id.to_string()));
-    if let Some(handler_key) =
-        public_handler.and_then(|handler| value_string(handler, "handlerKey"))
-    {
-        frame
-            .entry("handlerKey".to_string())
-            .or_insert_with(|| Value::String(handler_key));
-    }
-    if let Some(handler_class) =
-        public_handler.and_then(|handler| value_string(handler, "handlerClass"))
-    {
-        frame
-            .entry("handlerClass".to_string())
-            .or_insert_with(|| Value::String(handler_class));
-    }
-    Some(Value::Object(frame))
-}
-
-pub fn materialize_native_frame_assets(
-    input: &Path,
-    output: &Path,
-    recipe_ui_index: &[Value],
-) -> Result<Value> {
-    let mut assets_by_ref = BTreeMap::<String, BTreeSet<String>>::new();
-    let mut malformed = Vec::new();
-    for entry in recipe_ui_index {
-        let recipe_id = value_string(entry, "recipeId").unwrap_or_default();
-        let Some(frame) = entry.get("nativeFrame").filter(|value| value.is_object()) else {
-            malformed.push(json!({
-                "recipeId": recipe_id,
-                "reason": "native-frame-payload-missing",
-                "required": "nativeFrame",
-            }));
-            continue;
-        };
-        let status = value_string(frame, "status").unwrap_or_default();
-        let asset_ref = value_string(frame, "assetRef").unwrap_or_default();
-        if status != "captured" {
-            malformed.push(json!({
-                "recipeId": recipe_id,
-                "assetRef": asset_ref,
-                "reason": "native-frame-status-not-captured",
-                "status": status,
-            }));
-            continue;
-        }
-        if asset_ref.trim().is_empty() {
-            malformed.push(json!({
-                "recipeId": recipe_id,
-                "reason": "native-frame-asset-ref-missing",
-            }));
-            continue;
-        }
-        assets_by_ref
-            .entry(asset_ref)
-            .or_default()
-            .insert(recipe_id);
-    }
-
-    let mut copied = Vec::new();
-    let mut missing = malformed;
-    for (asset_ref, recipe_ids) in assets_by_ref {
-        if !asset_ref.starts_with(NATIVE_NEI_FRAME_ASSET_PREFIX) {
-            missing.push(json!({
-                "assetRef": asset_ref,
-                "recipeIds": recipe_ids.into_iter().collect::<Vec<_>>(),
-                "reason": "native-frame-asset-outside-prefix",
-                "expectedPrefix": NATIVE_NEI_FRAME_ASSET_PREFIX,
-            }));
-            continue;
-        }
-        let Some(relative) = portable_relative_path(&asset_ref) else {
-            missing.push(json!({
-                "assetRef": asset_ref,
-                "recipeIds": recipe_ids.into_iter().collect::<Vec<_>>(),
-                "reason": "non-portable-path",
-            }));
-            continue;
-        };
-        let source = input.join(&relative);
-        if !source.is_file() {
-            missing.push(json!({
-                "assetRef": asset_ref,
-                "recipeIds": recipe_ids.into_iter().collect::<Vec<_>>(),
-                "path": normalize_path(relative.as_path()),
-                "reason": "raw-export-native-frame-asset-missing",
-            }));
-            continue;
-        }
-        let target = output.join(&relative);
-        if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::copy(&source, &target).with_context(|| {
-            format!(
-                "copy native NEI frame asset {} -> {}",
-                source.display(),
-                target.display()
-            )
-        })?;
-        copied.push(json!({
-            "assetRef": asset_ref,
-            "recipeIds": recipe_ids.into_iter().collect::<Vec<_>>(),
-            "path": normalize_path(relative.as_path()),
-        }));
-    }
-    Ok(json!({
-        "schemaVersion": "neonei/native-nei-frame-assets/current",
-        "assetPrefix": NATIVE_NEI_FRAME_ASSET_PREFIX,
-        "copied": copied,
-        "missing": missing,
-    }))
 }
 
 pub fn read_compiled_recipe_ui_payload_index(output: &Path) -> Result<Option<Vec<Value>>> {
@@ -248,16 +75,13 @@ pub fn build_raw_recipe_ui_payload_index(
     for recipe in &recipes {
         let recipe_id = recipe_id(recipe);
         let (handler, layout) = handler_context.resolve(recipe);
+        if should_skip_redundant_nei_workbench_recipe(recipe, handler) {
+            continue;
+        }
         let public_handler = handler.map(public_recipe_handler);
         let public_layout = layout
             .map(public_recipe_layout)
             .or_else(|| recipe.get("nativeLayout").cloned());
-        let native_frame = public_recipe_native_frame(
-            &recipe_id,
-            recipe,
-            public_layout.as_ref(),
-            public_handler.as_ref(),
-        );
         let raw_family_key = first_non_empty(&[
             value_string(recipe, "family"),
             value_string(recipe, "sourcePlugin"),
@@ -289,7 +113,7 @@ pub fn build_raw_recipe_ui_payload_index(
         let handler_key = public_handler
             .as_ref()
             .and_then(|handler| value_string(handler, "handlerKey"));
-        let mut entry = json!({
+        let entry = json!({
             "recipeId": recipe_id,
             "path": rust_recipe_ui_payload_relative_path(&recipe_id),
             "payloadKey": recipe_id,
@@ -299,11 +123,6 @@ pub fn build_raw_recipe_ui_payload_index(
             "handlerKey": handler_key,
             "nativeLayout": public_layout,
         });
-        if let Some(native_frame) = native_frame {
-            if let Some(object) = entry.as_object_mut() {
-                object.insert("nativeFrame".to_string(), native_frame);
-            }
-        }
         entries.push(entry);
     }
     Ok(entries)

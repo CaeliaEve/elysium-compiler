@@ -1,7 +1,7 @@
 {
   "artifacts": [
     {
-      "bytes": 1199,
+      "bytes": 1065,
       "envelopeSchema": "neonei/ui-string-pack/current",
       "kind": "binary-pack",
       "logicalName": "rustUiStringsBin",
@@ -15,13 +15,13 @@
           "strideU32": 1
         },
         {
-          "bytes": 1050,
+          "bytes": 916,
           "name": "stringBytes",
-          "rows": 1050,
+          "rows": 916,
           "strideU32": 0
         }
       ],
-      "sha256": "47ebfc589b172eb74f9894ee35221035743780796b10b5643f1c9c80cfe09818",
+      "sha256": "84dd3a8bb57035dfdc9fe89e985d37e299b4303091fe83992bc526be535f8b1f",
       "status": "present",
       "version": 1
     },
@@ -94,26 +94,26 @@
       "version": 1
     },
     {
-      "bytes": 310,
+      "bytes": 267,
       "envelopeSchema": null,
       "kind": "manifest",
       "logicalName": "rustUiAssetsManifest",
       "path": "rust/ui-pack/ui_assets.manifest.json",
       "payloadMagic": null,
       "sections": [],
-      "sha256": "542881fe87414370a87e20ec1622d14906a9f2e8dbbe8a7cb02e7cf46390b9e8",
+      "sha256": "c3ec316952359637cc197b74aa84560544f9e9d5baff06d0608ec5f36aa52cb3",
       "status": "present",
       "version": null
     },
     {
-      "bytes": 2989,
+      "bytes": 2835,
       "envelopeSchema": null,
       "kind": "manifest",
       "logicalName": "rustUiTemplateCatalog",
       "path": "rust/ui-pack/ui_template_catalog.json",
       "payloadMagic": null,
       "sections": [],
-      "sha256": "50b16c43003d210b9d16c2aee9efb96a04565ed61d4bf0a2425f3885498516d3",
+      "sha256": "8beaee3c4f708c2fa06b28fefe4cab14db667bdf81a52e50dcff9bae62585125",
       "status": "present",
       "version": null
     },
@@ -142,14 +142,14 @@
       "version": null
     },
     {
-      "bytes": 2672,
+      "bytes": 2645,
       "envelopeSchema": null,
       "kind": "report",
       "logicalName": "rustUiPackReport",
       "path": "rust/ui-pack/ui_pack_report.json",
       "payloadMagic": null,
       "sections": [],
-      "sha256": "6bac9408dff48a436e1fd87d68564daffa2d2f3c2a0159a9530bde3acd826b70",
+      "sha256": "cd10b8410e50bca578c321f265a3a6cd00b8833d1ac8ae896db9c9ecd8cc9882",
       "status": "present",
       "version": null
     }

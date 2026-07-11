@@ -1,6 +1,6 @@
 {
   "backgroundAssetGaps": [],
-  "backgroundStatus": "captured",
+  "backgroundStatus": "semantic",
   "counts": {
     "gregtechHandlerLayouts": 1,
     "gregtechHandlerLayoutsWithBackgroundRegions": 1,

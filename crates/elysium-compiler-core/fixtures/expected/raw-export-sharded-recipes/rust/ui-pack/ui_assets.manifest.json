@@ -1,13 +1,11 @@
 {
-  "assets": [
-    {
-      "assetRef": "assets/ui-backgrounds/gregtech/nei_single_recipe.png",
-      "kind": "template-background",
-      "templateKeys": [
-        "gt-fixture@default"
-      ]
-    }
-  ],
+  "assetPolicy": "web-authored-ui-only",
+  "assets": [],
   "generatedAt": "deterministic-rust-compiler",
-  "schemaVersion": "neonei/ui-assets-manifest/current"
+  "retiredNativeArtifacts": [
+    "nei-background-png",
+    "nei-frame-png"
+  ],
+  "schemaVersion": "neonei/ui-assets-manifest/current",
+  "templateCount": 1
 }

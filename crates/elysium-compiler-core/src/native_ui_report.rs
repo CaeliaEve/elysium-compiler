@@ -46,7 +46,7 @@ pub fn compile_native_ui_layout_report(
         .collect::<Vec<_>>();
 
     let mut failures = Vec::new();
-    let mut background_asset_gaps = Vec::new();
+    let mut background_contract_gaps = Vec::new();
     if layouts.is_empty() {
         failures.push("handler layout index is empty".to_string());
     }
@@ -59,8 +59,8 @@ pub fn compile_native_ui_layout_report(
         .filter(|layout| has_native_background(layout))
         .count();
     if !gt_recipe_layouts.is_empty() && gt_recipe_entries_with_native_backgrounds == 0 {
-        background_asset_gaps.push(
-            "gregtech-machine recipe UI payloads have no nativeBackground capture facts"
+        background_contract_gaps.push(
+            "gregtech-machine recipe UI payloads have no semantic nativeBackground facts"
                 .to_string(),
         );
     }
@@ -69,11 +69,11 @@ pub fn compile_native_ui_layout_report(
     } else {
         "blocked"
     };
-    let background_status = if gt_recipe_entries_with_background_regions > 0 {
-        "captured"
-    } else if gt_recipe_entries_with_native_backgrounds > 0 {
+    let background_status = if gt_recipe_entries_with_native_backgrounds > 0
+        || gt_recipe_entries_with_background_regions > 0
+    {
         "semantic"
-    } else if background_asset_gaps.is_empty() {
+    } else if background_contract_gaps.is_empty() {
         "ready"
     } else {
         "missing"
@@ -114,7 +114,7 @@ pub fn compile_native_ui_layout_report(
                 .collect::<Vec<_>>(),
         },
         "failures": failures,
-        "backgroundAssetGaps": background_asset_gaps,
+        "backgroundAssetGaps": background_contract_gaps,
     });
     let rust_dir = output.join("rust");
     fs::create_dir_all(&rust_dir)?;

@@ -7,14 +7,11 @@
   },
   "assets": {
     "uiBackgrounds": {
-      "copied": [
-        {
-          "assetRef": "assets/ui-backgrounds/gregtech/nei_single_recipe.png",
-          "path": "assets/ui-backgrounds/gregtech/nei_single_recipe.png"
-        }
-      ],
+      "copied": [],
       "missing": [],
-      "schemaVersion": "neonei/ui-background-assets/current"
+      "reason": "NEI background PNG materialization retired; web-authored UI uses semantic nativeBackground geometry only",
+      "schemaVersion": "neonei/ui-background-assets/retired",
+      "status": "retired"
     }
   },
   "format": {
@@ -93,7 +90,7 @@
   },
   "status": "ready",
   "summary": {
-    "assetCount": 1,
+    "assetCount": 0,
     "bindingCount": 2,
     "boundRecipeCount": 2,
     "dynamicPrimitiveCount": 1,
