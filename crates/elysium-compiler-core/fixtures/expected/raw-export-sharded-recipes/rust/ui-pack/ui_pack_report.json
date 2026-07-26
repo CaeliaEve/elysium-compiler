@@ -30,6 +30,25 @@
       "gt-modular-ui",
       "canonical-nei-template"
     ],
+    "bindingFields": [
+      "recipeId",
+      "path",
+      "payloadKey",
+      "familyKey",
+      "recipeType",
+      "machineType",
+      "templateKey",
+      "templateSignature",
+      "canonicalMachineFamily",
+      "layoutKind",
+      "presentationSurface",
+      "layoutId",
+      "rendererId",
+      "flags"
+    ],
+    "bindingPackMagic": "NEIUIB1_NUL",
+    "bindingPackVersion": 2,
+    "bindingStride": 14,
     "dynamicPrimitiveGeometryFields": [
       "kind",
       "role",

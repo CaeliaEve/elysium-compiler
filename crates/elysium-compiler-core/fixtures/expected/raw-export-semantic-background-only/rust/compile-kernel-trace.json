@@ -1,0 +1,223 @@
+{
+  "authorityInput": "\\\\?\\E:\\codex\\ae2\\elysium-compiler\\crates\\elysium-compiler-core\\fixtures\\raw-export-semantic-background-only",
+  "debugJson": false,
+  "inputAuthority": "legacy-direct-manifest",
+  "inputGenerationId": "78a5788b09248572b09166474bdec0b116fb4f9fa493099e0529a796a251c37e",
+  "inputGenerationPolicy": "manifest bytes plus the complete input-tree path/type/length/mtime metadata catalog must remain unchanged for the session lifetime; symlinks are forbidden",
+  "manifestIo": {
+    "cacheHitCount": 0,
+    "cacheMissCount": 8,
+    "jsonParseCount": 4,
+    "jsonlParseCount": 2,
+    "jsonlRowParseCount": 2,
+    "loadBytesRead": 709,
+    "loadOpenCount": 1,
+    "loadReadCount": 1,
+    "nativeUiExportAbiValidationCount": 1,
+    "parseCount": 1,
+    "rawExportAbiValidationCount": 1,
+    "sourceBytesRead": 3870,
+    "sourceCacheReleaseCount": 1,
+    "sourceCacheReleaseMs": 0,
+    "sourceDecompressionCount": 0,
+    "sourceOpenCount": 6,
+    "sourceReadCount": 6,
+    "verificationBytesRead": 709,
+    "verificationOpenCount": 1,
+    "verificationReadCount": 1
+  },
+  "resolvedInput": "\\\\?\\E:\\codex\\ae2\\elysium-compiler\\crates\\elysium-compiler-core\\fixtures\\raw-export-semantic-background-only",
+  "runtimePackThreads": 1,
+  "schemaVersion": "elysium-compiler/compile-kernel-trace/v1",
+  "scope": "native-ui",
+  "stages": [
+    {
+      "contract": {
+        "capabilities": [
+          "compiler.lifecycle.prepare"
+        ],
+        "inputs": [
+          "compile-options"
+        ],
+        "outputs": [
+          "output-directory",
+          "debug-json-policy"
+        ]
+      },
+      "durationMs": 0,
+      "module": "compiler.lifecycle",
+      "stage": "prepare-output",
+      "status": "ok"
+    },
+    {
+      "contract": {
+        "capabilities": [
+          "compiler.raw_export_abi_validator"
+        ],
+        "inputs": [
+          "raw-export-manifest"
+        ],
+        "outputs": [
+          "rust/raw-export-abi-validation-report.json"
+        ]
+      },
+      "durationMs": 1,
+      "module": "compiler.raw_export_abi",
+      "stage": "validate-raw-export-abi",
+      "status": "ok"
+    },
+    {
+      "contract": {
+        "capabilities": [
+          "compiler.native_ui_export_abi_validator"
+        ],
+        "inputs": [
+          "validation/native-ui-abi.json",
+          "raw-export-manifest"
+        ],
+        "outputs": [
+          "rust/native-ui-export-abi-validation-report.json"
+        ]
+      },
+      "durationMs": 0,
+      "module": "compiler.native_ui_export_abi",
+      "stage": "validate-native-ui-export-abi",
+      "status": "ok"
+    },
+    {
+      "contract": {
+        "capabilities": [
+          "compiler.binary_pack",
+          "compiler.native_ui_pack"
+        ],
+        "inputs": [
+          "raw-export-manifest",
+          "raw-fact-streams",
+          "native-ui-capture-facts"
+        ],
+        "outputs": [
+          "binary-runtime-packs",
+          "ui-pack-assets",
+          "optional-debug-json"
+        ]
+      },
+      "durationMs": 24,
+      "module": "compiler.runtime_packs",
+      "stage": "emit-runtime-packs",
+      "status": "ok"
+    },
+    {
+      "contract": {
+        "capabilities": [
+          "compiler.semantic_validator"
+        ],
+        "inputs": [
+          "raw-export-reports",
+          "browser-contract",
+          "semantic-reports"
+        ],
+        "outputs": [
+          "rust/semantic-validation-report.json"
+        ]
+      },
+      "durationMs": 0,
+      "module": "compiler.semantic_validation",
+      "stage": "validate-semantic-contract",
+      "status": "ok"
+    },
+    {
+      "contract": {
+        "capabilities": [
+          "compiler.input_generation_guard"
+        ],
+        "inputs": [
+          "raw-export-session",
+          "complete-input-tree-metadata"
+        ],
+        "outputs": [
+          "verified-immutable-input-generation"
+        ]
+      },
+      "durationMs": 0,
+      "module": "compiler.input_generation",
+      "stage": "verify-input-generation",
+      "status": "ok"
+    },
+    {
+      "contract": {
+        "capabilities": [
+          "compiler.native_ui_validator"
+        ],
+        "inputs": [
+          "recipes/handler-layout-index.json",
+          "recipes/ui-payload-index.json"
+        ],
+        "outputs": [
+          "rust/native-ui-layout-report.json"
+        ]
+      },
+      "durationMs": 2,
+      "module": "compiler.native_ui_validation",
+      "stage": "validate-native-ui-layout",
+      "status": "ok"
+    },
+    {
+      "contract": {
+        "capabilities": [
+          "compiler.native_ui_pack_abi_validator"
+        ],
+        "inputs": [
+          "rust/ui-pack/ui_templates.bin",
+          "rust/ui-pack/ui_bindings.bin",
+          "rust/ui-pack/ui_strings.bin"
+        ],
+        "outputs": [
+          "rust/ui-pack-abi-validation-report.json"
+        ]
+      },
+      "durationMs": 1,
+      "module": "compiler.native_ui_validation",
+      "stage": "validate-native-ui-pack-abi",
+      "status": "ok"
+    },
+    {
+      "contract": {
+        "capabilities": [
+          "compiler.pack_abi_validator"
+        ],
+        "inputs": [
+          "binary-runtime-packs",
+          "runtime-report-inputs"
+        ],
+        "outputs": [
+          "rust/pack-validation-report.json"
+        ]
+      },
+      "durationMs": 2,
+      "module": "compiler.pack_abi_validation",
+      "stage": "validate-pack-abi",
+      "status": "ok"
+    },
+    {
+      "contract": {
+        "capabilities": [
+          "compiler.runtime_manifest"
+        ],
+        "inputs": [
+          "pack-abi-validation-report",
+          "runtime-artifact-registry"
+        ],
+        "outputs": [
+          "runtime-manifest",
+          "integrity-report",
+          "dist-manifest"
+        ]
+      },
+      "durationMs": 5,
+      "module": "compiler.runtime_reports",
+      "stage": "emit-runtime-reports",
+      "status": "ok"
+    }
+  ],
+  "strict": true
+}

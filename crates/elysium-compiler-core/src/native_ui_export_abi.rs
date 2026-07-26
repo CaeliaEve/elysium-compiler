@@ -1,7 +1,8 @@
-use crate::io::{sha256_file, write_json_value};
-use crate::json_ext::{read_json_file, value_string, value_u64};
-use crate::manifest::{portable_relative_path, read_manifest};
+use crate::io::write_json_value;
+use crate::json_ext::{value_string, value_u64};
+use crate::manifest::portable_relative_path;
 use crate::native_ui_export_abi_catalog::*;
+use crate::session::{RawExportSession, RelativeInputKind};
 use crate::version::EXPORT_ABI_VERSION;
 use anyhow::{anyhow, Result};
 use serde::Serialize;
@@ -78,12 +79,12 @@ pub fn native_ui_export_abi_validation_report_path(output: &Path) -> PathBuf {
     output.join(NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH)
 }
 
-pub fn write_native_ui_export_abi_validation_report(
-    input: &Path,
+pub(crate) fn write_native_ui_export_abi_validation_report_with_session(
+    session: &RawExportSession,
     output: &Path,
     strict: bool,
 ) -> Result<NativeUiExportAbiValidationReport> {
-    let report = validate_native_ui_export_abi(input)?;
+    let report = validate_native_ui_export_abi_with_session(session)?;
     let path = native_ui_export_abi_validation_report_path(output);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -101,8 +102,25 @@ pub fn write_native_ui_export_abi_validation_report(
     Ok(report)
 }
 
+#[cfg(test)]
 pub fn validate_native_ui_export_abi(input: &Path) -> Result<NativeUiExportAbiValidationReport> {
-    let manifest = read_manifest(input)?;
+    let session = RawExportSession::open(input)?;
+    validate_native_ui_export_abi_with_session(&session)
+}
+
+pub(crate) fn validate_native_ui_export_abi_with_session(
+    session: &RawExportSession,
+) -> Result<NativeUiExportAbiValidationReport> {
+    Ok(session
+        .native_ui_export_abi_validation(|| validate_native_ui_export_abi_uncached(session))?
+        .as_ref()
+        .clone())
+}
+
+fn validate_native_ui_export_abi_uncached(
+    session: &RawExportSession,
+) -> Result<NativeUiExportAbiValidationReport> {
+    let manifest = session.manifest();
     let mut state = NativeUiExportAbiState {
         manifest_path: manifest
             .files
@@ -138,33 +156,42 @@ pub fn validate_native_ui_export_abi(input: &Path) -> Result<NativeUiExportAbiVa
         ));
     }
 
-    let path = input.join(&portable_path);
-    if !path.exists() {
-        state.missing_report = true;
-        state.contract_violations.push(format!(
-            "native UI validation report file is missing: {}",
-            manifest_path_value
-        ));
-        return Ok(state.into_report());
-    }
-    if path.is_dir() {
-        state.missing_report = true;
-        state.path_violations.push(format!(
-            "{}:{} points to a directory; native UI validation report must be a JSON file",
-            NATIVE_UI_VALIDATION_MANIFEST_KEY, manifest_path_value
-        ));
-        return Ok(state.into_report());
+    match session.relative_input_kind(&manifest_path_value)? {
+        RelativeInputKind::Missing => {
+            state.missing_report = true;
+            state.contract_violations.push(format!(
+                "native UI validation report file is missing: {}",
+                manifest_path_value
+            ));
+            return Ok(state.into_report());
+        }
+        RelativeInputKind::Directory | RelativeInputKind::Unsupported => {
+            state.missing_report = true;
+            state.path_violations.push(format!(
+                "{}:{} points to a non-file; native UI validation report must be a JSON file",
+                NATIVE_UI_VALIDATION_MANIFEST_KEY, manifest_path_value
+            ));
+            return Ok(state.into_report());
+        }
+        RelativeInputKind::File => {}
     }
 
-    let metadata = path.metadata()?;
-    state.report_bytes = Some(metadata.len());
-    state.report_sha256 = Some(sha256_file(&path)?);
-    let raw_report = read_json_file(&path)?;
-    state.raw_report_schema_version = value_string(&raw_report, "schemaVersion");
-    state.raw_report_status = value_string(&raw_report, "status");
-    state.layout_count = value_u64(&raw_report, NATIVE_UI_EXPORT_LAYOUT_COUNT_FIELD).unwrap_or(0);
-    state.slot_count = value_u64(&raw_report, NATIVE_UI_EXPORT_SLOT_COUNT_FIELD).unwrap_or(0);
-    state.rect_count = value_u64(&raw_report, NATIVE_UI_EXPORT_RECT_COUNT_FIELD).unwrap_or(0);
+    let descriptor = session
+        .describe_relative_file(&manifest_path_value)?
+        .ok_or_else(|| anyhow!("native UI validation report disappeared during session"))?;
+    state.report_bytes = Some(descriptor.bytes);
+    state.report_sha256 = Some(descriptor.sha256.clone());
+    let raw_report = session
+        .read_manifest_json(NATIVE_UI_VALIDATION_MANIFEST_KEY)?
+        .ok_or_else(|| anyhow!("native UI validation report is not declared"))?;
+    state.raw_report_schema_version = value_string(raw_report.as_ref(), "schemaVersion");
+    state.raw_report_status = value_string(raw_report.as_ref(), "status");
+    state.layout_count =
+        value_u64(raw_report.as_ref(), NATIVE_UI_EXPORT_LAYOUT_COUNT_FIELD).unwrap_or(0);
+    state.slot_count =
+        value_u64(raw_report.as_ref(), NATIVE_UI_EXPORT_SLOT_COUNT_FIELD).unwrap_or(0);
+    state.rect_count =
+        value_u64(raw_report.as_ref(), NATIVE_UI_EXPORT_RECT_COUNT_FIELD).unwrap_or(0);
     state.primitive_count =
         value_u64(&raw_report, NATIVE_UI_EXPORT_PRIMITIVE_COUNT_FIELD).unwrap_or(0);
     state.missing_surface_count =

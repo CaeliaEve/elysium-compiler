@@ -1,13 +1,23 @@
 {
+  "animationMaterializationDiagnostics": [],
   "counts": {
     "actionableIssues": 0,
     "animatedAtlasItems": 0,
+    "animationFrameMaterializationRows": 0,
     "atlasItems": 1,
+    "blockingActionableIssues": 0,
+    "certifiedStaticAnimations": 0,
+    "certifiedUnavailableAnimations": 0,
+    "facadeResolutionRows": 0,
+    "invalidAnimationMaterializations": 0,
     "invalidAtlasBounds": 0,
     "invalidFrameBounds": 0,
+    "missingAnimationMaterializations": 0,
     "missingAtlasAssetFiles": 0,
     "missingAtlasFileRefs": 0,
-    "staticAtlasItems": 1
+    "repairedBuildCraftFacades": 0,
+    "staticAtlasItems": 1,
+    "unresolvedBuildCraftFacades": 0
   },
   "generatedAt": "deterministic-rust-compiler",
   "invalidAtlasBounds": [],

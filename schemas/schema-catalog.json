@@ -177,15 +177,19 @@
           },
           {
             "capabilities": [
+              "compiler.recipe_pack",
               "compiler.native_ui_pack"
             ],
             "name": "ui",
-            "policy": "emit native UI binary and sidecar packs only",
+            "policy": "emit recipe artifacts plus native UI binary and sidecar packs",
             "runtimeCapabilities": [
+              "recipes.lookup",
+              "recipes.native-ui-layout",
               "recipes.ui-pack",
               "native-render.webgl2"
             ],
             "runtimePackProducers": [
+              "recipes",
               "ui"
             ]
           },
@@ -672,7 +676,8 @@
             "scopes": [
               "all",
               "native-ui",
-              "recipes"
+              "recipes",
+              "ui"
             ]
           },
           {
@@ -976,7 +981,8 @@
             "scopes": [
               "all",
               "native-ui",
-              "recipes"
+              "recipes",
+              "ui"
             ]
           },
           {
@@ -991,7 +997,8 @@
             "scopes": [
               "all",
               "native-ui",
-              "recipes"
+              "recipes",
+              "ui"
             ]
           },
           {
@@ -1004,7 +1011,8 @@
             "scopes": [
               "all",
               "native-ui",
-              "recipes"
+              "recipes",
+              "ui"
             ]
           },
           {
@@ -1051,7 +1059,8 @@
             "scopes": [
               "all",
               "native-ui",
-              "recipes"
+              "recipes",
+              "ui"
             ]
           },
           {
@@ -1179,6 +1188,8 @@
           "atlas.meta"
         ],
         "ui": [
+          "recipes.lookup",
+          "recipes.native-ui-layout",
           "recipes.ui-pack",
           "native-render.webgl2"
         ]
@@ -1515,15 +1526,19 @@
           },
           {
             "capabilities": [
+              "compiler.recipe_pack",
               "compiler.native_ui_pack"
             ],
             "name": "ui",
-            "policy": "emit native UI binary and sidecar packs only",
+            "policy": "emit recipe artifacts plus native UI binary and sidecar packs",
             "runtimeCapabilities": [
+              "recipes.lookup",
+              "recipes.native-ui-layout",
               "recipes.ui-pack",
               "native-render.webgl2"
             ],
             "runtimePackProducers": [
+              "recipes",
               "ui"
             ]
           },
@@ -1556,7 +1571,7 @@
       ]
     },
     "compileKernel": {
-      "moduleCount": 9,
+      "moduleCount": 10,
       "modules": [
         {
           "name": "compiler.lifecycle",
@@ -1664,6 +1679,27 @@
                 ]
               },
               "name": "validate-semantic-contract"
+            }
+          ]
+        },
+        {
+          "name": "compiler.input_generation",
+          "stageCount": 1,
+          "stages": [
+            {
+              "contract": {
+                "capabilities": [
+                  "compiler.input_generation_guard"
+                ],
+                "inputs": [
+                  "raw-export-session",
+                  "complete-input-tree-metadata"
+                ],
+                "outputs": [
+                  "verified-immutable-input-generation"
+                ]
+              },
+              "name": "verify-input-generation"
             }
           ]
         },
@@ -1781,10 +1817,12 @@
               "compiler.browser_pack",
               "compiler.search_pack"
             ],
+            "concurrency": "parallel",
             "debugOnlyOutputs": [
               "rust/browser-pack.json",
               "rust/search-pack.json"
             ],
+            "dependencies": [],
             "id": "browser",
             "inputs": [
               "raw-export-manifest",
@@ -1797,6 +1835,17 @@
               "rust/search.bin",
               "rust/strings.zh_cn.bin"
             ],
+            "ownership": {
+              "mode": "exclusive",
+              "paths": [
+                "rust/browser.bin",
+                "rust/groups.bin",
+                "rust/search.bin",
+                "rust/strings.zh_cn.bin",
+                "rust/browser-pack.json",
+                "rust/search-pack.json"
+              ]
+            },
             "scopes": [
               "all",
               "native-ui",
@@ -1807,9 +1856,11 @@
             "capabilities": [
               "compiler.recipe_pack"
             ],
+            "concurrency": "exclusive-io",
             "debugOnlyOutputs": [
               "rust/recipe-pack.json"
             ],
+            "dependencies": [],
             "id": "recipes",
             "inputs": [
               "raw-export-manifest",
@@ -1821,21 +1872,37 @@
               "rust/recipe-handler-metadata-report.json",
               "rust/recipe-fragmentation-report.json"
             ],
+            "ownership": {
+              "mode": "exclusive",
+              "paths": [
+                "recipes/",
+                "rust/recipes.bin",
+                "rust/recipe-pack.json",
+                "rust/recipe-handler-metadata-report.json",
+                "rust/recipe-fragmentation-report.json"
+              ]
+            },
             "scopes": [
               "all",
               "native-ui",
-              "recipes"
+              "recipes",
+              "ui"
             ]
           },
           {
             "capabilities": [
               "compiler.native_ui_pack"
             ],
+            "concurrency": "parallel",
             "debugOnlyOutputs": [],
+            "dependencies": [
+              "recipes"
+            ],
             "id": "ui",
             "inputs": [
-              "native-ui-capture-facts",
-              "ui-template-catalog"
+              "raw-export-manifest",
+              "ui-template-catalog",
+              "compiled-recipe-ui-payload-index"
             ],
             "outputs": [
               "rust/ui-pack/ui_templates.bin",
@@ -1847,6 +1914,12 @@
               "rust/ui-pack/ui_family_census.json",
               "rust/ui-pack/ui_pack_report.json"
             ],
+            "ownership": {
+              "mode": "exclusive",
+              "paths": [
+                "rust/ui-pack/"
+              ]
+            },
             "scopes": [
               "all",
               "native-ui",
@@ -1857,11 +1930,16 @@
             "capabilities": [
               "compiler.texture_pack"
             ],
+            "concurrency": "exclusive-io",
             "debugOnlyOutputs": [
               "rust/texture-pack.json"
             ],
+            "dependencies": [
+              "ui"
+            ],
             "id": "texture",
             "inputs": [
+              "raw-export-manifest",
               "texture-atlas",
               "texture-animation-facts"
             ],
@@ -1873,6 +1951,19 @@
               "rust/missing-texture-report.json",
               "rust/suspicious-texture-report.json"
             ],
+            "ownership": {
+              "mode": "exclusive",
+              "paths": [
+                "textures/",
+                "render/",
+                "rust/textures.bin",
+                "rust/atlas.meta.bin",
+                "rust/animations.bin",
+                "rust/texture-pack.json",
+                "rust/missing-texture-report.json",
+                "rust/suspicious-texture-report.json"
+              ]
+            },
             "scopes": [
               "all",
               "textures"
@@ -1882,9 +1973,11 @@
             "capabilities": [
               "compiler.search_pack"
             ],
+            "concurrency": "parallel",
             "debugOnlyOutputs": [
               "rust/search-pack.json"
             ],
+            "dependencies": [],
             "id": "search",
             "inputs": [
               "raw-export-manifest",
@@ -1894,6 +1987,14 @@
               "rust/search.bin",
               "rust/strings.zh_cn.bin"
             ],
+            "ownership": {
+              "mode": "exclusive",
+              "paths": [
+                "rust/search.bin",
+                "rust/strings.zh_cn.bin",
+                "rust/search-pack.json"
+              ]
+            },
             "scopes": [
               "search"
             ]
@@ -1902,7 +2003,7 @@
         "selection": "descriptor-scope-table"
       },
       "schemaVersion": "elysium-compiler/compile-kernel-catalog/v1",
-      "stageCount": 10,
+      "stageCount": 11,
       "trace": {
         "path": "rust/compile-kernel-trace.json",
         "schemaVersion": "elysium-compiler/compile-kernel-trace/v1"
@@ -1916,7 +2017,7 @@
       "packAbiVersion": "elysium.pack.v1",
       "rawExportSchemaVersion": "1.0",
       "runtimeAbiVersion": "elysium.runtime.v1",
-      "schemaHash": "sha256:8ad246c8ef4cdbe47bacb0c30ab08ebd639f8c510fc80c268622bed470b5d291",
+      "schemaHash": "sha256:a1a1bd4731cc4c8e0a6ed7f2f547a03b61a538c80b51e2d2f99d4597db5eeda1",
       "version": "0.1.0"
     },
     "name": "elysium-compiler"
@@ -2107,7 +2208,8 @@
           "scopes": [
             "all",
             "native-ui",
-            "recipes"
+            "recipes",
+            "ui"
           ]
         },
         {
@@ -2411,7 +2513,8 @@
           "scopes": [
             "all",
             "native-ui",
-            "recipes"
+            "recipes",
+            "ui"
           ]
         },
         {
@@ -2426,7 +2529,8 @@
           "scopes": [
             "all",
             "native-ui",
-            "recipes"
+            "recipes",
+            "ui"
           ]
         },
         {
@@ -2439,7 +2543,8 @@
           "scopes": [
             "all",
             "native-ui",
-            "recipes"
+            "recipes",
+            "ui"
           ]
         },
         {
@@ -2486,7 +2591,8 @@
           "scopes": [
             "all",
             "native-ui",
-            "recipes"
+            "recipes",
+            "ui"
           ]
         },
         {
@@ -2541,6 +2647,29 @@
       "abiValidationReport": "elysium-compiler/ui-pack-abi-validation/v1",
       "abiValidationReportPath": "rust/ui-pack-abi-validation-report.json",
       "assetsManifest": "neonei/ui-assets-manifest/current",
+      "bindingAbi": {
+        "captureKeyPolicy": "internal-template-match-only",
+        "fields": [
+          "recipeId",
+          "path",
+          "payloadKey",
+          "familyKey",
+          "recipeType",
+          "machineType",
+          "templateKey",
+          "templateSignature",
+          "canonicalMachineFamily",
+          "layoutKind",
+          "presentationSurface",
+          "layoutId",
+          "rendererId",
+          "flags"
+        ],
+        "rowStrideU32": 14,
+        "schema": "neonei/ui-binding-pack/current",
+        "unknownRendererPolicy": "fail-closed",
+        "version": 2
+      },
       "bindingPackSchema": "neonei/ui-binding-pack/current",
       "report": "neonei/ui-pack-report/current",
       "stringPackSchema": "neonei/ui-string-pack/current",
@@ -2612,6 +2741,24 @@
           },
           {
             "arrayFields": [
+              "items"
+            ],
+            "id": "semantic-items",
+            "logicalNames": [
+              "semanticItems"
+            ]
+          },
+          {
+            "arrayFields": [
+              "items"
+            ],
+            "id": "item-identity-map",
+            "logicalNames": [
+              "itemIdentityMap"
+            ]
+          },
+          {
+            "arrayFields": [
               "textures"
             ],
             "id": "texture-rows",
@@ -2640,6 +2787,13 @@
             ]
           },
           {
+            "arrayFields": [],
+            "id": "nei-handlers",
+            "logicalNames": [
+              "neiHandlers"
+            ]
+          },
+          {
             "arrayFields": [
               "animations"
             ],
@@ -2658,6 +2812,26 @@
               "nativeSprites",
               "nativeRenderIndex"
             ]
+          },
+          {
+            "arrayFields": [
+              "facadeResolutions",
+              "resolutions"
+            ],
+            "id": "facade-resolutions",
+            "logicalNames": [
+              "facadeResolutions"
+            ]
+          },
+          {
+            "arrayFields": [
+              "animationFrameMaterializations",
+              "materializations"
+            ],
+            "id": "animation-frame-materializations",
+            "logicalNames": [
+              "animationFrameMaterializations"
+            ]
           }
         ],
         "jsonlExtensions": [
@@ -2665,7 +2839,7 @@
           "gz"
         ],
         "pathPolicy": "portable-relative-only; no drive letters, UNC paths, file URLs, '.', or '..' segments",
-        "schemaHashInput": "manifest-collection-catalog=elysium-compiler/manifest-collection-catalog/v1;descriptor-table=v1",
+        "schemaHashInput": "manifest-collection-catalog=elysium-compiler/manifest-collection-catalog/v1;descriptor-table=v2",
         "schemaVersion": "elysium-compiler/manifest-collection-catalog/v1"
       },
       "optionalFiles": [
@@ -2674,6 +2848,8 @@
         "textures",
         "animations",
         "nativeSprites",
+        "facadeResolutions",
+        "animationFrameMaterializations",
         "neiHandlers",
         "neiHandlerLayouts",
         "uiTemplateCatalog",

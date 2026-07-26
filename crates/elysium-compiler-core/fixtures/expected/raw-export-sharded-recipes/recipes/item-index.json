@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "neonei/recipe-item-index/v1",
+  "items": [
+    {
+      "itemId": "i~minecraft~iron_ingot~0",
+      "producedBy": [
+        {
+          "categoryId": "display~test_gt_machine",
+          "displayName": "Test GT Machine",
+          "recipeId": "r_fixture_shard_a"
+        }
+      ],
+      "usedIn": [
+        {
+          "categoryId": "display~test_gt_machine",
+          "displayName": "Test GT Machine",
+          "recipeId": "r_fixture_shard_a"
+        },
+        {
+          "categoryId": "display~test_gt_machine",
+          "displayName": "Test GT Machine",
+          "recipeId": "r_fixture_shard_b"
+        }
+      ]
+    }
+  ]
+}

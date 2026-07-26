@@ -11,8 +11,16 @@ pub struct CompilerReport {
     pub schema_version: &'static str,
     pub mode: String,
     pub input: String,
+    #[serde(rename = "inputAuthority")]
+    pub input_authority: &'static str,
+    #[serde(rename = "resolvedInput")]
+    pub resolved_input: String,
     pub output: Option<String>,
     pub elapsed_ms: u128,
+    #[serde(rename = "manifestIo")]
+    pub manifest_io: crate::session::ManifestIoMetrics,
+    #[serde(rename = "inputGenerationId")]
+    pub input_generation_id: String,
     pub raw_export: RawExportSummary,
     #[serde(rename = "rawExportAbi")]
     pub raw_export_abi: crate::raw_export_abi::RawExportAbiValidationReport,

@@ -42,7 +42,7 @@ const PRODUCERS_NATIVE_UI: &[&str] = &[
 const PRODUCERS_SEARCH: &[&str] = &[RUNTIME_PACK_PRODUCER_SEARCH];
 const PRODUCERS_BROWSER: &[&str] = &[RUNTIME_PACK_PRODUCER_BROWSER];
 const PRODUCERS_RECIPES: &[&str] = &[RUNTIME_PACK_PRODUCER_RECIPES];
-const PRODUCERS_UI: &[&str] = &[RUNTIME_PACK_PRODUCER_UI];
+const PRODUCERS_UI: &[&str] = &[RUNTIME_PACK_PRODUCER_RECIPES, RUNTIME_PACK_PRODUCER_UI];
 const PRODUCERS_TEXTURES: &[&str] = &[RUNTIME_PACK_PRODUCER_TEXTURE];
 
 const CAPABILITIES_ALL: &[&str] = &[
@@ -59,7 +59,7 @@ const CAPABILITIES_NATIVE_UI: &[&str] = &[
 const CAPABILITIES_SEARCH: &[&str] = &["compiler.search_pack"];
 const CAPABILITIES_BROWSER: &[&str] = &["compiler.browser_pack", "compiler.search_pack"];
 const CAPABILITIES_RECIPES: &[&str] = &["compiler.recipe_pack"];
-const CAPABILITIES_UI: &[&str] = &["compiler.native_ui_pack"];
+const CAPABILITIES_UI: &[&str] = &["compiler.recipe_pack", "compiler.native_ui_pack"];
 const CAPABILITIES_TEXTURES: &[&str] = &["compiler.texture_pack"];
 
 const RUNTIME_CAPABILITIES_ALL: &[&str] = &[
@@ -94,7 +94,12 @@ const RUNTIME_CAPABILITIES_BROWSER: &[&str] = &[
     "native-render.webgl2",
 ];
 const RUNTIME_CAPABILITIES_RECIPES: &[&str] = &["recipes.lookup", "recipes.native-ui-layout"];
-const RUNTIME_CAPABILITIES_UI: &[&str] = &["recipes.ui-pack", "native-render.webgl2"];
+const RUNTIME_CAPABILITIES_UI: &[&str] = &[
+    "recipes.lookup",
+    "recipes.native-ui-layout",
+    "recipes.ui-pack",
+    "native-render.webgl2",
+];
 const RUNTIME_CAPABILITIES_TEXTURES: &[&str] = &["atlas.static", "atlas.animated", "atlas.meta"];
 
 pub const SCOPE_EVERY: &[CompileScope] = &[
@@ -121,6 +126,7 @@ pub const SCOPE_ALL_NATIVE_RECIPES: &[CompileScope] = &[
     CompileScope::All,
     CompileScope::NativeUi,
     CompileScope::Recipes,
+    CompileScope::Ui,
 ];
 pub const SCOPE_ALL_NATIVE_UI: &[CompileScope] =
     &[CompileScope::All, CompileScope::NativeUi, CompileScope::Ui];
@@ -227,7 +233,7 @@ const COMPILE_SCOPE_DESCRIPTORS: &[CompileScopeDescriptor] = &[
         PRODUCERS_UI,
         CAPABILITIES_UI,
         RUNTIME_CAPABILITIES_UI,
-        "emit native UI binary and sidecar packs only",
+        "emit recipe artifacts plus native UI binary and sidecar packs",
     ),
     CompileScopeDescriptor::new(
         CompileScope::Textures,

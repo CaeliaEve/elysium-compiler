@@ -1,5 +1,4 @@
 use crate::json_ext::{first_non_empty, nested_value_string, value_i64, value_string, value_u64};
-use crate::recipe_ui_payload::encode_recipe_file_name;
 use crate::text::normalize_text;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -400,7 +399,25 @@ pub fn recipe_category_id_from_display_name(display_name: &str, raw_id: &str) ->
     if normalized.is_empty() || normalized == "unknown" {
         return raw_id.to_string();
     }
-    format!("display~{}", encode_recipe_file_name(&normalized))
+    format!(
+        "display~{}",
+        encode_recipe_category_id_component(&normalized)
+    )
+}
+
+fn encode_recipe_category_id_component(value: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.as_bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            encoded.push(*byte as char);
+        } else {
+            encoded.push('%');
+            encoded.push(HEX[(byte >> 4) as usize] as char);
+            encoded.push(HEX[(byte & 0x0f) as usize] as char);
+        }
+    }
+    encoded
 }
 
 fn normalize_machine_icon_item_id(value: &str) -> Option<String> {

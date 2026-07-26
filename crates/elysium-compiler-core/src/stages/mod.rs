@@ -4,18 +4,24 @@ use crate::kernel::{
     CompileStageDescriptor, CompileStageRegistry, COMPILE_KERNEL_TRACE_REPORT_PATH,
     COMPILE_KERNEL_TRACE_SCHEMA_VERSION,
 };
-use crate::native_ui_export_abi::write_native_ui_export_abi_validation_report;
+use crate::native_ui_export_abi::write_native_ui_export_abi_validation_report_with_session;
 use crate::native_ui_export_abi_catalog::{
     NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH, NATIVE_UI_VALIDATION_DEFAULT_PATH,
 };
 use crate::native_ui_report::compile_native_ui_layout_report;
-use crate::pack_abi::{purge_out_of_scope_runtime_artifacts, write_pack_abi_validation_report};
-use crate::raw_export_abi::write_raw_export_abi_validation_report;
+use crate::pack_abi::{
+    purge_out_of_scope_runtime_artifacts, purge_runtime_authority_artifacts,
+    write_pack_abi_validation_report,
+};
+use crate::raw_export_abi::write_raw_export_abi_validation_report_with_session;
 use crate::recipe_domain::captured_ui_family_key;
 use crate::runtime::{compile_runtime_reports, purge_debug_json_artifacts};
-use crate::runtime_pack_plan::{compile_runtime_packs, runtime_pack_compiler_catalog};
+use crate::runtime_pack_plan::{
+    compile_runtime_packs, runtime_pack_compiler_catalog, CompilerThreadPool,
+};
+use crate::session::RawExportSession;
 use crate::ui_pack_abi::write_ui_pack_abi_validation_report;
-use crate::validation::compile_semantic_validation_report;
+use crate::validation::compile_semantic_validation_report_with_session;
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 use std::fs;
@@ -31,6 +37,7 @@ const MODULE_RUNTIME_PACKS: &str = "compiler.runtime_packs";
 const MODULE_SEMANTIC_VALIDATION: &str = "compiler.semantic_validation";
 const MODULE_NATIVE_UI_VALIDATION: &str = "compiler.native_ui_validation";
 const MODULE_PACK_ABI_VALIDATION: &str = "compiler.pack_abi_validation";
+const MODULE_INPUT_GENERATION: &str = "compiler.input_generation";
 const MODULE_RUNTIME_REPORTS: &str = "compiler.runtime_reports";
 const MODULE_TRACE: &str = "compiler.trace";
 
@@ -130,6 +137,16 @@ const PACK_ABI_VALIDATION_STAGES: &[CompileStageDescriptor] = &[CompileStageDesc
     pack_abi_validation_stage,
 )];
 
+const INPUT_GENERATION_STAGES: &[CompileStageDescriptor] = &[CompileStageDescriptor::new(
+    "verify-input-generation",
+    CompileStageContract::new(
+        &["raw-export-session", "complete-input-tree-metadata"],
+        &["verified-immutable-input-generation"],
+        &["compiler.input_generation_guard"],
+    ),
+    verify_input_generation_stage,
+)];
+
 const RUNTIME_REPORT_STAGES: &[CompileStageDescriptor] = &[CompileStageDescriptor::new(
     "emit-runtime-reports",
     CompileStageContract::new(
@@ -156,27 +173,48 @@ const COMPILE_KERNEL_MODULES: &[CompileKernelModule] = &[
     CompileKernelModule::new(MODULE_NATIVE_UI_EXPORT_ABI, NATIVE_UI_EXPORT_ABI_STAGES),
     CompileKernelModule::new(MODULE_RUNTIME_PACKS, RUNTIME_PACK_STAGES),
     CompileKernelModule::new(MODULE_SEMANTIC_VALIDATION, SEMANTIC_VALIDATION_STAGES),
+    CompileKernelModule::new(MODULE_INPUT_GENERATION, INPUT_GENERATION_STAGES),
     CompileKernelModule::new(MODULE_NATIVE_UI_VALIDATION, NATIVE_UI_VALIDATION_STAGES),
     CompileKernelModule::new(MODULE_PACK_ABI_VALIDATION, PACK_ABI_VALIDATION_STAGES),
     CompileKernelModule::new(MODULE_RUNTIME_REPORTS, RUNTIME_REPORT_STAGES),
     CompileKernelModule::new(MODULE_TRACE, TRACE_STAGES),
 ];
 
-pub fn run_compile_kernel(
+pub(crate) fn run_compile_kernel(
     input: &Path,
+    output: &Path,
+    scope: CompileScope,
+    threads: Option<usize>,
+    strict: bool,
+    debug_json: bool,
+) -> Result<RawExportSession> {
+    let thread_pool = CompilerThreadPool::new(threads)?;
+    fs::create_dir_all(output)
+        .with_context(|| format!("create output directory {}", output.display()))?;
+    purge_runtime_authority_artifacts(output)?;
+    let session = RawExportSession::open(input)?;
+    let manifest_io = session.manifest_io_metrics();
+    debug_assert_eq!(manifest_io.load_open_count, 1);
+    debug_assert_eq!(manifest_io.parse_count, 1);
+    run_compile_kernel_with_session(&session, &thread_pool, output, scope, strict, debug_json)?;
+    Ok(session)
+}
+
+pub(crate) fn run_compile_kernel_with_session(
+    session: &RawExportSession,
+    thread_pool: &CompilerThreadPool,
     output: &Path,
     scope: CompileScope,
     strict: bool,
     debug_json: bool,
 ) -> Result<()> {
-    fs::create_dir_all(output)
-        .with_context(|| format!("create output directory {}", output.display()))?;
     let mut registry = CompileStageRegistry::new();
     for module in compile_kernel_modules() {
         registry.register_module(*module);
     }
     let kernel = registry.into_kernel();
-    let mut context = CompileKernelContext::new(input, output, scope, strict, debug_json);
+    let mut context =
+        CompileKernelContext::new(session, thread_pool, output, scope, strict, debug_json);
     kernel.run(&mut context)
 }
 
@@ -245,7 +283,8 @@ fn prepare_output_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
 
 fn emit_runtime_packs_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
     compile_runtime_packs(
-        context.input,
+        context.thread_pool,
+        context.session,
         context.output,
         context.scope,
         context.strict,
@@ -254,17 +293,25 @@ fn emit_runtime_packs_stage(context: &mut CompileKernelContext<'_>) -> Result<()
 }
 
 fn raw_export_abi_validation_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
-    write_raw_export_abi_validation_report(context.input, context.output, context.strict)?;
+    write_raw_export_abi_validation_report_with_session(
+        context.session,
+        context.output,
+        context.strict,
+    )?;
     Ok(())
 }
 
 fn native_ui_export_abi_validation_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
-    write_native_ui_export_abi_validation_report(context.input, context.output, context.strict)?;
+    write_native_ui_export_abi_validation_report_with_session(
+        context.session,
+        context.output,
+        context.strict,
+    )?;
     Ok(())
 }
 
 fn semantic_validation_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
-    compile_semantic_validation_report(context.input, context.output)
+    compile_semantic_validation_report_with_session(context.session, context.output)
 }
 
 fn native_ui_layout_validation_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
@@ -285,6 +332,10 @@ fn pack_abi_validation_stage(context: &mut CompileKernelContext<'_>) -> Result<(
         context.strict,
     )?;
     Ok(())
+}
+
+fn verify_input_generation_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
+    context.session.verify_input_generation()
 }
 
 fn runtime_reports_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
@@ -308,6 +359,13 @@ fn kernel_trace_stage(context: &mut CompileKernelContext<'_>) -> Result<()> {
             "scope": context.scope.as_str(),
             "strict": context.strict,
             "debugJson": context.debug_json,
+            "runtimePackThreads": context.thread_pool.thread_count(),
+            "manifestIo": context.session.manifest_io_metrics(),
+            "inputAuthority": context.session.input_authority().as_str(),
+            "authorityInput": context.session.authority_input(),
+            "resolvedInput": context.session.input(),
+            "inputGenerationId": context.session.generation_id(),
+            "inputGenerationPolicy": crate::session::INPUT_GENERATION_POLICY,
             "stages": context.events(),
         }))?,
     )?;

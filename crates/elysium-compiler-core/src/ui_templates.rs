@@ -1,4 +1,5 @@
 use crate::json_ext::value_string;
+use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -31,35 +32,58 @@ fn strip_retired_native_background_asset_fields(mut template: Value) -> Value {
     template
 }
 
-pub fn build_ui_template_bindings(recipe_index: &[Value], templates: &[Value]) -> Vec<Value> {
-    let template_by_family = templates
-        .iter()
-        .filter_map(|template| Some((value_string(template, "familyKey")?, template)))
-        .collect::<BTreeMap<_, _>>();
-    let mut bindings = recipe_index
-        .iter()
-        .filter_map(|entry| {
-            let recipe_id = value_string(entry, "recipeId")?;
-            let family_key = value_string(entry, "familyKey").unwrap_or_default();
-            let template = template_by_family.get(&family_key).copied();
-            Some(json!({
+pub fn build_ui_template_bindings(
+    recipe_index: &[Value],
+    templates: &[Value],
+) -> Result<Vec<Value>> {
+    let mut template_by_capture_key = BTreeMap::<String, &Value>::new();
+    for template in templates {
+        let Some(capture_key) = value_string(template, "captureKey") else {
+            continue;
+        };
+        if let Some(existing) = template_by_capture_key.get(&capture_key) {
+            let existing_template_key =
+                value_string(existing, "templateKey").unwrap_or("<unknown>".to_string());
+            let duplicate_template_key =
+                value_string(template, "templateKey").unwrap_or("<unknown>".to_string());
+            return Err(anyhow!(
+                "UI template catalog has duplicate captureKey {capture_key}: templates {existing_template_key} and {duplicate_template_key}"
+            ));
+        }
+        template_by_capture_key.insert(capture_key, template);
+    }
+    let mut bindings = Vec::new();
+    for entry in recipe_index {
+        let Some(recipe_id) = value_string(entry, "recipeId") else {
+            continue;
+        };
+        let capture_key = value_string(entry, "captureKey")
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow!("UI binding recipe {recipe_id} missing required v2 captureKey")
+            })?;
+        let template = template_by_capture_key.get(&capture_key).copied();
+        bindings.push(json!({
                 "recipeId": recipe_id,
                 "path": value_string(entry, "path").unwrap_or_default(),
                 "payloadKey": value_string(entry, "payloadKey").unwrap_or_default(),
-                "familyKey": family_key,
+                "captureKey": capture_key,
+                "familyKey": template.and_then(|template| value_string(template, "familyKey")).unwrap_or_default(),
                 "recipeType": value_string(entry, "recipeType").unwrap_or_default(),
                 "machineType": value_string(entry, "machineType").unwrap_or_default(),
                 "templateKey": template.and_then(|template| value_string(template, "templateKey")).unwrap_or_default(),
                 "templateSignature": template.and_then(|template| value_string(template, "templateSignature")).unwrap_or_default(),
                 "canonicalMachineFamily": template.and_then(|template| value_string(template, "canonicalMachineFamily")).unwrap_or_default(),
                 "layoutKind": template.and_then(|template| value_string(template, "layoutKind")).unwrap_or_default(),
-            }))
-        })
-        .collect::<Vec<_>>();
+                "presentationSurface": template.and_then(|template| value_string(template, "presentationSurface")).unwrap_or_default(),
+                "layoutId": template.and_then(|template| value_string(template, "layoutId")).unwrap_or_default(),
+                "rendererId": template.and_then(|template| value_string(template, "rendererId")).unwrap_or_default(),
+            }));
+    }
     bindings.sort_by(|left, right| {
         value_string(left, "recipeId").cmp(&value_string(right, "recipeId"))
     });
-    bindings
+    Ok(bindings)
 }
 
 fn value_usize(value: &Value, key: &str) -> usize {
@@ -158,10 +182,15 @@ pub fn build_ui_template_binding_index_report(bindings: &[Value], templates: &[V
             let canonical_machine_family =
                 value_string(entry, "canonicalMachineFamily").unwrap_or_default();
             let layout_kind = value_string(entry, "layoutKind").unwrap_or_default();
+            let presentation_surface =
+                value_string(entry, "presentationSurface").unwrap_or_default();
+            let layout_id = value_string(entry, "layoutId").unwrap_or_default();
+            let renderer_id = value_string(entry, "rendererId").unwrap_or_default();
             json!({
                 "recipeId": value_string(entry, "recipeId").unwrap_or_default(),
                 "path": value_string(entry, "path").unwrap_or_default(),
                 "payloadKey": value_string(entry, "payloadKey").unwrap_or_default(),
+                "captureKey": value_string(entry, "captureKey").unwrap_or_default(),
                 "familyKey": value_string(entry, "familyKey").unwrap_or_default(),
                 "recipeType": value_string(entry, "recipeType").unwrap_or_default(),
                 "machineType": value_string(entry, "machineType").unwrap_or_default(),
@@ -169,6 +198,9 @@ pub fn build_ui_template_binding_index_report(bindings: &[Value], templates: &[V
                 "templateSignature": if template_signature.is_empty() { Value::Null } else { Value::String(template_signature) },
                 "canonicalMachineFamily": if canonical_machine_family.is_empty() { Value::Null } else { Value::String(canonical_machine_family) },
                 "layoutKind": if layout_kind.is_empty() { Value::Null } else { Value::String(layout_kind) },
+                "presentationSurface": if presentation_surface.is_empty() { Value::Null } else { Value::String(presentation_surface) },
+                "layoutId": if layout_id.is_empty() { Value::Null } else { Value::String(layout_id) },
+                "rendererId": if renderer_id.is_empty() { Value::Null } else { Value::String(renderer_id) },
             })
         })
         .collect::<Vec<_>>();

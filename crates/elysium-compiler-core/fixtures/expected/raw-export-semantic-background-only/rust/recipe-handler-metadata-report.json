@@ -1,0 +1,20 @@
+{
+  "counts": {
+    "categories": 1,
+    "categoriesWithHandler": 1,
+    "categoriesWithNativeLayout": 1,
+    "gtMachineIconMismatches": 0,
+    "gtMultiblockWithoutPreferred": 0,
+    "handlers": 1,
+    "layoutWithoutSlots": 1,
+    "layouts": 1,
+    "missingDisplayName": 0,
+    "missingFamily": 0,
+    "missingHandlerKey": 0,
+    "missingLayout": 0,
+    "missingMachineRefRatio": 1.0,
+    "missingMachineRefs": 1
+  },
+  "generatedAt": "deterministic-rust-compiler",
+  "schemaVersion": "neonei/rust-recipe-handler-metadata-report/current"
+}

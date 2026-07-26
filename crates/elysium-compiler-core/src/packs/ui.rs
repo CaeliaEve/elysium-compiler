@@ -1,7 +1,6 @@
 use crate::binary::{intern_compact_string, push_i32, push_u32, write_binary_pack_payload};
 use crate::io::write_json_value;
 use crate::json_ext::{value_i64, value_string, value_u64};
-use crate::manifest::{read_manifest, read_manifest_json};
 use crate::native_ui_pack_abi::{
     ui_pack_format_report, NATIVE_UI_ANCHOR, NATIVE_UI_BACKGROUND_KINDS,
     NATIVE_UI_BACKGROUND_SCALING_NINE_SLICE, NATIVE_UI_COORDINATE_SPACE,
@@ -13,9 +12,12 @@ use crate::native_ui_pack_abi::{
     UI_STRING_PAYLOAD_VERSION, UI_STRING_SCHEMA, UI_TEMPLATE_MAGIC, UI_TEMPLATE_PAYLOAD_VERSION,
     UI_TEMPLATE_ROW_STRIDE_U32, UI_TEMPLATE_SCHEMA, UI_TEXT_ROW_STRIDE_U32,
 };
-use crate::recipe_ui_payload::{
-    build_raw_recipe_ui_payload_index, read_compiled_recipe_ui_payload_index,
+use crate::raw_ui_schema_catalog::{
+    RAW_UI_FAMILY_CENSUS_SCHEMA_VERSION, RAW_UI_TEMPLATE_CATALOG_SCHEMA_VERSION,
 };
+use crate::recipe_ui_payload::read_compiled_recipe_ui_payload_index;
+use crate::session::RawExportSession;
+use crate::ui_presentation_catalog::enrich_ui_templates_with_presentation;
 use crate::ui_templates::{
     build_ui_assets_manifest, build_ui_family_census_report,
     build_ui_template_binding_index_report, build_ui_template_bindings,
@@ -23,15 +25,20 @@ use crate::ui_templates::{
     ui_template_dynamic_primitive_count, ui_template_rect_count,
     ui_template_rect_interaction_count, ui_template_slot_count, ui_template_text_count,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: bool) -> Result<()> {
-    let manifest = read_manifest(input)?;
-    let template_catalog = read_manifest_json(input, &manifest, "uiTemplateCatalog")?;
+pub fn compile_ui_pack(
+    session: &RawExportSession,
+    output: &Path,
+    strict: bool,
+    _debug_json: bool,
+) -> Result<()> {
+    let manifest = session.manifest();
+    let template_catalog = session.read_manifest_json("uiTemplateCatalog")?;
     let Some(template_catalog) = template_catalog else {
         if strict {
             return Err(anyhow!(
@@ -40,7 +47,30 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
         }
         return Ok(());
     };
-    let templates = ui_template_catalog_templates(&template_catalog);
+    validate_raw_ui_schema_version(
+        template_catalog.as_ref(),
+        "uiTemplateCatalog",
+        RAW_UI_TEMPLATE_CATALOG_SCHEMA_VERSION,
+    )?;
+    validate_raw_ui_census_source_schema(template_catalog.as_ref())?;
+    if manifest.files.contains_key("uiFamilyCensus") {
+        let census = session
+            .read_manifest_json("uiFamilyCensus")
+            .context(
+                "ui-pack compiler blocked: manifest-declared uiFamilyCensus is unreadable or missing",
+            )?
+            .context(
+                "ui-pack compiler blocked: manifest-declared uiFamilyCensus is missing",
+            )?;
+        validate_raw_ui_schema_version(
+            census.as_ref(),
+            "uiFamilyCensus",
+            RAW_UI_FAMILY_CENSUS_SCHEMA_VERSION,
+        )?;
+    }
+    let templates = enrich_ui_templates_with_presentation(ui_template_catalog_templates(
+        template_catalog.as_ref(),
+    ))?;
     if strict && templates.is_empty() {
         return Err(anyhow!(
             "ui-pack compiler blocked: uiTemplateCatalog has no templates"
@@ -48,17 +78,16 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
     }
     validate_ui_template_background_contracts(&templates)?;
 
-    let recipe_ui_index = match read_compiled_recipe_ui_payload_index(output)? {
-        Some(entries) => entries,
-        None => build_raw_recipe_ui_payload_index(input, &manifest)?,
-    };
+    let recipe_ui_index = read_compiled_recipe_ui_payload_index(output)?.ok_or_else(|| {
+        anyhow!("ui-pack compiler blocked: compiled recipe UI payload index is missing")
+    })?;
     if strict && recipe_ui_index.is_empty() {
         return Err(anyhow!(
             "ui-pack compiler blocked: no recipe UI payload index entries are available"
         ));
     }
 
-    let bindings = build_ui_template_bindings(&recipe_ui_index, &templates);
+    let bindings = build_ui_template_bindings(&recipe_ui_index, &templates)?;
     let bound_recipe_count = bindings
         .iter()
         .filter(|entry| value_string(entry, "templateKey").is_some_and(|value| !value.is_empty()))
@@ -66,6 +95,12 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
     if strict && !recipe_ui_index.is_empty() && bound_recipe_count == 0 {
         return Err(anyhow!(
             "ui-pack compiler blocked: no recipe bindings matched a captured UI template"
+        ));
+    }
+    if strict && bound_recipe_count != bindings.len() {
+        return Err(anyhow!(
+            "ui-pack compiler blocked: {} recipe bindings have no exact captured template or renderer mapping",
+            bindings.len().saturating_sub(bound_recipe_count)
         ));
     }
 
@@ -109,6 +144,7 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
         .map(|entry| {
             json!({
                 "recipeId": value_string(entry, "recipeId").unwrap_or_default(),
+                "captureKey": value_string(entry, "captureKey").unwrap_or_default(),
                 "familyKey": value_string(entry, "familyKey").unwrap_or_default(),
                 "recipeType": value_string(entry, "recipeType").unwrap_or_default(),
             })
@@ -191,6 +227,34 @@ pub fn compile_ui_pack(input: &Path, output: &Path, strict: bool, _debug_json: b
             "unboundRecipes": unbound_recipes,
         }),
     )?;
+    Ok(())
+}
+
+fn validate_raw_ui_schema_version(
+    document: &Value,
+    logical_name: &str,
+    expected: &str,
+) -> Result<()> {
+    let actual = document.get("schemaVersion").and_then(Value::as_str);
+    anyhow::ensure!(
+        actual == Some(expected),
+        "ui-pack compiler blocked: {logical_name} schemaVersion must be {expected} but was {}",
+        actual.unwrap_or("<missing>")
+    );
+    Ok(())
+}
+
+fn validate_raw_ui_census_source_schema(template_catalog: &Value) -> Result<()> {
+    let actual = template_catalog
+        .get("source")
+        .and_then(|source| source.get("censusSchemaVersion"))
+        .and_then(Value::as_str);
+    anyhow::ensure!(
+        actual == Some(RAW_UI_FAMILY_CENSUS_SCHEMA_VERSION),
+        "ui-pack compiler blocked: uiTemplateCatalog source.censusSchemaVersion must be {} but was {}",
+        RAW_UI_FAMILY_CENSUS_SCHEMA_VERSION,
+        actual.unwrap_or("<missing>")
+    );
     Ok(())
 }
 
@@ -1031,6 +1095,9 @@ pub fn build_compact_ui_binding_payload(
             "templateSignature",
             "canonicalMachineFamily",
             "layoutKind",
+            "presentationSurface",
+            "layoutId",
+            "rendererId",
         ] {
             push_u32(
                 &mut row_bytes,

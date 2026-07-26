@@ -19,7 +19,7 @@ use crate::ui_pack_abi::{
     UI_PACK_ABI_VALIDATION_REPORT_PATH, UI_PACK_ABI_VALIDATION_SCHEMA_VERSION,
 };
 use crate::version::{COMPILED_DIST_SCHEMA_VERSION, PACK_ABI_VERSION};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
@@ -647,6 +647,26 @@ pub fn purge_out_of_scope_runtime_artifacts(
         let path = output.join(spec.relative_path);
         if path.exists() {
             fs::remove_file(&path)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn purge_runtime_authority_artifacts(output: &Path) -> Result<()> {
+    let mut relative_paths = vec!["manifest.json"];
+    relative_paths.extend(
+        RUNTIME_FINAL_REPORT_SPECS
+            .iter()
+            .map(|spec| spec.relative_path),
+    );
+    relative_paths.sort_unstable();
+    relative_paths.dedup();
+    for relative_path in relative_paths {
+        let path = output.join(relative_path);
+        if path.exists() {
+            fs::remove_file(&path).with_context(|| {
+                format!("remove stale runtime authority artifact {}", path.display())
+            })?;
         }
     }
     Ok(())

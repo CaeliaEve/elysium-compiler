@@ -1,24 +1,36 @@
 use crate::io::write_json_value;
 use crate::json_ext::{numeric_value_u64, value_u64};
-use crate::manifest::{read_manifest, read_manifest_json};
+use crate::session::RawExportSession;
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::fs;
 use std::path::Path;
 
-pub fn compile_semantic_validation_report(input: &Path, output: &Path) -> Result<()> {
-    let manifest = read_manifest(input)?;
-    let export_report =
-        read_manifest_json(input, &manifest, "exportReport")?.unwrap_or(Value::Null);
-    let browser_contract =
-        read_manifest_json(input, &manifest, "neiBrowserContract")?.unwrap_or(Value::Null);
-    let family_audit =
-        read_manifest_json(input, &manifest, "semanticFamilyAudit")?.unwrap_or(Value::Null);
-    let nbt_distribution =
-        read_manifest_json(input, &manifest, "semanticNbtKeyDistribution")?.unwrap_or(Value::Null);
-    let identity_report =
-        read_manifest_json(input, &manifest, "semanticIdentityNormalizationReport")?
-            .unwrap_or(Value::Null);
+pub(crate) fn compile_semantic_validation_report_with_session(
+    session: &RawExportSession,
+    output: &Path,
+) -> Result<()> {
+    let manifest = session.manifest();
+    let export_report = session
+        .read_manifest_json("exportReport")?
+        .map(|value| value.as_ref().clone())
+        .unwrap_or(Value::Null);
+    let browser_contract = session
+        .read_manifest_json("neiBrowserContract")?
+        .map(|value| value.as_ref().clone())
+        .unwrap_or(Value::Null);
+    let family_audit = session
+        .read_manifest_json("semanticFamilyAudit")?
+        .map(|value| value.as_ref().clone())
+        .unwrap_or(Value::Null);
+    let nbt_distribution = session
+        .read_manifest_json("semanticNbtKeyDistribution")?
+        .map(|value| value.as_ref().clone())
+        .unwrap_or(Value::Null);
+    let identity_report = session
+        .read_manifest_json("semanticIdentityNormalizationReport")?
+        .map(|value| value.as_ref().clone())
+        .unwrap_or(Value::Null);
 
     let export_counts = export_report
         .get("counts")

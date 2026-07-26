@@ -23,8 +23,8 @@ pub fn normalize_search_terms<'a>(values: impl Iterator<Item = &'a str>) -> Stri
     terms.join(" ")
 }
 
-pub fn build_pinyin_fields(localized_name: &str) -> (String, String) {
-    let syllables = localized_name
+fn pinyin_syllables(localized_name: &str) -> Vec<String> {
+    localized_name
         .chars()
         .filter_map(|character| {
             character
@@ -32,7 +32,11 @@ pub fn build_pinyin_fields(localized_name: &str) -> (String, String) {
                 .map(|pinyin| pinyin.plain().to_string())
         })
         .filter(|value| !value.trim().is_empty())
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()
+}
+
+pub fn build_pinyin_fields(localized_name: &str) -> (String, String) {
+    let syllables = pinyin_syllables(localized_name);
     let full = syllables.join("");
     let acronym = syllables
         .iter()

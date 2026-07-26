@@ -2,13 +2,17 @@
   "bindings": [
     {
       "canonicalMachineFamily": "gregtech-machine",
-      "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
+      "captureKey": "gregtech-machine|machine|176x90@0#1|unknown",
+      "familyKey": "gregtech-machine",
+      "layoutId": "gregtech-machine",
       "layoutKind": "machine",
       "machineType": "Test GT Machine",
       "path": "recipes/ui-payload-shards/91.json",
       "payloadKey": "r_fixture_gt",
+      "presentationSurface": "machine",
       "recipeId": "r_fixture_gt",
       "recipeType": "gt.recipe.test",
+      "rendererId": "gt_generic",
       "templateKey": "gt-fixture@default",
       "templateSignature": "gt-fixture"
     }
@@ -23,18 +27,18 @@
     },
     "uiTemplateCatalog": {
       "exists": true,
-      "familyCount": 1,
-      "layoutKindCount": 1,
+      "familyCount": 11,
+      "layoutKindCount": 25,
       "path": "rust/ui-pack/ui_template_catalog.json",
-      "templateCount": 1
+      "templateCount": 29
     }
   },
   "summary": {
     "boundRecipeCount": 1,
-    "familyCount": 1,
-    "layoutKindCount": 1,
+    "familyCount": 11,
+    "layoutKindCount": 25,
     "recipeCount": 1,
-    "templateCount": 1,
+    "templateCount": 29,
     "unboundRecipeCount": 0
   }
 }

@@ -1,5 +1,6 @@
-use crate::io::{sha256_file, write_json_value};
-use crate::manifest::{count_jsonl_rows, portable_relative_path, read_manifest};
+use crate::io::write_json_value;
+use crate::manifest::portable_relative_path;
+use crate::session::{RawExportSession, RelativeInputKind};
 use crate::version::{EXPORT_ABI_VERSION, RAW_EXPORT_SCHEMA_VERSION};
 use anyhow::{anyhow, Result};
 use serde::Serialize;
@@ -65,12 +66,12 @@ pub fn raw_export_abi_validation_report_path(output: &Path) -> PathBuf {
     output.join(RAW_EXPORT_ABI_VALIDATION_REPORT_PATH)
 }
 
-pub fn write_raw_export_abi_validation_report(
-    input: &Path,
+pub(crate) fn write_raw_export_abi_validation_report_with_session(
+    session: &RawExportSession,
     output: &Path,
     strict: bool,
 ) -> Result<RawExportAbiValidationReport> {
-    let report = validate_raw_export_abi(input)?;
+    let report = validate_raw_export_abi_with_session(session)?;
     let path = raw_export_abi_validation_report_path(output);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -87,8 +88,25 @@ pub fn write_raw_export_abi_validation_report(
     Ok(report)
 }
 
+#[cfg(test)]
 pub fn validate_raw_export_abi(input: &Path) -> Result<RawExportAbiValidationReport> {
-    let manifest = read_manifest(input)?;
+    let session = RawExportSession::open(input)?;
+    validate_raw_export_abi_with_session(&session)
+}
+
+pub(crate) fn validate_raw_export_abi_with_session(
+    session: &RawExportSession,
+) -> Result<RawExportAbiValidationReport> {
+    Ok(session
+        .raw_export_abi_validation(|| validate_raw_export_abi_uncached(session))?
+        .as_ref()
+        .clone())
+}
+
+fn validate_raw_export_abi_uncached(
+    session: &RawExportSession,
+) -> Result<RawExportAbiValidationReport> {
+    let manifest = session.manifest();
     let mut files = Vec::with_capacity(manifest.files.len());
     let mut missing_declared_files = Vec::new();
     let mut path_violations = Vec::new();
@@ -116,48 +134,69 @@ pub fn validate_raw_export_abi(input: &Path) -> Result<RawExportAbiValidationRep
         };
 
         let normalized = portable_path.to_string_lossy().replace('\\', "/");
-        let path = input.join(&portable_path);
-        if !path.exists() {
-            missing_declared_files.push(format!("{}:{}", logical_name, normalized));
-            files.push(RawExportAbiFileRecord {
-                logical_name: logical_name.clone(),
-                manifest_path: manifest_path.clone(),
-                path: Some(normalized),
-                required,
-                status: "missing",
-                kind: None,
-                bytes: None,
-                sha256: None,
-                row_count: None,
-            });
-            continue;
+        match session.relative_input_kind(manifest_path)? {
+            RelativeInputKind::Missing => {
+                missing_declared_files.push(format!("{}:{}", logical_name, normalized));
+                files.push(RawExportAbiFileRecord {
+                    logical_name: logical_name.clone(),
+                    manifest_path: manifest_path.clone(),
+                    path: Some(normalized),
+                    required,
+                    status: "missing",
+                    kind: None,
+                    bytes: None,
+                    sha256: None,
+                    row_count: None,
+                });
+                continue;
+            }
+            RelativeInputKind::Directory => {
+                path_violations.push(format!(
+                    "{}:{} points to a non-file; raw export manifest entries must be files",
+                    logical_name, normalized
+                ));
+                files.push(RawExportAbiFileRecord {
+                    logical_name: logical_name.clone(),
+                    manifest_path: manifest_path.clone(),
+                    path: Some(normalized),
+                    required,
+                    status: "directory",
+                    kind: Some("directory"),
+                    bytes: None,
+                    sha256: None,
+                    row_count: None,
+                });
+                continue;
+            }
+            RelativeInputKind::Unsupported => {
+                path_violations.push(format!(
+                    "{}:{} points to an unsupported filesystem entry; raw export manifest entries must be regular files",
+                    logical_name, normalized
+                ));
+                files.push(RawExportAbiFileRecord {
+                    logical_name: logical_name.clone(),
+                    manifest_path: manifest_path.clone(),
+                    path: Some(normalized),
+                    required,
+                    status: "unsupported",
+                    kind: Some("unsupported"),
+                    bytes: None,
+                    sha256: None,
+                    row_count: None,
+                });
+                continue;
+            }
+            RelativeInputKind::File => {}
         }
 
-        let metadata = path.metadata()?;
-        if metadata.is_dir() {
-            path_violations.push(format!(
-                "{}:{} points to a directory; raw export manifest entries must be files",
-                logical_name, normalized
-            ));
-            files.push(RawExportAbiFileRecord {
-                logical_name: logical_name.clone(),
-                manifest_path: manifest_path.clone(),
-                path: Some(normalized),
-                required,
-                status: "directory",
-                kind: Some("directory"),
-                bytes: None,
-                sha256: None,
-                row_count: None,
-            });
-            continue;
-        }
-
-        let row_count = if is_jsonl_path(&normalized) {
-            Some(count_jsonl_rows(&path)?)
-        } else {
-            None
-        };
+        let descriptor = session
+            .describe_relative_file(manifest_path)?
+            .ok_or_else(|| {
+                anyhow!(
+                    "raw-export file disappeared during ABI validation: {}",
+                    normalized
+                )
+            })?;
         present_file_count += 1;
         files.push(RawExportAbiFileRecord {
             logical_name: logical_name.clone(),
@@ -166,9 +205,9 @@ pub fn validate_raw_export_abi(input: &Path) -> Result<RawExportAbiValidationRep
             required,
             status: "present",
             kind: Some("file"),
-            bytes: Some(metadata.len()),
-            sha256: Some(sha256_file(&path)?),
-            row_count,
+            bytes: Some(descriptor.bytes),
+            sha256: Some(descriptor.sha256.clone()),
+            row_count: descriptor.row_count,
         });
     }
 
@@ -215,9 +254,4 @@ pub fn validate_raw_export_abi(input: &Path) -> Result<RawExportAbiValidationRep
             legacy_fallback: "forbidden",
         },
     })
-}
-
-fn is_jsonl_path(path: &str) -> bool {
-    let lower = path.to_ascii_lowercase();
-    lower.ends_with(".jsonl") || lower.ends_with(".jsonl.gz")
 }

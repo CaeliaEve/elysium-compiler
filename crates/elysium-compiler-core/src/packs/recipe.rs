@@ -1,10 +1,7 @@
 use crate::binary::{intern_compact_string, push_u32, write_binary_pack_payload};
 use crate::io::{write_json_serializable, write_json_value};
 use crate::json_ext::{first_non_empty, nested_value_string, value_string, value_u64};
-use crate::manifest::{
-    read_jsonl_values, read_manifest, read_manifest_collection, read_manifest_json,
-    runtime_file_descriptors, COLLECTION_HANDLER_LAYOUTS,
-};
+use crate::manifest::{COLLECTION_HANDLER_LAYOUTS, COLLECTION_NEI_HANDLERS};
 use crate::recipe_domain::{
     build_recipe_fragmentation_report, build_recipe_handler_metadata_report,
     captured_ui_family_key, classify_recipe_family_key, collect_recipe_item_ids,
@@ -13,14 +10,13 @@ use crate::recipe_domain::{
     should_skip_redundant_nei_workbench_recipe, RecipeCategoryAccumulator, RecipeHandlerContext,
 };
 use crate::recipe_ui_payload::{rust_recipe_ui_payload_relative_path, RecipeUiPayloadShardWriters};
-use anyhow::{anyhow, Context, Result};
-use flate2::read::GzDecoder;
+use crate::session::RawExportSession;
+use anyhow::{anyhow, Result};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Read};
-use std::path::{Path, PathBuf};
+use std::fs;
+use std::path::Path;
 
 #[derive(Serialize)]
 struct HandlerIndexDocument<'a> {
@@ -83,49 +79,21 @@ struct RecipeOutputDebugPack<'a> {
     category_index: &'a [Value],
 }
 
-fn visit_jsonl_file_values<F>(path: &Path, mut visitor: F) -> Result<usize>
-where
-    F: FnMut(Value) -> Result<()>,
-{
-    let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    let reader: Box<dyn Read> = if path
-        .extension()
-        .and_then(|value| value.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("gz"))
-    {
-        Box::new(GzDecoder::new(file))
-    } else {
-        Box::new(file)
-    };
-    let buf = BufReader::new(reader);
-    let mut count = 0usize;
-    for (index, line) in buf.lines().enumerate() {
-        let line = line?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        let value = serde_json::from_str::<Value>(&line)
-            .with_context(|| format!("parse {} line {}", path.display(), index + 1))?;
-        visitor(value)?;
-        count += 1;
-    }
-    Ok(count)
-}
-
 pub fn compile_recipe_pack(
-    input: &Path,
+    session: &RawExportSession,
     output: &Path,
     strict: bool,
     debug_json: bool,
 ) -> Result<()> {
-    let manifest = read_manifest(input)?;
+    let manifest = session.manifest();
     if !manifest.files.contains_key("recipeIndex") {
-        return compile_dist_recipe_pack(input, output, strict, debug_json);
+        return compile_dist_recipe_pack(session, output, strict, debug_json);
     }
-    let recipe_index = read_manifest_json(input, &manifest, "recipeIndex")?
+    let recipe_index = session
+        .read_manifest_json("recipeIndex")?
         .ok_or_else(|| anyhow!("recipe compiler blocked: recipeIndex is missing"))?;
-    let handlers = read_jsonl_values(input, &manifest, "neiHandlers")?;
-    let layouts = read_manifest_collection(input, &manifest, COLLECTION_HANDLER_LAYOUTS)?;
+    let handlers = session.read_manifest_collection(COLLECTION_NEI_HANDLERS)?;
+    let layouts = session.read_manifest_collection(COLLECTION_HANDLER_LAYOUTS)?;
     let recipe_shards = recipe_index
         .get("shards")
         .and_then(Value::as_array)
@@ -134,11 +102,11 @@ pub fn compile_recipe_pack(
         .filter_map(|shard| {
             let path = shard.get("path").and_then(Value::as_str)?;
             Some((
-                input.join(path.replace('\\', "/").trim_start_matches('/')),
+                path.to_string(),
                 shard.get("recipeCount").and_then(Value::as_u64),
             ))
         })
-        .collect::<Vec<(PathBuf, Option<u64>)>>();
+        .collect::<Vec<(String, Option<u64>)>>();
     let expected_recipe_count = recipe_index.get("recipeCount").and_then(Value::as_u64);
     let declared_shard_total = recipe_shards
         .iter()
@@ -184,7 +152,7 @@ pub fn compile_recipe_pack(
     let mut recipe_count = 0usize;
 
     for (shard_path, _) in &recipe_shards {
-        visit_jsonl_file_values(shard_path, |recipe_value| {
+        session.visit_relative_jsonl(shard_path, |recipe_value| {
             recipe_count += 1;
             let recipe = &recipe_value;
             let recipe_id = recipe_id(recipe);
@@ -276,7 +244,7 @@ pub fn compile_recipe_pack(
                 "recipeId": recipe_id,
                 "path": rust_recipe_ui_payload_relative_path(&recipe_id),
                 "payloadKey": recipe_id,
-                "familyKey": family_key,
+                "captureKey": family_key,
                 "recipeType": recipe_type,
                 "machineType": machine_type,
                 "handlerKey": handler_key,
@@ -296,7 +264,7 @@ pub fn compile_recipe_pack(
                 "recipeId": recipe_id,
                 "path": rust_recipe_ui_payload_relative_path(&recipe_id),
                 "payloadKey": recipe_id,
-                "familyKey": family_key,
+                "captureKey": family_key,
                 "recipeType": recipe_type,
                 "machineType": machine_type,
                 "handlerKey": handler_key,
@@ -487,23 +455,18 @@ pub fn compile_recipe_pack(
 }
 
 pub fn compile_dist_recipe_pack(
-    input: &Path,
+    session: &RawExportSession,
     output: &Path,
     strict: bool,
     debug_json: bool,
 ) -> Result<()> {
-    let manifest = read_manifest(input)?;
-    let recipe_files = runtime_file_descriptors(
-        input,
-        &manifest,
-        &[
-            ("itemIndex", "recipeItemIndex"),
-            ("handlers", "recipeHandlers"),
-            ("handlerLayouts", "recipeHandlerLayouts"),
-            ("categoryIndex", "recipeCategories"),
-            ("uiPayloadIndex", "recipeUiPayloadIndex"),
-        ],
-    )?;
+    let recipe_files = session.runtime_file_descriptors(&[
+        ("itemIndex", "recipeItemIndex"),
+        ("handlers", "recipeHandlers"),
+        ("handlerLayouts", "recipeHandlerLayouts"),
+        ("categoryIndex", "recipeCategories"),
+        ("uiPayloadIndex", "recipeUiPayloadIndex"),
+    ])?;
     if strict
         && !recipe_files.iter().any(|value| {
             value
@@ -651,7 +614,7 @@ pub fn build_compact_recipe_payload(
             intern_compact_string(
                 &mut strings,
                 &mut string_refs,
-                value_string(entry, "familyKey"),
+                value_string(entry, "captureKey"),
             ),
             intern_compact_string(
                 &mut strings,

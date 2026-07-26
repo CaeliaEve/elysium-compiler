@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "neonei/recipe-handler-layout-index/v1",
+  "layouts": [
+    {
+      "canonicalMachineFamily": "gregtech-machine",
+      "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
+      "handlerKey": "gt.recipe.test",
+      "height": 90,
+      "hotspots": [],
+      "imageRegion": {
+        "height": 90,
+        "width": 176,
+        "x": 0,
+        "y": 0
+      },
+      "imageResource": null,
+      "layoutKind": "machine",
+      "maxRecipesPerPage": 1,
+      "nativeBackground": {
+        "anchor": "top-left",
+        "canonicalMachineFamily": "gregtech-machine",
+        "captureRequired": false,
+        "coordinateSpace": "nei_pixels",
+        "drawable": "GTUITextures.BACKGROUND_NEI_SINGLE_RECIPE",
+        "height": 90,
+        "kind": "gt-modular-ui",
+        "layoutKind": "machine",
+        "recipeBackgroundOffset": {
+          "x": 3,
+          "y": 3
+        },
+        "recipeBackgroundSize": {
+          "height": 84,
+          "width": 170
+        },
+        "scaleMode": "uniform-scale",
+        "scaling": "nine-slice",
+        "schemaVersion": "nesqlpp/raw-export/alpha1/ui-family-census/native-ui-background",
+        "source": "GTNEIDefaultHandler.drawUI(ModularWindow.getBackground)",
+        "status": "captured",
+        "texture": {
+          "borderU": 2,
+          "borderV": 2,
+          "height": 64,
+          "width": 64
+        },
+        "width": 176,
+        "yShift": 0
+      },
+      "slots": [],
+      "textOverlays": [],
+      "viewports": [],
+      "width": 176,
+      "yShift": 0
+    }
+  ]
+}

@@ -2,15 +2,60 @@ use crate::binary::{intern_compact_string, push_u32, write_binary_pack_payload};
 use crate::io::write_json_value;
 use crate::json_ext::{value_string, value_u64};
 use crate::manifest::{
-    read_manifest, read_manifest_collection, COLLECTION_BROWSER_GROUPS,
-    COLLECTION_BROWSER_ITEMS_PREFER_CATALOG, COLLECTION_SEARCH_ITEMS,
+    COLLECTION_BROWSER_GROUPS, COLLECTION_BROWSER_ITEMS_PREFER_CATALOG, COLLECTION_SEARCH_ITEMS,
 };
+use crate::session::RawExportSession;
 use crate::text::{build_pinyin_fields, normalize_search_terms, normalize_text};
 use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::Path;
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+struct RawSearchItem {
+    item_id: String,
+    localized_name: Option<String>,
+    mod_id: Option<String>,
+    internal_name: Option<String>,
+    render_asset_ref: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+struct BrowserGroupRow {
+    group_key: Option<String>,
+    group_label: Option<String>,
+    representative_item_id: Option<String>,
+    member_item_ids: Vec<String>,
+    group_size: Option<u64>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchItemRow {
+    item_id: String,
+    public_item_id: String,
+    localized_name: Option<String>,
+    mod_id: Option<String>,
+    internal_name: Option<String>,
+    normalized_localized_name: String,
+    normalized_internal_name: String,
+    normalized_item_id: String,
+    normalized_search_terms: String,
+    pinyin_full: String,
+    pinyin_acronym: String,
+    aliases: String,
+    popularity_score: u64,
+    search_rank: usize,
+    render_asset_ref: Option<String>,
+    group_key: Option<String>,
+    group_label: Option<String>,
+    group_size: u64,
+    representative_item_id: String,
+}
 pub fn build_compact_string_payload_from_items(items: &[Value]) -> Result<Vec<u8>> {
     let mut strings = vec![String::new()];
     let mut string_refs = HashMap::new();
@@ -183,14 +228,13 @@ pub fn build_compact_search_payload_from_items(items: &[Value]) -> Result<Vec<u8
 }
 
 pub fn compile_search_pack(
-    input: &Path,
+    session: &RawExportSession,
     output: &Path,
     strict: bool,
     debug_json: bool,
 ) -> Result<()> {
-    let manifest = read_manifest(input)?;
-    let items = read_manifest_collection(input, &manifest, COLLECTION_SEARCH_ITEMS)?;
-    let group_rows = read_manifest_collection(input, &manifest, COLLECTION_BROWSER_GROUPS)?;
+    let items = session.read_manifest_collection(COLLECTION_SEARCH_ITEMS)?;
+    let group_rows = session.read_manifest_collection(COLLECTION_BROWSER_GROUPS)?;
 
     if strict && items.is_empty() {
         return Err(anyhow!(
@@ -198,32 +242,14 @@ pub fn compile_search_pack(
         ));
     }
 
-    let mut group_by_member = BTreeMap::new();
-    for row in &group_rows {
-        let group_key = value_string(row, "groupKey");
-        let group_label = value_string(row, "groupLabel");
-        let representative = value_string(row, "representativeItemId");
-        let members = row
-            .get("memberItemIds")
-            .and_then(Value::as_array)
-            .map(|values| {
-                values
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_string)
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-        for member in &members {
-            group_by_member.insert(
-                member.clone(),
-                json!({
-                    "groupKey": group_key,
-                    "groupLabel": group_label,
-                    "groupSize": value_u64(row, "groupSize").unwrap_or(members.len() as u64),
-                    "representativeItemId": representative,
-                }),
-            );
+    let mut group_by_member = BTreeMap::<String, BrowserGroupRow>::new();
+    for row in group_rows.iter() {
+        let mut group: BrowserGroupRow = serde_json::from_value(row.clone())?;
+        if group.group_size.is_none() {
+            group.group_size = Some(group.member_item_ids.len() as u64);
+        }
+        for member in &group.member_item_ids {
+            group_by_member.insert(member.clone(), group.clone());
         }
     }
 
@@ -232,65 +258,73 @@ pub fn compile_search_pack(
         .iter()
         .enumerate()
         .map(|(search_rank, item)| {
-            let item_id = value_string(item, "itemId").unwrap_or_default();
-            let localized_name = value_string(item, "localizedName");
-            let mod_id = value_string(item, "modId");
-            let internal_name = value_string(item, "internalName");
-            let render_asset_ref = value_string(item, "renderAssetRef");
-            let raw_search_terms = value_string(item, "searchTerms");
+            let item: RawSearchItem = serde_json::from_value(item.clone())?;
+            let item_id = item.item_id;
+            let localized_name = item.localized_name;
+            let mod_id = item.mod_id;
+            let internal_name = item.internal_name;
+            let render_asset_ref = item.render_asset_ref;
             let (pinyin_full, pinyin_acronym) =
                 build_pinyin_fields(localized_name.as_deref().unwrap_or_default());
             let group = group_by_member.get(&item_id);
             let public_item_id = format!("item:{}", item_id.to_ascii_lowercase());
+            let curated_aliases = normalize_search_terms(
+                [
+                    group.and_then(|value| value.group_key.as_deref()),
+                    group.and_then(|value| value.group_label.as_deref()),
+                ]
+                .into_iter()
+                .flatten(),
+            );
             let normalized_terms = normalize_search_terms(
                 [
                     localized_name.as_deref(),
                     internal_name.as_deref(),
                     mod_id.as_deref(),
-                    raw_search_terms.as_deref(),
                     Some(public_item_id.as_str()),
-                    group
-                        .and_then(|value| value.get("groupKey"))
-                        .and_then(Value::as_str),
-                    group
-                        .and_then(|value| value.get("groupLabel"))
-                        .and_then(Value::as_str),
+                    group.and_then(|value| value.group_key.as_deref()),
+                    group.and_then(|value| value.group_label.as_deref()),
                 ]
                 .into_iter()
                 .flatten(),
             );
             alias_items += 1;
-            json!({
-                "itemId": item_id,
-                "publicItemId": public_item_id,
-                "localizedName": localized_name,
-                "modId": mod_id,
-                "internalName": internal_name,
-                "normalizedLocalizedName": localized_name.as_deref().map(normalize_text).unwrap_or_default(),
-                "normalizedInternalName": internal_name.as_deref().map(normalize_text).unwrap_or_default(),
-                "normalizedItemId": normalize_text(&item_id),
-                "normalizedSearchTerms": normalized_terms,
-                "pinyinFull": pinyin_full,
-                "pinyinAcronym": pinyin_acronym,
-                "aliases": raw_search_terms.unwrap_or_default(),
-                "popularityScore": group.and_then(|value| value.get("groupSize")).and_then(Value::as_u64).unwrap_or(1),
-                "searchRank": search_rank,
-                "renderAssetRef": render_asset_ref,
-                "groupKey": group.and_then(|value| value.get("groupKey")).cloned().unwrap_or(Value::Null),
-                "groupLabel": group.and_then(|value| value.get("groupLabel")).cloned().unwrap_or(Value::Null),
-                "groupSize": group.and_then(|value| value.get("groupSize")).cloned().unwrap_or(json!(1)),
-                "representativeItemId": group
-                    .and_then(|value| value.get("representativeItemId"))
-                    .cloned()
-                    .unwrap_or_else(|| json!(item_id)),
+            Ok(SearchItemRow {
+                normalized_localized_name: localized_name
+                    .as_deref()
+                    .map(normalize_text)
+                    .unwrap_or_default(),
+                normalized_internal_name: internal_name
+                    .as_deref()
+                    .map(normalize_text)
+                    .unwrap_or_default(),
+                normalized_item_id: normalize_text(&item_id),
+                aliases: curated_aliases,
+                popularity_score: group.and_then(|value| value.group_size).unwrap_or(1),
+                group_key: group.and_then(|value| value.group_key.clone()),
+                group_label: group.and_then(|value| value.group_label.clone()),
+                group_size: group.and_then(|value| value.group_size).unwrap_or(1),
+                representative_item_id: group
+                    .and_then(|value| value.representative_item_id.clone())
+                    .unwrap_or_else(|| item_id.clone()),
+                item_id,
+                public_item_id,
+                localized_name,
+                mod_id,
+                internal_name,
+                normalized_search_terms: normalized_terms,
+                pinyin_full,
+                pinyin_acronym,
+                search_rank,
+                render_asset_ref,
             })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
 
     let rust_dir = output.join("rust");
     fs::create_dir_all(&rust_dir)?;
     let browser_items =
-        read_manifest_collection(input, &manifest, COLLECTION_BROWSER_ITEMS_PREFER_CATALOG)?;
+        session.read_manifest_collection(COLLECTION_BROWSER_ITEMS_PREFER_CATALOG)?;
     let string_pack = build_compact_string_payload_from_items(&browser_items)?;
     let search_pack = json!({
         "schemaVersion": "neonei/rust-search-pack/current",

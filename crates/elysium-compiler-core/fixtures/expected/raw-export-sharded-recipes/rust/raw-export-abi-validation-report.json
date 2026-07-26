@@ -113,14 +113,14 @@
       "status": "present"
     },
     {
-      "bytes": 2450,
+      "bytes": 2613,
       "kind": "file",
       "logicalName": "uiTemplateCatalog",
       "manifestPath": "recipes/ui-template-catalog.json",
       "path": "recipes/ui-template-catalog.json",
       "required": false,
       "rowCount": null,
-      "sha256": "fa76000f937ac317f25671eb9d32da0c70615cf1d9d96cc3039fb6e6f9e8a90b",
+      "sha256": "4ab50ec7c1cd29855bd4a93ca9108b39a0b3fd2a93d9254856903b58189be690",
       "status": "present"
     }
   ],

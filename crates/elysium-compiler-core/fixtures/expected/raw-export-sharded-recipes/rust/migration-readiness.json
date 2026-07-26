@@ -1,0 +1,11 @@
+{
+  "checks": {
+    "integrityHashesGenerated": true,
+    "pathPortable": true,
+    "requiredArtifactsPresent": true,
+    "sizeReportGenerated": true
+  },
+  "pathViolations": [],
+  "ready": true,
+  "schemaVersion": "neonei/rust-migration-readiness/current"
+}

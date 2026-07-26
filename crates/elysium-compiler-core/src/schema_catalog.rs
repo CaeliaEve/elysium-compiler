@@ -11,6 +11,9 @@ use crate::native_ui_export_abi_catalog::{
     NATIVE_UI_EXPORT_ABI_VALIDATION_REPORT_PATH, NATIVE_UI_EXPORT_ABI_VALIDATION_SCHEMA_VERSION,
     NATIVE_UI_VALIDATION_DEFAULT_PATH, NESQL_NATIVE_UI_VALIDATION_SCHEMA_VERSION,
 };
+use crate::native_ui_pack_abi::{
+    UI_BINDING_PAYLOAD_VERSION, UI_BINDING_ROW_STRIDE_U32, UI_BINDING_SCHEMA,
+};
 use crate::pack_abi::{runtime_artifact_catalog, PACK_ABI_VALIDATION_SCHEMA_VERSION};
 use crate::raw_export_abi::RAW_EXPORT_ABI_VALIDATION_SCHEMA_VERSION;
 use crate::runtime_manifest_abi::{RUST_RUNTIME_ENTRYPOINTS, RUST_RUNTIME_MANIFEST_SCHEMA_VERSION};
@@ -64,6 +67,8 @@ pub const RAW_EXPORT_MANIFEST_FILE_DESCRIPTORS: &[RawExportManifestFileDescripto
     RawExportManifestFileDescriptor::optional("textures"),
     RawExportManifestFileDescriptor::optional("animations"),
     RawExportManifestFileDescriptor::optional("nativeSprites"),
+    RawExportManifestFileDescriptor::optional("facadeResolutions"),
+    RawExportManifestFileDescriptor::optional("animationFrameMaterializations"),
     RawExportManifestFileDescriptor::optional("neiHandlers"),
     RawExportManifestFileDescriptor::optional("neiHandlerLayouts"),
     RawExportManifestFileDescriptor::optional("uiTemplateCatalog"),
@@ -214,6 +219,32 @@ pub fn validate_schema_catalog_descriptors() {
 fn ui_pack_schema_section() -> Value {
     let mut object = Map::new();
     insert_schema_descriptors(&mut object, UI_PACK_SCHEMA_DESCRIPTORS);
+    object.insert(
+        "bindingAbi".to_string(),
+        json!({
+            "schema": UI_BINDING_SCHEMA,
+            "version": UI_BINDING_PAYLOAD_VERSION,
+            "rowStrideU32": UI_BINDING_ROW_STRIDE_U32,
+            "fields": [
+                "recipeId",
+                "path",
+                "payloadKey",
+                "familyKey",
+                "recipeType",
+                "machineType",
+                "templateKey",
+                "templateSignature",
+                "canonicalMachineFamily",
+                "layoutKind",
+                "presentationSurface",
+                "layoutId",
+                "rendererId",
+                "flags",
+            ],
+            "captureKeyPolicy": "internal-template-match-only",
+            "unknownRendererPolicy": "fail-closed",
+        }),
+    );
     Value::Object(object)
 }
 

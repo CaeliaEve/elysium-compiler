@@ -1,4 +1,6 @@
 use crate::cli::CompileScope;
+use crate::runtime_pack_plan::CompilerThreadPool;
+use crate::session::RawExportSession;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -8,7 +10,8 @@ pub const COMPILE_KERNEL_TRACE_REPORT_PATH: &str = "rust/compile-kernel-trace.js
 
 #[derive(Debug)]
 pub struct CompileKernelContext<'a> {
-    pub input: &'a Path,
+    pub session: &'a RawExportSession,
+    pub thread_pool: &'a CompilerThreadPool,
     pub output: &'a Path,
     pub scope: CompileScope,
     pub strict: bool,
@@ -18,14 +21,16 @@ pub struct CompileKernelContext<'a> {
 
 impl<'a> CompileKernelContext<'a> {
     pub fn new(
-        input: &'a Path,
+        session: &'a RawExportSession,
+        thread_pool: &'a CompilerThreadPool,
         output: &'a Path,
         scope: CompileScope,
         strict: bool,
         debug_json: bool,
     ) -> Self {
         Self {
-            input,
+            session,
+            thread_pool,
             output,
             scope,
             strict,

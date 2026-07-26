@@ -17,7 +17,7 @@
     "packAbiVersion": "elysium.pack.v1",
     "rawExportSchemaVersion": "1.0",
     "runtimeAbiVersion": "elysium.runtime.v1",
-    "schemaHash": "sha256:8ad246c8ef4cdbe47bacb0c30ab08ebd639f8c510fc80c268622bed470b5d291",
+    "schemaHash": "sha256:a1a1bd4731cc4c8e0a6ed7f2f547a03b61a538c80b51e2d2f99d4597db5eeda1",
     "version": "0.1.0"
   },
   "entrypoints": {
@@ -44,7 +44,7 @@
       "path": "rust/search.bin"
     },
     {
-      "bytes": 410,
+      "bytes": 414,
       "path": "rust/recipes.bin"
     },
     {
@@ -52,35 +52,35 @@
       "path": "rust/strings.zh_cn.bin"
     },
     {
-      "bytes": 311,
+      "bytes": 3111,
       "path": "rust/ui-pack/ui_templates.bin"
     },
     {
-      "bytes": 118,
+      "bytes": 130,
       "path": "rust/ui-pack/ui_bindings.bin"
     },
     {
-      "bytes": 1065,
+      "bytes": 4486,
       "path": "rust/ui-pack/ui_strings.bin"
     },
     {
-      "bytes": 267,
+      "bytes": 268,
       "path": "rust/ui-pack/ui_assets.manifest.json"
     },
     {
-      "bytes": 2835,
+      "bytes": 44980,
       "path": "rust/ui-pack/ui_template_catalog.json"
     },
     {
-      "bytes": 1082,
+      "bytes": 1240,
       "path": "rust/ui-pack/ui_template_binding_index.json"
     },
     {
-      "bytes": 1225,
+      "bytes": 15085,
       "path": "rust/ui-pack/ui_family_census.json"
     },
     {
-      "bytes": 2645,
+      "bytes": 3063,
       "path": "rust/ui-pack/ui_pack_report.json"
     },
     {
@@ -92,7 +92,7 @@
       "path": "rust/native-ui-export-abi-validation-report.json"
     },
     {
-      "bytes": 4931,
+      "bytes": 4940,
       "path": "rust/ui-pack-abi-validation-report.json"
     },
     {
@@ -112,7 +112,7 @@
       "path": "rust/native-ui-layout-report.json"
     },
     {
-      "bytes": 6882,
+      "bytes": 6885,
       "path": "rust/pack-validation-report.json"
     }
   ],
@@ -122,7 +122,7 @@
     "portableRelativePathsOnly": true,
     "windowsPathsAllowed": false
   },
-  "runtimeId": "rust-c8789b4715ba35b2",
+  "runtimeId": "rust-162e2ed90eb32b94",
   "schema": "neonei/runtime/current",
   "schemaRevision": 1,
   "schemaVersion": "neonei/rust-runtime-manifest/current"

@@ -1,10 +1,6 @@
-use anyhow::{Context, Result};
-use flate2::read::GzDecoder;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
 pub const RAW_EXPORT_MANIFEST_FILE: &str = "manifest.json";
@@ -14,7 +10,7 @@ pub const JSONL_EXTENSIONS: &[&str] = &["jsonl", "gz"];
 pub const MANIFEST_COLLECTION_CATALOG_SCHEMA_VERSION: &str =
     "elysium-compiler/manifest-collection-catalog/v1";
 pub const SCHEMA_HASH_MANIFEST_COLLECTION_INPUT: &str =
-    "manifest-collection-catalog=elysium-compiler/manifest-collection-catalog/v1;descriptor-table=v1";
+    "manifest-collection-catalog=elysium-compiler/manifest-collection-catalog/v1;descriptor-table=v2";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ManifestCollectionDescriptor {
@@ -60,6 +56,10 @@ pub const COLLECTION_NEI_ORDER: ManifestCollectionDescriptor =
     ManifestCollectionDescriptor::new("nei-order", &["neiOrder"], &[]);
 pub const COLLECTION_BROWSER_GROUPS: ManifestCollectionDescriptor =
     ManifestCollectionDescriptor::new("browser-groups", &["groups", "browserGroups"], &["groups"]);
+pub const COLLECTION_SEMANTIC_ITEMS: ManifestCollectionDescriptor =
+    ManifestCollectionDescriptor::new("semantic-items", &["semanticItems"], &["items"]);
+pub const COLLECTION_ITEM_IDENTITY_MAP: ManifestCollectionDescriptor =
+    ManifestCollectionDescriptor::new("item-identity-map", &["itemIdentityMap"], &["items"]);
 pub const COLLECTION_TEXTURE_ROWS: ManifestCollectionDescriptor =
     ManifestCollectionDescriptor::new("texture-rows", &["textures"], &["textures"]);
 pub const COLLECTION_TEXTURE_ROWS_WITH_MANIFEST: ManifestCollectionDescriptor =
@@ -74,6 +74,8 @@ pub const COLLECTION_HANDLER_LAYOUTS: ManifestCollectionDescriptor =
         &["neiHandlerLayouts", "recipeLayouts"],
         &["handler-layouts"],
     );
+pub const COLLECTION_NEI_HANDLERS: ManifestCollectionDescriptor =
+    ManifestCollectionDescriptor::new("nei-handlers", &["neiHandlers"], &[]);
 pub const COLLECTION_ANIMATIONS: ManifestCollectionDescriptor = ManifestCollectionDescriptor::new(
     "animations",
     &["animations", "animationTable"],
@@ -85,6 +87,18 @@ pub const COLLECTION_NATIVE_SPRITES: ManifestCollectionDescriptor =
         &["nativeSprites", "nativeRenderIndex"],
         &["sprites"],
     );
+pub const COLLECTION_FACADE_RESOLUTIONS: ManifestCollectionDescriptor =
+    ManifestCollectionDescriptor::new(
+        "facade-resolutions",
+        &["facadeResolutions"],
+        &["facadeResolutions", "resolutions"],
+    );
+pub const COLLECTION_ANIMATION_FRAME_MATERIALIZATIONS: ManifestCollectionDescriptor =
+    ManifestCollectionDescriptor::new(
+        "animation-frame-materializations",
+        &["animationFrameMaterializations"],
+        &["animationFrameMaterializations", "materializations"],
+    );
 
 pub const MANIFEST_COLLECTION_DESCRIPTORS: &[ManifestCollectionDescriptor] = &[
     COLLECTION_BROWSER_ITEMS,
@@ -93,11 +107,16 @@ pub const MANIFEST_COLLECTION_DESCRIPTORS: &[ManifestCollectionDescriptor] = &[
     COLLECTION_SEARCH_ALL_PREFER_INDEX,
     COLLECTION_NEI_ORDER,
     COLLECTION_BROWSER_GROUPS,
+    COLLECTION_SEMANTIC_ITEMS,
+    COLLECTION_ITEM_IDENTITY_MAP,
     COLLECTION_TEXTURE_ROWS,
     COLLECTION_TEXTURE_ROWS_WITH_MANIFEST,
     COLLECTION_HANDLER_LAYOUTS,
+    COLLECTION_NEI_HANDLERS,
     COLLECTION_ANIMATIONS,
     COLLECTION_NATIVE_SPRITES,
+    COLLECTION_FACADE_RESOLUTIONS,
+    COLLECTION_ANIMATION_FRAME_MATERIALIZATIONS,
 ];
 
 #[derive(Debug, Deserialize)]
@@ -112,120 +131,6 @@ pub struct RawManifest {
     pub generated_at: Option<Value>,
     #[serde(rename = "repositoryName")]
     pub repository_name: Option<String>,
-}
-
-pub fn read_manifest(input: &Path) -> Result<RawManifest> {
-    let manifest_path = input.join(RAW_EXPORT_MANIFEST_FILE);
-    let text = fs::read_to_string(&manifest_path)
-        .with_context(|| format!("read manifest {}", manifest_path.display()))?;
-    serde_json::from_str(&text)
-        .with_context(|| format!("parse manifest {}", manifest_path.display()))
-}
-
-pub fn read_manifest_json(
-    input: &Path,
-    manifest: &RawManifest,
-    logical_name: &str,
-) -> Result<Option<Value>> {
-    let Some(path) = resolve_manifest_path(input, manifest, logical_name) else {
-        return Ok(None);
-    };
-    let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let value = serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
-    Ok(Some(value))
-}
-
-pub fn read_optional_manifest_json(
-    input: &Path,
-    manifest: &RawManifest,
-    logical_name: &str,
-) -> Result<Option<Value>> {
-    let Some(path) = resolve_manifest_path(input, manifest, logical_name) else {
-        return Ok(None);
-    };
-    if !path.exists() {
-        return Ok(None);
-    }
-    let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let value = serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
-    Ok(Some(value))
-}
-
-pub fn read_jsonl_values(
-    input: &Path,
-    manifest: &RawManifest,
-    logical_name: &str,
-) -> Result<Vec<Value>> {
-    let Some(path) = resolve_manifest_path(input, manifest, logical_name) else {
-        return Ok(Vec::new());
-    };
-    read_jsonl_file_values(&path)
-}
-
-pub fn read_manifest_collection(
-    input: &Path,
-    manifest: &RawManifest,
-    descriptor: ManifestCollectionDescriptor,
-) -> Result<Vec<Value>> {
-    validate_manifest_collection_descriptors();
-    for logical_name in descriptor.logical_names {
-        let Some(path) = resolve_manifest_path(input, manifest, logical_name) else {
-            continue;
-        };
-        if is_jsonl_path(&path) {
-            return read_jsonl_file_values(&path);
-        }
-        let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-        let value: Value =
-            serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
-        if let Some(rows) = value.as_array() {
-            return Ok(rows.clone());
-        }
-        for field in descriptor.array_fields {
-            if let Some(rows) = value.get(field).and_then(Value::as_array) {
-                return Ok(rows.clone());
-            }
-        }
-        return Ok(vec![value]);
-    }
-    Ok(Vec::new())
-}
-
-pub fn read_jsonl_file_values(path: &Path) -> Result<Vec<Value>> {
-    let reader: Box<dyn Read> = if path_extension(path) == Some("gz") {
-        Box::new(GzDecoder::new(File::open(path)?))
-    } else {
-        Box::new(File::open(path)?)
-    };
-    let buf = BufReader::new(reader);
-    let mut rows = Vec::new();
-    for (index, line) in buf.lines().enumerate() {
-        let line = line?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        rows.push(
-            serde_json::from_str(&line)
-                .with_context(|| format!("parse {} line {}", path.display(), index + 1))?,
-        );
-    }
-    Ok(rows)
-}
-
-pub fn count_jsonl_rows(path: &Path) -> Result<u64> {
-    let reader: Box<dyn Read> = if path_extension(path) == Some("gz") {
-        Box::new(GzDecoder::new(File::open(path)?))
-    } else {
-        Box::new(File::open(path)?)
-    };
-    let buf = BufReader::new(reader);
-    let mut count = 0u64;
-    for line in buf.lines() {
-        if !line?.trim().is_empty() {
-            count += 1;
-        }
-    }
-    Ok(count)
 }
 
 pub fn resolve_manifest_path(
@@ -323,28 +228,4 @@ fn require_non_empty(label: &str, value: &str) {
     if value.trim().is_empty() {
         panic!("{label} must be non-empty");
     }
-}
-
-pub fn runtime_file_descriptors(
-    input: &Path,
-    manifest: &RawManifest,
-    logical_pairs: &[(&str, &str)],
-) -> Result<Vec<Value>> {
-    let mut files = Vec::new();
-    for (public_name, manifest_key) in logical_pairs {
-        let Some(path) = resolve_manifest_path(input, manifest, manifest_key) else {
-            continue;
-        };
-        if !path.exists() {
-            continue;
-        }
-        files.push(serde_json::json!({
-            "logicalName": public_name,
-            "manifestKey": manifest_key,
-            "path": path.strip_prefix(input).unwrap_or(path.as_path()).to_string_lossy().replace('\\', "/"),
-            "bytes": path.metadata()?.len(),
-            "sha256": crate::io::sha256_file(&path)?,
-        }));
-    }
-    Ok(files)
 }

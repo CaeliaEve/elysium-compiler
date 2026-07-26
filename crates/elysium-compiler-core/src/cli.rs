@@ -17,8 +17,6 @@ pub enum Command {
         input: PathBuf,
         #[arg(long)]
         report: PathBuf,
-        #[arg(long)]
-        threads: Option<usize>,
     },
     /// Validate Raw Export and optional dist-data contracts, failing on blockers.
     Validate {
@@ -28,8 +26,6 @@ pub enum Command {
         report: PathBuf,
         #[arg(long)]
         output: Option<PathBuf>,
-        #[arg(long)]
-        threads: Option<usize>,
     },
     /// Emit the stable compiler schema/catalog contract.
     Schemas {

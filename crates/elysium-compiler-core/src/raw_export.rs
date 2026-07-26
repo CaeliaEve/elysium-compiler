@@ -1,20 +1,16 @@
-use crate::io::sha256_file;
-use crate::manifest::{
-    count_jsonl_rows, portable_relative_path, resolve_manifest_path, RawManifest,
-};
+use crate::manifest::portable_relative_path;
 use crate::reports::{RawExportSummary, ZeroRecipeDiagnostics};
-use anyhow::{Context, Result};
+use crate::session::{RawExportSession, RelativeInputKind};
+use anyhow::Result;
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::fs;
-use std::path::Path;
 
 pub fn summarize_raw_export(
-    input: &Path,
-    manifest: &RawManifest,
+    session: &RawExportSession,
     warnings: &mut Vec<String>,
     blocked: &mut Vec<String>,
 ) -> Result<RawExportSummary> {
+    let manifest = session.manifest();
     let mut existing_declared_files = 0usize;
     let mut missing_declared_files = Vec::new();
     let mut file_counts = BTreeMap::new();
@@ -29,23 +25,30 @@ pub fn summarize_raw_export(
             continue;
         };
         let normalized = portable_path.to_string_lossy().replace('\\', "/");
-        let path = input.join(&portable_path);
-        if !path.exists() {
-            missing_declared_files.push(format!("{}:{}", logical_name, normalized));
-            continue;
-        }
-        if path.is_dir() {
-            warnings.push(format!(
-                "manifest path is a directory and was not hashed as a file: {}:{}",
-                logical_name, normalized
-            ));
-            existing_declared_files += 1;
-            continue;
+        match session.relative_input_kind(relative_path)? {
+            RelativeInputKind::Missing => {
+                missing_declared_files.push(format!("{}:{}", logical_name, normalized));
+                continue;
+            }
+            RelativeInputKind::Directory | RelativeInputKind::Unsupported => {
+                warnings.push(format!(
+                    "manifest path is not a regular file and was not hashed: {}:{}",
+                    logical_name, normalized
+                ));
+                existing_declared_files += 1;
+                continue;
+            }
+            RelativeInputKind::File => {}
         }
         existing_declared_files += 1;
-        file_hashes.insert(logical_name.clone(), sha256_file(&path)?);
-        if normalized.ends_with(".jsonl") || normalized.ends_with(".jsonl.gz") {
-            file_counts.insert(logical_name.clone(), count_jsonl_rows(&path)?);
+        let descriptor = session
+            .describe_relative_file(relative_path)?
+            .ok_or_else(|| {
+                anyhow::anyhow!("raw-export file disappeared during session: {}", normalized)
+            })?;
+        file_hashes.insert(logical_name.clone(), descriptor.sha256.clone());
+        if let Some(row_count) = descriptor.row_count {
+            file_counts.insert(logical_name.clone(), row_count);
         }
     }
 
@@ -57,7 +60,7 @@ pub fn summarize_raw_export(
     if missing_declared_files.is_empty() {
         warnings.push("all declared manifest files exist".to_string());
     }
-    let zero_recipe_diagnostics = read_zero_recipe_diagnostics(input, manifest, warnings)?;
+    let zero_recipe_diagnostics = read_zero_recipe_diagnostics(session, warnings)?;
 
     Ok(RawExportSummary {
         manifest_schema_version: manifest.schema_version.clone(),
@@ -74,25 +77,22 @@ pub fn summarize_raw_export(
 }
 
 fn read_zero_recipe_diagnostics(
-    input: &Path,
-    manifest: &RawManifest,
+    session: &RawExportSession,
     warnings: &mut Vec<String>,
 ) -> Result<Option<ZeroRecipeDiagnostics>> {
-    let path = resolve_manifest_path(input, manifest, "neiHandlerAnomalies").or_else(|| {
-        let candidate = input.join("validation").join("nei_handler_anomalies.json");
-        candidate.exists().then_some(candidate)
-    });
-    let Some(path) = path else {
+    let value = if session.manifest().files.contains_key("neiHandlerAnomalies") {
+        session.read_optional_manifest_json("neiHandlerAnomalies")?
+    } else {
+        session.read_relative_json("validation/nei_handler_anomalies.json")?
+    };
+    let Some(value) = value else {
         warnings.push(
             "zero-recipe diagnostics are missing: validation/nei_handler_anomalies.json"
                 .to_string(),
         );
         return Ok(None);
     };
-    let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let value: Value =
-        serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
-    Ok(zero_recipe_diagnostics_from_value(&value))
+    Ok(zero_recipe_diagnostics_from_value(value.as_ref()))
 }
 
 pub fn zero_recipe_diagnostics_from_value(value: &Value) -> Option<ZeroRecipeDiagnostics> {

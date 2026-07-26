@@ -1,18 +1,18 @@
-use crate::atlas_repair::{repaired_browser_atlas, select_group_representative};
+use crate::atlas_repair::{repaired_browser_atlas_items, select_group_representative};
 use crate::binary::{
     intern_compact_string, push_u32, write_binary_pack, write_binary_pack_payload,
 };
 use crate::io::write_json_value;
 use crate::json_ext::{value_string, value_u64};
 use crate::manifest::{
-    read_manifest, read_manifest_collection, read_optional_manifest_json, runtime_file_descriptors,
-    RawManifest, COLLECTION_BROWSER_GROUPS, COLLECTION_BROWSER_ITEMS,
-    COLLECTION_BROWSER_ITEMS_PREFER_CATALOG, COLLECTION_NEI_ORDER,
-    COLLECTION_SEARCH_ALL_PREFER_INDEX, COLLECTION_TEXTURE_ROWS,
+    COLLECTION_BROWSER_GROUPS, COLLECTION_BROWSER_ITEMS, COLLECTION_BROWSER_ITEMS_PREFER_CATALOG,
+    COLLECTION_FACADE_RESOLUTIONS, COLLECTION_ITEM_IDENTITY_MAP, COLLECTION_NEI_ORDER,
+    COLLECTION_SEARCH_ALL_PREFER_INDEX, COLLECTION_SEMANTIC_ITEMS, COLLECTION_TEXTURE_ROWS,
 };
 use crate::packs::search::{
     build_compact_search_payload_from_items, build_compact_string_payload_from_items,
 };
+use crate::session::RawExportSession;
 use crate::text::{build_pinyin_fields, normalize_search_terms, normalize_text};
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
@@ -21,22 +21,30 @@ use std::fs;
 use std::path::Path;
 
 pub fn compile_browser_pack(
-    input: &Path,
+    session: &RawExportSession,
     output: &Path,
     strict: bool,
     debug_json: bool,
 ) -> Result<()> {
-    let manifest = read_manifest(input)?;
+    let manifest = session.manifest();
     if manifest.files.contains_key("browserCatalog") {
-        return compile_dist_browser_pack(input, output, strict, debug_json);
+        return compile_dist_browser_pack(session, output, strict, debug_json);
     }
-    let items = read_manifest_collection(input, &manifest, COLLECTION_BROWSER_ITEMS)?;
-    let order_rows = read_manifest_collection(input, &manifest, COLLECTION_NEI_ORDER)?;
-    let group_rows = read_manifest_collection(input, &manifest, COLLECTION_BROWSER_GROUPS)?;
-    let texture_rows = read_manifest_collection(input, &manifest, COLLECTION_TEXTURE_ROWS)?;
-    let atlas =
-        read_optional_manifest_json(input, &manifest, "browserAtlasIndex")?.unwrap_or(Value::Null);
-    let atlas = repaired_browser_atlas(&atlas, &texture_rows, &items);
+    let items = session.read_manifest_collection(COLLECTION_BROWSER_ITEMS)?;
+    let order_rows = session.read_manifest_collection(COLLECTION_NEI_ORDER)?;
+    let group_rows = session.read_manifest_collection(COLLECTION_BROWSER_GROUPS)?;
+    let semantic_items = session.read_manifest_collection(COLLECTION_SEMANTIC_ITEMS)?;
+    let item_identity_map = session.read_manifest_collection(COLLECTION_ITEM_IDENTITY_MAP)?;
+    let texture_rows = session.read_manifest_collection(COLLECTION_TEXTURE_ROWS)?;
+    let facade_resolutions = session.read_manifest_collection(COLLECTION_FACADE_RESOLUTIONS)?;
+    let atlas = session.read_optional_manifest_json("browserAtlasIndex")?;
+    let atlas_items = repaired_browser_atlas_items(
+        atlas.as_deref().unwrap_or(&Value::Null),
+        &texture_rows,
+        &items,
+        &facade_resolutions,
+    )
+    .items;
 
     if strict && items.is_empty() {
         return Err(anyhow!(
@@ -54,18 +62,12 @@ pub fn compile_browser_pack(
         })
         .collect::<BTreeMap<_, _>>();
 
-    let atlas_by_item = atlas
-        .get("items")
-        .and_then(Value::as_array)
-        .map(|rows| {
-            rows.iter()
-                .filter_map(|row| Some((value_string(row, "itemId")?, row.clone())))
-                .collect::<BTreeMap<_, _>>()
-        })
-        .unwrap_or_default();
+    let atlas_by_item = atlas_items
+        .iter()
+        .filter_map(|row| Some((value_string(row, "itemId")?, row)))
+        .collect::<BTreeMap<_, _>>();
 
-    let mut group_by_member = BTreeMap::new();
-    let groups = group_rows
+    let raw_groups = group_rows
         .iter()
         .map(|row| {
             let group_key = value_string(row, "groupKey");
@@ -86,30 +88,53 @@ pub fn compile_browser_pack(
                 &members,
                 &atlas_by_item,
             );
-            for member in &members {
-                group_by_member.insert(
-                    member.clone(),
-                    json!({
-                        "groupKey": group_key,
-                        "groupLabel": group_label,
-                        "groupSize": value_u64(row, "groupSize").unwrap_or(members.len() as u64),
-                        "representativeItemId": representative,
-                        "groupSource": "nativeNei",
-                    }),
-                );
-            }
             json!({
                 "groupKey": group_key,
                 "groupLabel": group_label,
                 "groupSize": value_u64(row, "groupSize").unwrap_or(members.len() as u64),
+                "groupSortOrder": value_u64(row, "groupSortOrder").unwrap_or(u64::MAX),
                 "representativeItemId": representative,
                 "memberItemIds": members,
-                "groupSource": "nativeNei",
+                "groupSource": value_string(row, "groupSource").unwrap_or_else(|| "nativeNei".to_string()),
             })
         })
         .collect::<Vec<_>>();
 
     let browser_item_ids = collect_browser_item_ids(&order_rows, &group_rows);
+    let source_order_by_item = items
+        .iter()
+        .enumerate()
+        .filter_map(|(index, item)| Some((value_string(item, "itemId")?, index as u64)))
+        .collect::<BTreeMap<_, _>>();
+    let semantic_groups = build_semantic_browser_groups(
+        &semantic_items,
+        &item_identity_map,
+        &browser_item_ids,
+        &order_by_item,
+        &source_order_by_item,
+    );
+    let groups = merge_browser_groups(raw_groups, semantic_groups);
+    let mut group_by_member = BTreeMap::new();
+    for group in &groups {
+        let members = group
+            .get("memberItemIds")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str);
+        for member in members {
+            group_by_member.insert(
+                member.to_string(),
+                json!({
+                    "groupKey": value_string(group, "groupKey"),
+                    "groupLabel": value_string(group, "groupLabel"),
+                    "groupSize": value_u64(group, "groupSize").unwrap_or(1),
+                    "representativeItemId": value_string(group, "representativeItemId"),
+                    "groupSource": value_string(group, "groupSource"),
+                }),
+            );
+        }
+    }
     let browser_source_items = items
         .iter()
         .enumerate()
@@ -128,27 +153,62 @@ pub fn compile_browser_pack(
         ));
     }
 
+    let semantic_identity_by_item = item_identity_map
+        .iter()
+        .filter_map(|entry| Some((value_string(entry, "legacyItemId")?, entry)))
+        .collect::<BTreeMap<_, _>>();
     let mut alias_map = BTreeMap::new();
     let mut search_items = Vec::new();
     let mut browser_items = browser_source_items
         .iter()
         .map(|item| {
-            let (search_rank, item) = item;
+            let (source_order, item) = item;
             let item_id = value_string(item, "itemId").unwrap_or_default();
             let localized_name = value_string(item, "localizedName");
             let mod_id = value_string(item, "modId");
             let internal_name = value_string(item, "internalName");
             let render_asset_ref = value_string(item, "renderAssetRef");
-            let raw_search_terms = value_string(item, "searchTerms");
+            let semantic_identity = semantic_identity_by_item.get(&item_id).copied();
+            let semantic_public_item_id = semantic_identity
+                .and_then(|entry| value_string(entry, "publicItemId"));
+            let semantic_family = semantic_identity.and_then(|entry| value_string(entry, "family"));
+            let semantic_classification =
+                semantic_identity.and_then(|entry| value_string(entry, "classification"));
+            let semantic_facet_summary =
+                semantic_identity.and_then(|entry| value_string(entry, "facetSummary"));
             let (pinyin_full, pinyin_acronym) =
                 build_pinyin_fields(localized_name.as_deref().unwrap_or_default());
+            let semantic_aliases = semantic_family_aliases(
+                semantic_family.as_deref(),
+                semantic_classification.as_deref(),
+            );
+            let facet_aliases = semantic_facet_aliases(semantic_facet_summary.as_deref());
+            let group = group_by_member.get(&item_id);
+            let group_key = group
+                .and_then(|value| value.get("groupKey"))
+                .and_then(Value::as_str);
+            let group_label = group
+                .and_then(|value| value.get("groupLabel"))
+                .and_then(Value::as_str);
+            let curated_aliases = normalize_search_terms(
+                [
+                    semantic_family.as_deref(),
+                    semantic_classification.as_deref(),
+                    (!semantic_aliases.is_empty()).then_some(semantic_aliases.as_str()),
+                    (!facet_aliases.is_empty()).then_some(facet_aliases.as_str()),
+                    group_key,
+                    group_label,
+                ]
+                .into_iter()
+                .flatten(),
+            );
             let mut aliases = vec![item_id.clone()];
             for value in [
                 localized_name.clone(),
                 mod_id.clone(),
                 internal_name.clone(),
                 render_asset_ref.clone(),
-                raw_search_terms.clone(),
+                (!curated_aliases.is_empty()).then_some(curated_aliases.clone()),
             ]
             .into_iter()
             .flatten()
@@ -160,21 +220,25 @@ pub fn compile_browser_pack(
             aliases.sort();
             aliases.dedup();
             alias_map.insert(item_id.clone(), aliases);
-            let group = group_by_member.get(&item_id);
-            let public_item_id = format!("item:{}", item_id.to_ascii_lowercase());
+            let public_item_id = semantic_public_item_id
+                .unwrap_or_else(|| format!("item:{}", item_id.to_ascii_lowercase()));
+            let browser_order = order_by_item
+                .get(&item_id)
+                .copied()
+                .unwrap_or(*source_order as u64);
             let normalized_terms = normalize_search_terms(
                 [
                     localized_name.as_deref(),
                     internal_name.as_deref(),
                     mod_id.as_deref(),
-                    raw_search_terms.as_deref(),
                     Some(public_item_id.as_str()),
-                    group
-                        .and_then(|value| value.get("groupKey"))
-                        .and_then(Value::as_str),
-                    group
-                        .and_then(|value| value.get("groupLabel"))
-                        .and_then(Value::as_str),
+                    semantic_family.as_deref(),
+                    semantic_classification.as_deref(),
+                    semantic_facet_summary.as_deref(),
+                    (!semantic_aliases.is_empty()).then_some(semantic_aliases.as_str()),
+                    (!facet_aliases.is_empty()).then_some(facet_aliases.as_str()),
+                    group_key,
+                    group_label,
                 ]
                 .into_iter()
                 .flatten(),
@@ -191,10 +255,13 @@ pub fn compile_browser_pack(
                 "normalizedSearchTerms": normalized_terms,
                 "pinyinFull": pinyin_full,
                 "pinyinAcronym": pinyin_acronym,
-                "aliases": raw_search_terms.unwrap_or_default(),
+                "aliases": curated_aliases,
                 "popularityScore": group.and_then(|value| value.get("groupSize")).and_then(Value::as_u64).unwrap_or(1),
-                "searchRank": search_rank,
+                "searchRank": browser_order,
                 "renderAssetRef": render_asset_ref,
+                "family": semantic_family,
+                "classification": semantic_classification,
+                "facetSummary": semantic_facet_summary,
                 "groupKey": group.and_then(|value| value.get("groupKey")).cloned().unwrap_or(Value::Null),
                 "groupLabel": group.and_then(|value| value.get("groupLabel")).cloned().unwrap_or(Value::Null),
                 "groupSize": group.and_then(|value| value.get("groupSize")).cloned().unwrap_or(json!(1)),
@@ -210,7 +277,10 @@ pub fn compile_browser_pack(
                 "modId": mod_id,
                 "internalName": internal_name,
                 "renderAssetRef": render_asset_ref,
-                "browserOrder": order_by_item.get(&item_id).copied().unwrap_or(u64::MAX),
+                "browserOrder": browser_order,
+                "semanticFamily": semantic_family,
+                "semanticClassification": semantic_classification,
+                "facetSummary": semantic_facet_summary,
                 "groupKey": group.and_then(|value| value.get("groupKey")).cloned().unwrap_or(Value::Null),
                 "groupLabel": group.and_then(|value| value.get("groupLabel")).cloned().unwrap_or(Value::Null),
                 "groupSize": group.and_then(|value| value.get("groupSize")).cloned().unwrap_or(json!(1)),
@@ -219,7 +289,10 @@ pub fn compile_browser_pack(
                     .cloned()
                     .unwrap_or_else(|| json!(item_id)),
                 "groupSource": group.and_then(|value| value.get("groupSource")).cloned().unwrap_or(Value::Null),
-                "atlas": atlas_by_item.get(&item_id).cloned().unwrap_or(Value::Null),
+                "atlas": atlas_by_item
+                    .get(&item_id)
+                    .map(|value| (*value).clone())
+                    .unwrap_or(Value::Null),
             })
         })
         .collect::<Vec<_>>();
@@ -341,8 +414,330 @@ fn collect_browser_item_ids(order_rows: &[Value], group_rows: &[Value]) -> HashS
     ids
 }
 
-fn build_compact_browser_payload(input: &Path, manifest: &RawManifest) -> Result<Vec<u8>> {
-    let items = read_manifest_collection(input, manifest, COLLECTION_BROWSER_ITEMS_PREFER_CATALOG)?;
+fn build_semantic_browser_groups(
+    semantic_items: &[Value],
+    item_identity_map: &[Value],
+    available_item_ids: &HashSet<String>,
+    order_by_item: &BTreeMap<String, u64>,
+    source_order_by_item: &BTreeMap<String, u64>,
+) -> Vec<Value> {
+    let semantic_by_public_id = semantic_items
+        .iter()
+        .filter_map(|item| Some((value_string(item, "publicItemId")?, item)))
+        .collect::<BTreeMap<_, _>>();
+    let mut members_by_public_id = BTreeMap::<String, Vec<(u64, String, &Value)>>::new();
+
+    for entry in item_identity_map {
+        let Some(public_item_id) = value_string(entry, "publicItemId") else {
+            continue;
+        };
+        let Some(legacy_item_id) = value_string(entry, "legacyItemId") else {
+            continue;
+        };
+        if !available_item_ids.contains(&legacy_item_id) {
+            continue;
+        }
+        let browser_order = order_by_item
+            .get(&legacy_item_id)
+            .or_else(|| source_order_by_item.get(&legacy_item_id))
+            .copied()
+            .unwrap_or(u64::MAX);
+        members_by_public_id
+            .entry(public_item_id)
+            .or_default()
+            .push((browser_order, legacy_item_id, entry));
+    }
+
+    let mut groups = Vec::new();
+    for (public_item_id, mut members) in members_by_public_id {
+        members.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.1.cmp(&right.1)));
+        members.dedup_by(|left, right| left.1 == right.1);
+        if members.len() <= 1 {
+            continue;
+        }
+
+        let semantic_item = semantic_by_public_id.get(&public_item_id).copied();
+        let member_item_ids = members
+            .iter()
+            .map(|(_, item_id, _)| item_id.clone())
+            .collect::<Vec<_>>();
+        let declared_representative =
+            semantic_item.and_then(|item| value_string(item, "representativeLegacyItemId"));
+        let representative_item_id = declared_representative
+            .filter(|item_id| member_item_ids.contains(item_id))
+            .unwrap_or_else(|| member_item_ids[0].clone());
+        let group_key = public_item_id
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .collect::<String>();
+        let group_label = semantic_item
+            .and_then(|item| {
+                value_string(item, "localizedName").or_else(|| value_string(item, "internalName"))
+            })
+            .unwrap_or_else(|| group_key.clone());
+        let first_identity = members[0].2;
+        let semantic_family = semantic_item
+            .and_then(|item| value_string(item, "family"))
+            .or_else(|| value_string(first_identity, "family"));
+        let semantic_classification = semantic_item
+            .and_then(|item| value_string(item, "classification"))
+            .or_else(|| value_string(first_identity, "classification"));
+
+        groups.push(json!({
+            "groupKey": group_key,
+            "groupLabel": group_label,
+            "groupSize": member_item_ids.len(),
+            "representativeItemId": representative_item_id,
+            "memberItemIds": member_item_ids,
+            "groupSortOrder": members[0].0,
+            "groupSource": "semanticIdentity",
+            "publicItemId": public_item_id,
+            "semanticFamily": semantic_family,
+            "semanticClassification": semantic_classification,
+        }));
+    }
+    groups.sort_by(|left, right| {
+        value_u64(left, "groupSortOrder")
+            .unwrap_or(0)
+            .cmp(&value_u64(right, "groupSortOrder").unwrap_or(0))
+            .then_with(|| value_string(left, "groupKey").cmp(&value_string(right, "groupKey")))
+    });
+    groups
+}
+
+fn merge_browser_groups(raw_groups: Vec<Value>, semantic_groups: Vec<Value>) -> Vec<Value> {
+    let mut candidates = raw_groups
+        .into_iter()
+        .map(|mut group| {
+            if group.get("groupSource").and_then(Value::as_str).is_none() {
+                let source = infer_browser_group_source(&group);
+                if let Some(object) = group.as_object_mut() {
+                    object.insert("groupSource".to_string(), json!(source));
+                }
+            }
+            group
+        })
+        .chain(semantic_groups)
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| {
+        browser_group_precedence(left)
+            .cmp(&browser_group_precedence(right))
+            .then_with(|| {
+                value_u64(left, "groupSortOrder")
+                    .unwrap_or(0)
+                    .cmp(&value_u64(right, "groupSortOrder").unwrap_or(0))
+            })
+            .then_with(|| value_string(left, "groupKey").cmp(&value_string(right, "groupKey")))
+    });
+
+    let mut assigned = HashSet::new();
+    let mut merged = Vec::new();
+    for mut group in candidates {
+        let mut original_members = group
+            .get("memberItemIds")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        let mut seen = HashSet::new();
+        original_members.retain(|item_id| seen.insert(item_id.clone()));
+        let retained_members = original_members
+            .iter()
+            .filter(|item_id| !assigned.contains(*item_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        let source = value_string(&group, "groupSource").unwrap_or_default();
+        let authoritative_raw_group = source == "rawExport"
+            || source == "collapsibleItems"
+            || browser_group_precedence(&group) <= 20;
+
+        let members = if retained_members.len() <= 1 {
+            if authoritative_raw_group && !original_members.is_empty() {
+                original_members
+            } else {
+                continue;
+            }
+        } else {
+            for item_id in &retained_members {
+                assigned.insert(item_id.clone());
+            }
+            retained_members
+        };
+        let representative_item_id = value_string(&group, "representativeItemId")
+            .filter(|item_id| members.contains(item_id))
+            .unwrap_or_else(|| members[0].clone());
+        let group_size = members.len();
+        if let Some(object) = group.as_object_mut() {
+            object.insert("memberItemIds".to_string(), json!(members));
+            object.insert("groupSize".to_string(), json!(group_size));
+            object.insert(
+                "representativeItemId".to_string(),
+                json!(representative_item_id),
+            );
+        }
+        merged.push(group);
+    }
+    merged
+}
+
+fn browser_group_precedence(group: &Value) -> u8 {
+    let group_key = value_string(group, "groupKey").unwrap_or_default();
+    let source = value_string(group, "groupSource").unwrap_or_default();
+    if group_key.starts_with("nei:") || source == "nativeNei" || source == "collapsibleItems" {
+        10
+    } else if source == "guidfilters" || group_key.starts_with("guidfilter:") {
+        20
+    } else if source == "semanticIdentity" || group_key.starts_with("semantic:") {
+        30
+    } else if source == "syntheticFallback"
+        || source == "fallback"
+        || group_key.starts_with("fallback:")
+    {
+        40
+    } else {
+        35
+    }
+}
+
+fn infer_browser_group_source(group: &Value) -> String {
+    let group_key = value_string(group, "groupKey").unwrap_or_default();
+    if group_key.starts_with("fallback:") {
+        "fallback"
+    } else if group_key.starts_with("semantic:") {
+        "semanticIdentity"
+    } else if group_key.starts_with("guidfilter:") {
+        "guidfilters"
+    } else if group_key.starts_with("nei:") {
+        "nativeNei"
+    } else if group_key.starts_with("variant:") {
+        "syntheticFallback"
+    } else {
+        "rawExport"
+    }
+    .to_string()
+}
+
+fn semantic_family_aliases(family: Option<&str>, classification: Option<&str>) -> String {
+    let normalized = family.unwrap_or_default().trim().to_ascii_lowercase();
+    let mut aliases = Vec::new();
+    if normalized.starts_with("facade.") {
+        aliases.extend([
+            "facade",
+            "cover",
+            "camouflage",
+            "microblock",
+            "painted block",
+        ]);
+    }
+    match normalized.as_str() {
+        "facade.buildcraft" => aliases.extend(["buildcraft facade", "pipe facade"]),
+        "facade.ae2" => aliases.extend(["ae2 facade", "applied energistics facade"]),
+        "facade.enderio.paint" => aliases.extend(["enderio painted block", "conduit facade"]),
+        "thaumcraft.wand" => aliases.extend([
+            "wand",
+            "sceptre",
+            "scepter",
+            "staff",
+            "focus",
+            "rod",
+            "cap",
+            "thaumcraft wand",
+        ]),
+        "tool.tconstruct" => aliases.extend([
+            "tinkers tool",
+            "tconstruct tool",
+            "infitool",
+            "modifier",
+            "durability",
+        ]),
+        "toolpart.tconstruct" => aliases.extend([
+            "tinkers part",
+            "tconstruct part",
+            "tool part",
+            "bolt part",
+            "arrow part",
+        ]),
+        "toolpart.tgregworks" => aliases.extend([
+            "tgregworks part",
+            "gregworks part",
+            "tool part",
+            "material part",
+        ]),
+        "tool.gregtech" => {
+            aliases.extend(["gregtech tool", "gt tool", "meta tool", "electric tool"])
+        }
+        "crop.ic2" => aliases.extend(["ic2 crop", "crop seed", "growth", "gain", "resistance"]),
+        "fluid.container" => aliases.extend([
+            "fluid cell",
+            "fluid container",
+            "bucket",
+            "capsule",
+            "tank",
+            "fluid",
+        ]),
+        "data_carrier.encoded-pattern" => aliases.extend([
+            "encoded pattern",
+            "ae2 pattern",
+            "processing pattern",
+            "crafting pattern",
+        ]),
+        "cosmetic.color" => aliases.extend(["color", "colour", "dye", "painted", "cosmetic"]),
+        _ => {}
+    }
+    if normalized.starts_with("genetics.") {
+        aliases.extend([
+            "bee",
+            "tree",
+            "butterfly",
+            "genetics",
+            "genome",
+            "allele",
+            "species",
+            "serum",
+            "template",
+        ]);
+    }
+    if normalized.starts_with("entity_capture.") {
+        aliases.extend([
+            "mob soul",
+            "mob crystal",
+            "soul vial",
+            "entity capture",
+            "monster",
+            "mob",
+        ]);
+    }
+    if let Some(classification) = classification
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        aliases.push(classification);
+    }
+    let mut seen = HashSet::new();
+    aliases
+        .into_iter()
+        .filter(|alias| seen.insert(*alias))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn semantic_facet_aliases(facet_summary: Option<&str>) -> String {
+    facet_summary
+        .unwrap_or_default()
+        .split(|character: char| {
+            character.is_whitespace()
+                || matches!(character, '=' | ':' | ',' | ';' | '|' | '/' | '\\')
+        })
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn build_compact_browser_payload(session: &RawExportSession) -> Result<Vec<u8>> {
+    let items = session.read_manifest_collection(COLLECTION_BROWSER_ITEMS_PREFER_CATALOG)?;
     build_compact_browser_payload_from_items(&items)
 }
 
@@ -508,24 +903,19 @@ pub fn build_compact_group_payload_from_groups(groups: &[Value]) -> Result<Vec<u
 }
 
 pub fn compile_dist_browser_pack(
-    input: &Path,
+    session: &RawExportSession,
     output: &Path,
     strict: bool,
     debug_json: bool,
 ) -> Result<()> {
-    let manifest = read_manifest(input)?;
-    let browser_files = runtime_file_descriptors(
-        input,
-        &manifest,
-        &[
-            ("browserCatalog", "browserCatalog"),
-            ("hiddenBrowserCatalog", "hiddenBrowserCatalog"),
-            ("groups", "browserGroups"),
-            ("nativeNeiRules", "nativeNeiRules"),
-            ("searchAll", "searchAll"),
-            ("searchAliasIndex", "searchAliasIndex"),
-        ],
-    )?;
+    let browser_files = session.runtime_file_descriptors(&[
+        ("browserCatalog", "browserCatalog"),
+        ("hiddenBrowserCatalog", "hiddenBrowserCatalog"),
+        ("groups", "browserGroups"),
+        ("nativeNeiRules", "nativeNeiRules"),
+        ("searchAll", "searchAll"),
+        ("searchAliasIndex", "searchAliasIndex"),
+    ])?;
     if strict
         && !browser_files.iter().any(|value| {
             value
@@ -545,18 +935,16 @@ pub fn compile_dist_browser_pack(
         "counts": { "files": browser_files.len() },
         "files": browser_files,
     });
-    let compact_browser_payload = build_compact_browser_payload(input, &manifest)?;
+    let compact_browser_payload = build_compact_browser_payload(session)?;
     let group_pack = json!({
         "schemaVersion": "neonei/rust-group-pack/current",
         "sourceKind": "dist-data",
-        "files": runtime_file_descriptors(input, &manifest, &[("groups", "browserGroups")])?,
+        "files": session.runtime_file_descriptors(&[("groups", "browserGroups")])?,
     });
     let search_pack = json!({
         "schemaVersion": "neonei/rust-search-pack/current",
         "sourceKind": "dist-data",
-        "files": runtime_file_descriptors(
-            input,
-            &manifest,
+        "files": session.runtime_file_descriptors(
             &[("searchAll", "searchAll"), ("searchAliasIndex", "searchAliasIndex")],
         )?,
     });
@@ -580,14 +968,16 @@ pub fn compile_dist_browser_pack(
         &group_pack,
     )?;
     let browser_items =
-        read_manifest_collection(input, &manifest, COLLECTION_BROWSER_ITEMS_PREFER_CATALOG)?;
+        session.read_manifest_collection(COLLECTION_BROWSER_ITEMS_PREFER_CATALOG)?;
     let browser_index_by_item = browser_items
         .iter()
         .enumerate()
         .filter_map(|(index, item)| Some((value_string(item, "itemId")?, index as u64)))
         .collect::<BTreeMap<_, _>>();
-    let mut search_rows =
-        read_manifest_collection(input, &manifest, COLLECTION_SEARCH_ALL_PREFER_INDEX)?;
+    let mut search_rows = session
+        .read_manifest_collection(COLLECTION_SEARCH_ALL_PREFER_INDEX)?
+        .as_ref()
+        .clone();
     for item in &mut search_rows {
         if let Some(item_object) = item.as_object_mut() {
             if let Some(item_id) = item_object.get("itemId").and_then(Value::as_str) {

@@ -15,10 +15,12 @@ mod native_ui_export_abi;
 mod native_ui_export_abi_catalog;
 mod native_ui_pack_abi;
 mod native_ui_report;
+pub mod output_generation;
 mod pack_abi;
 mod packs;
 mod raw_export;
 mod raw_export_abi;
+mod raw_ui_schema_catalog;
 mod recipe_domain;
 mod recipe_ui_payload;
 mod reports;
@@ -27,13 +29,17 @@ mod runtime_manifest_abi;
 mod runtime_pack_plan;
 mod schema_catalog;
 mod schemas;
+mod session;
 mod stages;
 mod text;
 mod texture_animation;
 mod ui_pack_abi;
+mod ui_presentation_catalog;
 mod ui_templates;
 mod validation;
 
+#[cfg(test)]
+mod session_io_tests;
 #[cfg(test)]
 mod tests;
 mod version;

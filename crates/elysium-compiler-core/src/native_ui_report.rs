@@ -40,8 +40,8 @@ pub fn compile_native_ui_layout_report(
     let gt_recipe_layouts = gt_recipe_entries
         .iter()
         .filter_map(|entry| {
-            value_string(entry, "familyKey")
-                .and_then(|family_key| layout_by_family.get(&family_key).copied())
+            value_string(entry, "captureKey")
+                .and_then(|capture_key| layout_by_family.get(&capture_key).copied())
         })
         .collect::<Vec<_>>();
 
@@ -132,7 +132,7 @@ fn is_gregtech_recipe_ui_entry(entry: &Value) -> bool {
     entry
         .get("nativeLayout")
         .is_some_and(is_gregtech_native_layout)
-        || value_string(entry, "familyKey")
+        || value_string(entry, "captureKey")
             .map(|value| value.starts_with("gregtech-machine|"))
             .unwrap_or(false)
 }

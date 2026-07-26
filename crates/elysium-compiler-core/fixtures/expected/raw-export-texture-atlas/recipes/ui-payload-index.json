@@ -2,7 +2,7 @@
   "schemaVersion": "neonei/recipe-ui-payload-index/v1",
   "recipes": [
     {
-      "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
+      "captureKey": "gregtech-machine|machine|176x90@0#1|unknown",
       "handlerKey": "gt.recipe.test",
       "machineType": "Test GT Machine",
       "nativeLayout": {

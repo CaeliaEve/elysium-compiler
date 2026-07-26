@@ -21,7 +21,7 @@ pub const UI_BINDING_MAGIC_REPORT: &str = "NEIUIB1_NUL";
 pub const UI_STRING_MAGIC_REPORT: &str = "NEIUIS1_NUL";
 
 pub const UI_TEMPLATE_PAYLOAD_VERSION: u32 = 9;
-pub const UI_BINDING_PAYLOAD_VERSION: u32 = 1;
+pub const UI_BINDING_PAYLOAD_VERSION: u32 = 2;
 pub const UI_STRING_PAYLOAD_VERSION: u32 = 1;
 
 pub const UI_TEMPLATE_ROW_STRIDE_U32: u32 = 25;
@@ -29,7 +29,7 @@ pub const UI_SLOT_ROW_STRIDE_U32: u32 = 12;
 pub const UI_TEXT_ROW_STRIDE_U32: u32 = 7;
 pub const UI_PRIMITIVE_ROW_STRIDE_U32: u32 = 13;
 pub const UI_RECT_ROW_STRIDE_U32: u32 = 15;
-pub const UI_BINDING_ROW_STRIDE_U32: u32 = 11;
+pub const UI_BINDING_ROW_STRIDE_U32: u32 = 14;
 
 pub const NATIVE_UI_COORDINATE_SPACE: &str = "nei_pixels";
 pub const NATIVE_UI_ANCHOR: &str = "top-left";
@@ -97,7 +97,7 @@ pub const UI_SLOT_STRING_REF_COLUMNS: &[u32] = &[0, 6, 7];
 pub const UI_TEXT_STRING_REF_COLUMNS: &[u32] = &[0, 5, 6];
 pub const UI_PRIMITIVE_STRING_REF_COLUMNS: &[u32] = &[0, 1, 6, 7, 8, 9, 10, 11, 12];
 pub const UI_RECT_STRING_REF_COLUMNS: &[u32] = &[0, 1, 2, 3, 4, 9, 10, 11, 12, 13, 14];
-pub const UI_BINDING_STRING_REF_COLUMNS: &[u32] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+pub const UI_BINDING_STRING_REF_COLUMNS: &[u32] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 /// Public ABI catalog emitted into `ui_pack_report.json`.
 pub fn ui_pack_format_report() -> Value {
@@ -120,5 +120,24 @@ pub fn ui_pack_format_report() -> Value {
         "backgroundContractFields": BACKGROUND_CONTRACT_FIELDS,
         "backgroundKinds": NATIVE_UI_BACKGROUND_KINDS,
         "templateBackgroundField": TEMPLATE_BACKGROUND_FIELD,
+        "bindingPackMagic": UI_BINDING_MAGIC_REPORT,
+        "bindingPackVersion": UI_BINDING_PAYLOAD_VERSION,
+        "bindingStride": UI_BINDING_ROW_STRIDE_U32,
+        "bindingFields": [
+            "recipeId",
+            "path",
+            "payloadKey",
+            "familyKey",
+            "recipeType",
+            "machineType",
+            "templateKey",
+            "templateSignature",
+            "canonicalMachineFamily",
+            "layoutKind",
+            "presentationSurface",
+            "layoutId",
+            "rendererId",
+            "flags",
+        ],
     })
 }

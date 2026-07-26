@@ -1,4 +1,4 @@
-use crate::atlas_repair::repaired_browser_atlas;
+use crate::atlas_repair::repaired_browser_atlas_items;
 use crate::binary::{
     intern_compact_string, push_u32, write_binary_pack, write_binary_pack_payload,
 };
@@ -7,21 +7,22 @@ use crate::json_ext::{
     numeric_value_u64, optional_value_string, optional_value_u64, value_string, value_u64,
 };
 use crate::manifest::{
-    read_manifest, read_manifest_collection, read_manifest_json, resolve_manifest_path,
-    runtime_file_descriptors, RawManifest, COLLECTION_ANIMATIONS, COLLECTION_BROWSER_ITEMS,
-    COLLECTION_NATIVE_SPRITES, COLLECTION_TEXTURE_ROWS_WITH_MANIFEST,
+    COLLECTION_ANIMATIONS, COLLECTION_ANIMATION_FRAME_MATERIALIZATIONS, COLLECTION_BROWSER_ITEMS,
+    COLLECTION_FACADE_RESOLUTIONS, COLLECTION_NATIVE_SPRITES,
+    COLLECTION_TEXTURE_ROWS_WITH_MANIFEST,
 };
+use crate::session::RawExportSession;
 use crate::texture_animation::{
-    expected_animated_item, expected_animation_reason, promote_animation_facts_to_animated_atlas,
+    animation_materialization_diagnostic, expected_animated_item, expected_animation_reason,
+    promote_animation_facts_to_animated_atlas_items,
 };
 use crate::validation::{validate_atlas_bounds, validate_atlas_ref, validate_frame_bounds};
 use anyhow::{anyhow, Context, Result};
-use flate2::read::GzDecoder;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+use std::io::{BufWriter, Write};
 use std::path::Path;
 
 const NATIVE_RENDER_INDEX_PATH: &str = "render/index.json";
@@ -48,6 +49,65 @@ struct ShaderCaptureRequirement {
     renderer_class: Option<String>,
     shader_family: Option<String>,
     preferred_export: Option<String>,
+}
+
+type FramebufferCaptureIndex = (
+    BTreeMap<String, Value>,
+    BTreeMap<String, Value>,
+    BTreeMap<String, CaptureProbe>,
+    BTreeMap<String, CaptureProbe>,
+);
+
+fn index_framebuffer_captures(rows: &[Value]) -> Result<FramebufferCaptureIndex> {
+    let mut values_by_asset = BTreeMap::<String, Value>::new();
+    let mut values_by_variant = BTreeMap::<String, Value>::new();
+    let mut probes_by_asset = BTreeMap::<String, CaptureProbe>::new();
+    let mut probes_by_variant = BTreeMap::<String, CaptureProbe>::new();
+    for row in rows {
+        let compact = compact_framebuffer_capture(row);
+        let probe = capture_probe_from_compact(&compact);
+        if let Some(asset_id) = value_string(&compact, "assetId") {
+            if values_by_asset.contains_key(&asset_id) {
+                return Err(anyhow!(
+                    "duplicate framebuffer capture assetId is forbidden: {}",
+                    asset_id
+                ));
+            }
+            values_by_asset.insert(asset_id.clone(), compact.clone());
+            probes_by_asset.insert(asset_id, probe.clone());
+        }
+        if let Some(variant_key) = value_string(&compact, "variantKey") {
+            if let Some(existing) = values_by_variant.get(&variant_key) {
+                if equivalent_variant_capture(existing, &compact) {
+                    continue;
+                }
+                return Err(anyhow!(
+                    "conflicting framebuffer capture variantKey is forbidden: {}",
+                    variant_key
+                ));
+            }
+            values_by_variant.insert(variant_key.clone(), compact);
+            probes_by_variant.insert(variant_key, probe);
+        }
+    }
+    Ok((
+        values_by_asset,
+        values_by_variant,
+        probes_by_asset,
+        probes_by_variant,
+    ))
+}
+
+fn equivalent_variant_capture(left: &Value, right: &Value) -> bool {
+    let mut left = left.clone();
+    let mut right = right.clone();
+    if let Some(object) = left.as_object_mut() {
+        object.remove("assetId");
+    }
+    if let Some(object) = right.as_object_mut() {
+        object.remove("assetId");
+    }
+    left == right
 }
 
 #[derive(Clone, Debug)]
@@ -147,6 +207,7 @@ pub fn normalize_runtime_atlas_file_path(value: Option<String>) -> Option<String
     Some(normalized)
 }
 
+#[cfg(test)]
 pub fn copy_runtime_atlas_assets(
     input: &Path,
     output: &Path,
@@ -200,6 +261,57 @@ pub fn copy_runtime_atlas_assets(
                 destination_path.display()
             )
         })?;
+    }
+    Ok(())
+}
+
+fn copy_runtime_atlas_assets_from_session(
+    session: &RawExportSession,
+    output: &Path,
+    atlas_items: &[Value],
+    missing_atlas_asset_files: &mut Vec<String>,
+) -> Result<()> {
+    let mut atlas_paths = BTreeMap::<String, String>::new();
+    for item in atlas_items {
+        for key in ["staticAtlas", "animatedAtlas"] {
+            let Some(atlas) = item.get(key).filter(|value| value.is_object()) else {
+                continue;
+            };
+            let Some(raw_atlas_file) = optional_value_string(Some(atlas), "atlasFile") else {
+                continue;
+            };
+            let Some(runtime_atlas_file) =
+                normalize_runtime_atlas_file_path(Some(raw_atlas_file.clone()))
+            else {
+                continue;
+            };
+            atlas_paths
+                .entry(runtime_atlas_file)
+                .or_insert(raw_atlas_file);
+        }
+    }
+
+    for (runtime_atlas_file, raw_atlas_file) in atlas_paths {
+        let raw_relative = raw_atlas_file
+            .replace('\\', "/")
+            .trim_start_matches('/')
+            .to_string();
+        let Some(bytes) = session.read_relative_bytes(&raw_relative)? else {
+            missing_atlas_asset_files.push(format!(
+                "{runtime_atlas_file}:missing-source:{raw_relative}"
+            ));
+            continue;
+        };
+        let runtime_relative = runtime_atlas_file
+            .replace('\\', "/")
+            .trim_start_matches('/')
+            .to_string();
+        let destination_path = output.join(&runtime_relative);
+        if let Some(parent) = destination_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&destination_path, bytes.as_slice())
+            .with_context(|| format!("write runtime atlas asset {}", destination_path.display()))?;
     }
     Ok(())
 }
@@ -282,7 +394,7 @@ fn normalize_animation_timeline(
         return timeline
             .iter()
             .enumerate()
-            .filter_map(|(index, frame)| {
+            .map(|(index, frame)| {
                 let (frame_index, duration_ms) = if let Some(values) = frame.as_array() {
                     (
                         normalize_frame_index(values.first(), index),
@@ -303,10 +415,10 @@ fn normalize_animation_timeline(
                         ),
                     )
                 };
-                Some(json!({
+                json!({
                     "frameIndex": frame_index,
                     "durationMs": duration_ms.max(16),
-                }))
+                })
             })
             .collect();
     }
@@ -328,43 +440,6 @@ fn capture_probe_for_item_id<'a>(
     captures_by_asset_id
         .get(&format!("nesqlpp:item/{item_id}"))
         .or_else(|| captures_by_variant_key.get(item_id))
-}
-
-fn read_manifest_jsonl_stream<F>(
-    input: &Path,
-    manifest: &RawManifest,
-    logical_name: &str,
-    mut visitor: F,
-) -> Result<usize>
-where
-    F: FnMut(Value) -> Result<()>,
-{
-    let Some(path) = resolve_manifest_path(input, manifest, logical_name) else {
-        return Ok(0);
-    };
-    let file = File::open(&path).with_context(|| format!("open {}", path.display()))?;
-    let reader: Box<dyn Read> = if path
-        .extension()
-        .and_then(|value| value.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("gz"))
-    {
-        Box::new(GzDecoder::new(file))
-    } else {
-        Box::new(file)
-    };
-    let buf = BufReader::new(reader);
-    let mut count = 0usize;
-    for (index, line) in buf.lines().enumerate() {
-        let line = line?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        let value = serde_json::from_str::<Value>(&line)
-            .with_context(|| format!("parse {} line {}", path.display(), index + 1))?;
-        visitor(value)?;
-        count += 1;
-    }
-    Ok(count)
 }
 
 fn write_json_field_name<W: Write>(writer: &mut W, first: &mut bool, key: &str) -> Result<()> {
@@ -561,8 +636,7 @@ fn native_render_validation(
 }
 
 fn write_native_render_index(
-    input: &Path,
-    manifest: &RawManifest,
+    session: &RawExportSession,
     output: &Path,
 ) -> Result<NativeRenderIndexStats> {
     let native_render_path = output.join(NATIVE_RENDER_INDEX_PATH);
@@ -572,7 +646,10 @@ fn write_native_render_index(
     let file = File::create(&native_render_path)
         .with_context(|| format!("create {}", native_render_path.display()))?;
     let mut writer = BufWriter::new(file);
-    let backend = read_manifest_json(input, manifest, "renderBackend")?.unwrap_or(Value::Null);
+    let backend = session
+        .read_manifest_json("renderBackend")?
+        .map(|value| value.as_ref().clone())
+        .unwrap_or(Value::Null);
     let mut stats = NativeRenderIndexStats::default();
 
     writer.write_all(b"{")?;
@@ -589,21 +666,21 @@ fn write_native_render_index(
     writer.write_all(b"{")?;
     let mut map_first = true;
     let mut item_renderer_keys = HashSet::<String>::new();
-    stats.item_renderers =
-        read_manifest_jsonl_stream(input, manifest, "renderItemRenderers", |row| {
-            let Some(item_id) = value_string(&row, "itemId") else {
-                return Ok(());
-            };
-            if item_renderer_keys.insert(item_id.clone()) {
-                write_json_map_entry(
-                    &mut writer,
-                    &mut map_first,
-                    &item_id,
-                    &compact_item_renderer_entry(&row),
-                )?;
-            }
-            Ok(())
-        })?;
+    let item_renderer_rows = session.read_manifest_jsonl("renderItemRenderers")?;
+    stats.item_renderers = item_renderer_rows.len();
+    for row in item_renderer_rows.iter() {
+        let Some(item_id) = value_string(row, "itemId") else {
+            continue;
+        };
+        if item_renderer_keys.insert(item_id.clone()) {
+            write_json_map_entry(
+                &mut writer,
+                &mut map_first,
+                &item_id,
+                &compact_item_renderer_entry(row),
+            )?;
+        }
+    }
     stats.item_renderer_by_item_id = item_renderer_keys.len();
     writer.write_all(b"}")?;
 
@@ -612,17 +689,19 @@ fn write_native_render_index(
     let mut map_first = true;
     let mut shader_keys = HashSet::<String>::new();
     let mut shader_requirements = Vec::<ShaderCaptureRequirement>::new();
-    stats.shader_items = read_manifest_jsonl_stream(input, manifest, "renderShaderItems", |row| {
-        let Some(item_id) = value_string(&row, "itemId") else {
-            return Ok(());
+    let shader_rows = session.read_manifest_jsonl("renderShaderItems")?;
+    stats.shader_items = shader_rows.len();
+    for row in shader_rows.iter() {
+        let Some(item_id) = value_string(row, "itemId") else {
+            continue;
         };
-        if value_bool(&row, "captureRequired") {
+        if value_bool(row, "captureRequired") {
             shader_requirements.push(ShaderCaptureRequirement {
                 item_id: item_id.clone(),
-                renderer_kind: value_string(&row, "rendererKind"),
-                renderer_class: value_string(&row, "rendererClass"),
-                shader_family: value_string(&row, "shaderFamily"),
-                preferred_export: value_string(&row, "preferredExport"),
+                renderer_kind: value_string(row, "rendererKind"),
+                renderer_class: value_string(row, "rendererClass"),
+                shader_family: value_string(row, "shaderFamily"),
+                preferred_export: value_string(row, "preferredExport"),
             });
         }
         if shader_keys.insert(item_id.clone()) {
@@ -630,74 +709,57 @@ fn write_native_render_index(
                 &mut writer,
                 &mut map_first,
                 &item_id,
-                &compact_shader_item_entry(&row),
+                &compact_shader_item_entry(row),
             )?;
         }
-        Ok(())
-    })?;
+    }
     stats.shader_by_item_id = shader_keys.len();
     writer.write_all(b"}")?;
 
     write_json_field_name(&mut writer, &mut field_first, "capturesByAssetId")?;
     writer.write_all(b"{")?;
+    let capture_rows = session.read_manifest_jsonl("renderFramebufferCaptures")?;
+    stats.framebuffer_captures = capture_rows.len();
+    let (
+        captures_by_asset_value,
+        captures_by_variant_value,
+        captures_by_asset_id,
+        captures_by_variant_key,
+    ) = index_framebuffer_captures(capture_rows.as_slice())?;
     let mut map_first = true;
-    let mut capture_asset_keys = HashSet::<String>::new();
-    let mut captures_by_asset_id = BTreeMap::<String, CaptureProbe>::new();
-    let mut captures_by_variant_key = BTreeMap::<String, CaptureProbe>::new();
-    stats.framebuffer_captures =
-        read_manifest_jsonl_stream(input, manifest, "renderFramebufferCaptures", |row| {
-            let compact = compact_framebuffer_capture(&row);
-            let probe = capture_probe_from_compact(&compact);
-            if let Some(asset_id) = value_string(&compact, "assetId") {
-                captures_by_asset_id.insert(asset_id.clone(), probe.clone());
-                if capture_asset_keys.insert(asset_id.clone()) {
-                    write_json_map_entry(&mut writer, &mut map_first, &asset_id, &compact)?;
-                }
-            }
-            if let Some(variant_key) = value_string(&compact, "variantKey") {
-                captures_by_variant_key.insert(variant_key, probe);
-            }
-            Ok(())
-        })?;
+    for (asset_id, compact) in &captures_by_asset_value {
+        write_json_map_entry(&mut writer, &mut map_first, asset_id, compact)?;
+    }
     writer.write_all(b"}")?;
 
     write_json_field_name(&mut writer, &mut field_first, "capturesByVariantKey")?;
     writer.write_all(b"{")?;
     let mut map_first = true;
-    let mut capture_variant_keys = HashSet::<String>::new();
-    read_manifest_jsonl_stream(input, manifest, "renderFramebufferCaptures", |row| {
-        let compact = compact_framebuffer_capture(&row);
-        let Some(variant_key) = value_string(&compact, "variantKey") else {
-            return Ok(());
-        };
-        if capture_variant_keys.insert(variant_key.clone()) {
-            write_json_map_entry(&mut writer, &mut map_first, &variant_key, &compact)?;
-        }
-        Ok(())
-    })?;
+    for (variant_key, compact) in &captures_by_variant_value {
+        write_json_map_entry(&mut writer, &mut map_first, variant_key, compact)?;
+    }
     writer.write_all(b"}")?;
 
     write_json_field_name(&mut writer, &mut field_first, "spriteByIconName")?;
     writer.write_all(b"{")?;
     let mut map_first = true;
     let mut sprite_keys = HashSet::<String>::new();
-    stats.texture_sprites =
-        read_manifest_jsonl_stream(input, manifest, "renderTextureSprites", |row| {
-            let Some(key) =
-                value_string(&row, "iconName").or_else(|| value_string(&row, "spriteKey"))
-            else {
-                return Ok(());
-            };
-            if sprite_keys.insert(key.clone()) {
-                write_json_map_entry(
-                    &mut writer,
-                    &mut map_first,
-                    &key,
-                    &compact_sprite_entry(&row),
-                )?;
-            }
-            Ok(())
-        })?;
+    let sprite_rows = session.read_manifest_jsonl("renderTextureSprites")?;
+    stats.texture_sprites = sprite_rows.len();
+    for row in sprite_rows.iter() {
+        let Some(key) = value_string(row, "iconName").or_else(|| value_string(row, "spriteKey"))
+        else {
+            continue;
+        };
+        if sprite_keys.insert(key.clone()) {
+            write_json_map_entry(
+                &mut writer,
+                &mut map_first,
+                &key,
+                &compact_sprite_entry(row),
+            )?;
+        }
+    }
     stats.sprite_by_icon_name = sprite_keys.len();
     writer.write_all(b"}")?;
 
@@ -731,24 +793,16 @@ fn write_native_render_index(
 }
 
 fn copy_or_write_empty_native_render_index(
-    input: &Path,
-    manifest: &RawManifest,
+    session: &RawExportSession,
     output: &Path,
 ) -> Result<()> {
     let native_render_path = output.join(NATIVE_RENDER_INDEX_PATH);
     if let Some(parent) = native_render_path.parent() {
         fs::create_dir_all(parent)?;
     }
-    if let Some(source_path) =
-        resolve_manifest_path(input, manifest, "nativeRenderIndex").filter(|path| path.is_file())
-    {
-        fs::copy(&source_path, &native_render_path).with_context(|| {
-            format!(
-                "copy native render index {} -> {}",
-                source_path.display(),
-                native_render_path.display()
-            )
-        })?;
+    if let Some(bytes) = session.read_optional_manifest_bytes("nativeRenderIndex")? {
+        fs::write(&native_render_path, bytes.as_slice())
+            .with_context(|| format!("write {}", native_render_path.display()))?;
         return Ok(());
     }
     let empty_index = json!({
@@ -787,24 +841,29 @@ fn copy_or_write_empty_native_render_index(
 }
 
 pub fn compile_texture_pack(
-    input: &Path,
+    session: &RawExportSession,
     output: &Path,
     strict: bool,
     debug_json: bool,
 ) -> Result<()> {
-    let manifest = read_manifest(input)?;
+    let manifest = session.manifest();
     if manifest.files.contains_key("textureManifest") {
-        return compile_dist_texture_pack(input, output, strict, debug_json);
+        return compile_dist_texture_pack(session, output, strict, debug_json);
     }
-    let atlas = read_manifest_json(input, &manifest, "browserAtlasIndex")?
+    let atlas = session
+        .read_manifest_json("browserAtlasIndex")?
         .ok_or_else(|| anyhow!("texture compiler blocked: browserAtlasIndex is missing"))?;
-    let animations = read_manifest_collection(input, &manifest, COLLECTION_ANIMATIONS)?;
-    let native_sprites = read_manifest_collection(input, &manifest, COLLECTION_NATIVE_SPRITES)?;
-    let texture_rows =
-        read_manifest_collection(input, &manifest, COLLECTION_TEXTURE_ROWS_WITH_MANIFEST)?;
-    let item_rows = read_manifest_collection(input, &manifest, COLLECTION_BROWSER_ITEMS)?;
+    let animations = session.read_manifest_collection(COLLECTION_ANIMATIONS)?;
+    let native_sprites = session.read_manifest_collection(COLLECTION_NATIVE_SPRITES)?;
+    let facade_resolutions = session.read_manifest_collection(COLLECTION_FACADE_RESOLUTIONS)?;
+    let animation_materializations =
+        session.read_manifest_collection(COLLECTION_ANIMATION_FRAME_MATERIALIZATIONS)?;
+    let texture_rows = session.read_manifest_collection(COLLECTION_TEXTURE_ROWS_WITH_MANIFEST)?;
+    let item_rows = session.read_manifest_collection(COLLECTION_BROWSER_ITEMS)?;
     let animation_count = animations.len();
     let native_sprite_count = native_sprites.len();
+    let facade_resolution_count = facade_resolutions.len();
+    let animation_materialization_count = animation_materializations.len();
     let texture_row_count = texture_rows.len();
 
     let animation_by_asset = animations
@@ -817,6 +876,41 @@ pub fn compile_texture_pack(
         .filter_map(|row| Some((value_string(row, "assetId")?, row.clone())))
         .collect::<BTreeMap<_, _>>();
     drop(native_sprites);
+    let mut animation_materialization_by_asset = BTreeMap::new();
+    let mut animation_materialization_index_issues = Vec::new();
+    let mut invalid_animation_materialization_assets = HashSet::new();
+    for row in animation_materializations.iter() {
+        let Some(asset_id) = value_string(row, "assetId").filter(|value| !value.trim().is_empty())
+        else {
+            animation_materialization_index_issues.push(json!({
+                "code": "ANIMATION_MATERIALIZATION_INVALID",
+                "itemId": Value::Null,
+                "assetId": Value::Null,
+                "validationError": "animationFrameMaterializations row has no non-empty assetId",
+            }));
+            continue;
+        };
+        if invalid_animation_materialization_assets.contains(&asset_id) {
+            continue;
+        }
+        if animation_materialization_by_asset.contains_key(&asset_id) {
+            invalid_animation_materialization_assets.insert(asset_id.clone());
+            animation_materialization_by_asset.remove(&asset_id);
+            animation_materialization_index_issues.push(json!({
+                "code": "ANIMATION_MATERIALIZATION_INVALID",
+                "itemId": Value::Null,
+                "assetId": asset_id,
+                "validationError": "animationFrameMaterializations must contain exactly one row per assetId",
+            }));
+            continue;
+        }
+        if let Some((diagnostic, true)) = animation_materialization_diagnostic("", &asset_id, row) {
+            invalid_animation_materialization_assets.insert(asset_id.clone());
+            animation_materialization_index_issues.push(diagnostic);
+        }
+        animation_materialization_by_asset.insert(asset_id, row.clone());
+    }
+    drop(animation_materializations);
     let texture_by_asset = if debug_json {
         Some(
             texture_rows
@@ -828,22 +922,32 @@ pub fn compile_texture_pack(
         None
     };
 
-    let atlas = repaired_browser_atlas(&atlas, &texture_rows, &item_rows);
+    let atlas_repair =
+        repaired_browser_atlas_items(&atlas, &texture_rows, &item_rows, &facade_resolutions);
+    let repaired_facade_count = atlas_repair.repaired_facades;
+    let unresolved_facade_count = atlas_repair.unresolved_facades.len();
+    let mut atlas_items = atlas_repair.items;
     drop(item_rows);
     if !debug_json {
         drop(texture_rows);
     }
-    let atlas = promote_animation_facts_to_animated_atlas(
-        &atlas,
+    promote_animation_facts_to_animated_atlas_items(
+        &mut atlas_items,
+        &animation_materialization_by_asset,
         &animation_by_asset,
         &native_sprite_by_asset,
     );
-    let atlas_items = atlas
-        .get("items")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let debug_atlas = if debug_json { Some(atlas) } else { None };
+    let debug_atlas = if debug_json {
+        Some(json!({
+            "schemaVersion": atlas
+                .get("schemaVersion")
+                .cloned()
+                .unwrap_or(Value::Null),
+            "items": atlas_items.clone(),
+        }))
+    } else {
+        None
+    };
 
     let mut static_items = 0u64;
     let mut animated_items = 0u64;
@@ -851,7 +955,9 @@ pub fn compile_texture_pack(
     let mut missing_atlas_asset_files = Vec::new();
     let mut invalid_atlas_bounds = Vec::new();
     let mut invalid_frame_bounds = Vec::new();
-    let mut actionable_texture_issues = Vec::new();
+    let mut actionable_texture_issues = atlas_repair.unresolved_facades;
+    actionable_texture_issues.extend(animation_materialization_index_issues);
+    let mut animation_materialization_diagnostics = Vec::new();
     let mut animation_table = Vec::new();
     let mut atlas_map = if debug_json {
         Some(BTreeMap::new())
@@ -872,6 +978,7 @@ pub fn compile_texture_pack(
             .unwrap_or(false);
         let animation = animation_by_asset.get(&asset_id);
         let native_sprite = native_sprite_by_asset.get(&asset_id);
+        let animation_materialization = animation_materialization_by_asset.get(&asset_id);
         if !has_static_atlas && !has_animated_atlas {
             actionable_texture_issues.push(json!({
                 "code": "TEXTURE_ATLAS_ENTRY_EMPTY",
@@ -881,7 +988,23 @@ pub fn compile_texture_pack(
                 "recommendedFix": "Fix NESQL++ texture capture or atlas-source classification for this item; do not use frontend per-item image fallback.",
             }));
         }
-        if !has_animated_atlas && expected_animated_item(animation, native_sprite) {
+        if let Some(materialization) = animation_materialization {
+            if !invalid_animation_materialization_assets.contains(&asset_id) {
+                if let Some((diagnostic, blocking)) =
+                    animation_materialization_diagnostic(&item_id, &asset_id, materialization)
+                {
+                    if blocking {
+                        actionable_texture_issues.push(diagnostic);
+                    } else {
+                        animation_materialization_diagnostics.push(diagnostic);
+                    }
+                }
+            }
+        }
+        if !has_animated_atlas
+            && expected_animated_item(animation, native_sprite)
+            && animation_materialization.is_none()
+        {
             actionable_texture_issues.push(json!({
                 "code": "EXPECTED_ANIMATED_BUT_STATIC",
                 "itemId": item_id,
@@ -890,7 +1013,8 @@ pub fn compile_texture_pack(
                 "hasStaticAtlas": has_static_atlas,
                 "hasAnimationFacts": animation.is_some(),
                 "hasNativeSpriteFacts": native_sprite.is_some(),
-                "recommendedFix": "Repair NESQL++ animation facts or native sprite capture so compiler emits animatedAtlas/timeline rows.",
+                "hasAnimationFrameMaterializationFacts": false,
+                "recommendedFix": "NESQL++ must export an authoritative animationFrameMaterializations row; compiler promotion from timing metadata or duplicated static coordinates is forbidden.",
             }));
         }
         if item
@@ -931,11 +1055,27 @@ pub fn compile_texture_pack(
                 .and_then(|value| value_u64(value, "frameDurationMs"))
                 .or_else(|| animation.and_then(|value| value_u64(value, "frameDurationMs")))
                 .or_else(|| native_sprite.and_then(|value| value_u64(value, "frameDurationMs")));
+            let frame_duration_source = animated_atlas
+                .and_then(|value| value.get("frameDurationSource"))
+                .cloned()
+                .unwrap_or_else(|| {
+                    json!(if animation_materialization.is_some() {
+                        "animation_frame_materialization"
+                    } else if native_sprite.is_some() {
+                        "native_sprite_metadata"
+                    } else {
+                        "raw_animation_index"
+                    })
+                });
             animation_table.push(json!({
                 "itemId": item_id,
                 "assetId": asset_id,
-                "mode": native_sprite.and_then(|value| value.get("animationMode")).cloned().unwrap_or(Value::Null),
-                "frameDurationSource": if native_sprite.is_some() { "native_sprite_metadata" } else { "raw_animation_index" },
+                "mode": animation_materialization
+                    .and_then(|value| value.get("materializationStatus"))
+                    .cloned()
+                    .or_else(|| native_sprite.and_then(|value| value.get("animationMode")).cloned())
+                    .unwrap_or(Value::Null),
+                "frameDurationSource": frame_duration_source,
                 "frameCount": animated_atlas
                     .and_then(|value| value_u64(value, "frameCount"))
                     .or_else(|| animation.and_then(|value| value_u64(value, "frameCount"))),
@@ -967,27 +1107,69 @@ pub fn compile_texture_pack(
             );
         }
     }
-    copy_runtime_atlas_assets(input, output, &atlas_items, &mut missing_atlas_asset_files)?;
-
-    if strict
-        && (!missing_atlas_file_refs.is_empty()
-            || !missing_atlas_asset_files.is_empty()
-            || !invalid_atlas_bounds.is_empty()
-            || !invalid_frame_bounds.is_empty())
-    {
-        return Err(anyhow!(
-            "texture compiler blocked: missing atlas refs={}, missing atlas assets={}, invalid atlas bounds={}, invalid frame bounds={}",
-            missing_atlas_file_refs.len(),
-            missing_atlas_asset_files.len(),
-            invalid_atlas_bounds.len(),
-            invalid_frame_bounds.len()
-        ));
-    }
+    copy_runtime_atlas_assets_from_session(
+        session,
+        output,
+        &atlas_items,
+        &mut missing_atlas_asset_files,
+    )?;
 
     let rust_dir = output.join("rust");
     fs::create_dir_all(&rust_dir)?;
-    let native_render_stats = write_native_render_index(input, &manifest, output)?;
-    let texture_report_status = if actionable_texture_issues.is_empty()
+    let blocking_actionable_issue_count = actionable_texture_issues
+        .iter()
+        .filter(|issue| {
+            matches!(
+                value_string(issue, "code").as_deref(),
+                Some(
+                    "EXPECTED_ANIMATED_BUT_STATIC"
+                        | "ANIMATION_MATERIALIZATION_INVALID"
+                        | "FACADE_RESOLUTION_FACT_MISSING"
+                        | "FACADE_RESOLUTION_FACT_INVALID"
+                        | "FACADE_RESOLUTION_UNRESOLVED"
+                        | "FACADE_RESOLUTION_SOURCE_MISSING"
+                )
+            )
+        })
+        .count();
+    let certified_static_animation_count = animation_materialization_diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            value_string(diagnostic, "code").as_deref() == Some("ANIMATION_CERTIFIED_STATIC")
+        })
+        .count();
+    let certified_unavailable_animation_count = animation_materialization_diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            value_string(diagnostic, "code").as_deref() == Some("ANIMATION_CERTIFIED_UNAVAILABLE")
+        })
+        .count();
+    let invalid_animation_materialization_count = actionable_texture_issues
+        .iter()
+        .filter(|issue| {
+            value_string(issue, "code").as_deref() == Some("ANIMATION_MATERIALIZATION_INVALID")
+        })
+        .count();
+    let missing_animation_materialization_count = actionable_texture_issues
+        .iter()
+        .filter(|issue| {
+            value_string(issue, "code").as_deref() == Some("EXPECTED_ANIMATED_BUT_STATIC")
+        })
+        .count();
+    let missing_atlas_file_ref_count = missing_atlas_file_refs.len();
+    let missing_atlas_asset_file_count = missing_atlas_asset_files.len();
+    let invalid_atlas_bound_count = invalid_atlas_bounds.len();
+    let invalid_frame_bound_count = invalid_frame_bounds.len();
+    let blocking_texture_integrity_issue_count = missing_atlas_file_ref_count
+        + missing_atlas_asset_file_count
+        + invalid_atlas_bound_count
+        + invalid_frame_bound_count;
+    let strict_texture_blocked =
+        blocking_actionable_issue_count > 0 || blocking_texture_integrity_issue_count > 0;
+    let texture_report_status = if strict_texture_blocked {
+        "blocked"
+    } else if actionable_texture_issues.is_empty()
+        && animation_materialization_diagnostics.is_empty()
         && missing_atlas_file_refs.is_empty()
         && missing_atlas_asset_files.is_empty()
         && invalid_atlas_bounds.is_empty()
@@ -1004,12 +1186,22 @@ pub fn compile_texture_pack(
         "status": texture_report_status,
         "counts": {
             "actionableIssues": actionable_issue_count,
+            "blockingActionableIssues": blocking_actionable_issue_count,
+            "repairedBuildCraftFacades": repaired_facade_count,
+            "unresolvedBuildCraftFacades": unresolved_facade_count,
+            "facadeResolutionRows": facade_resolution_count,
+            "animationFrameMaterializationRows": animation_materialization_count,
+            "certifiedStaticAnimations": certified_static_animation_count,
+            "certifiedUnavailableAnimations": certified_unavailable_animation_count,
+            "invalidAnimationMaterializations": invalid_animation_materialization_count,
+            "missingAnimationMaterializations": missing_animation_materialization_count,
             "missingAtlasFileRefs": missing_atlas_file_refs.len(),
             "missingAtlasAssetFiles": missing_atlas_asset_files.len(),
             "invalidAtlasBounds": invalid_atlas_bounds.len(),
             "invalidFrameBounds": invalid_frame_bounds.len(),
         },
         "issues": actionable_texture_issues,
+        "animationMaterializationDiagnostics": animation_materialization_diagnostics,
         "missingAtlasFileRefs": missing_atlas_file_refs,
         "missingAtlasAssetFiles": missing_atlas_asset_files,
         "invalidAtlasBounds": invalid_atlas_bounds,
@@ -1026,12 +1218,22 @@ pub fn compile_texture_pack(
                 "staticAtlasItems": static_items,
                 "animatedAtlasItems": animated_items,
                 "actionableIssues": suspicious_texture_report["counts"]["actionableIssues"].clone(),
+                "blockingActionableIssues": suspicious_texture_report["counts"]["blockingActionableIssues"].clone(),
+                "repairedBuildCraftFacades": suspicious_texture_report["counts"]["repairedBuildCraftFacades"].clone(),
+                "unresolvedBuildCraftFacades": suspicious_texture_report["counts"]["unresolvedBuildCraftFacades"].clone(),
+                "facadeResolutionRows": suspicious_texture_report["counts"]["facadeResolutionRows"].clone(),
+                "animationFrameMaterializationRows": suspicious_texture_report["counts"]["animationFrameMaterializationRows"].clone(),
+                "certifiedStaticAnimations": suspicious_texture_report["counts"]["certifiedStaticAnimations"].clone(),
+                "certifiedUnavailableAnimations": suspicious_texture_report["counts"]["certifiedUnavailableAnimations"].clone(),
+                "invalidAnimationMaterializations": suspicious_texture_report["counts"]["invalidAnimationMaterializations"].clone(),
+                "missingAnimationMaterializations": suspicious_texture_report["counts"]["missingAnimationMaterializations"].clone(),
                 "missingAtlasFileRefs": suspicious_texture_report["counts"]["missingAtlasFileRefs"].clone(),
                 "missingAtlasAssetFiles": suspicious_texture_report["counts"]["missingAtlasAssetFiles"].clone(),
                 "invalidAtlasBounds": suspicious_texture_report["counts"]["invalidAtlasBounds"].clone(),
                 "invalidFrameBounds": suspicious_texture_report["counts"]["invalidFrameBounds"].clone(),
             },
             "issues": suspicious_texture_report["issues"].clone(),
+            "animationMaterializationDiagnostics": suspicious_texture_report["animationMaterializationDiagnostics"].clone(),
             "missingAtlasFileRefs": suspicious_texture_report["missingAtlasFileRefs"].clone(),
             "missingAtlasAssetFiles": suspicious_texture_report["missingAtlasAssetFiles"].clone(),
             "invalidAtlasBounds": suspicious_texture_report["invalidAtlasBounds"].clone(),
@@ -1042,6 +1244,17 @@ pub fn compile_texture_pack(
         &rust_dir.join("suspicious-texture-report.json"),
         &suspicious_texture_report,
     )?;
+    if strict && strict_texture_blocked {
+        return Err(anyhow!(
+            "texture compiler blocked: blocking actionable issues={}, missing atlas refs={}, missing atlas assets={}, invalid atlas bounds={}, invalid frame bounds={}; diagnostics were written to rust/missing-texture-report.json and rust/suspicious-texture-report.json",
+            blocking_actionable_issue_count,
+            missing_atlas_file_ref_count,
+            missing_atlas_asset_file_count,
+            invalid_atlas_bound_count,
+            invalid_frame_bound_count
+        ));
+    }
+    let native_render_stats = write_native_render_index(session, output)?;
     if debug_json {
         let atlas_map = atlas_map.unwrap_or_default();
         let texture_output_pack = json!({
@@ -1053,6 +1266,15 @@ pub fn compile_texture_pack(
                 "animationRows": animation_count,
                 "nativeSpriteRows": native_sprite_count,
                 "textureRows": texture_row_count,
+                "facadeResolutionRows": facade_resolution_count,
+                "animationFrameMaterializationRows": animation_materialization_count,
+                "certifiedStaticAnimations": certified_static_animation_count,
+                "certifiedUnavailableAnimations": certified_unavailable_animation_count,
+                "invalidAnimationMaterializations": invalid_animation_materialization_count,
+                "missingAnimationMaterializations": missing_animation_materialization_count,
+                "blockingActionableIssues": suspicious_texture_report["counts"]["blockingActionableIssues"].clone(),
+                "repairedBuildCraftFacades": suspicious_texture_report["counts"]["repairedBuildCraftFacades"].clone(),
+                "unresolvedBuildCraftFacades": suspicious_texture_report["counts"]["unresolvedBuildCraftFacades"].clone(),
                 "missingAtlasFileRefs": suspicious_texture_report["counts"]["missingAtlasFileRefs"].clone(),
                 "missingAtlasAssetFiles": suspicious_texture_report["counts"]["missingAtlasAssetFiles"].clone(),
                 "invalidAtlasBounds": suspicious_texture_report["counts"]["invalidAtlasBounds"].clone(),
@@ -1098,23 +1320,18 @@ pub fn compile_texture_pack(
 }
 
 pub fn compile_dist_texture_pack(
-    input: &Path,
+    session: &RawExportSession,
     output: &Path,
     strict: bool,
     debug_json: bool,
 ) -> Result<()> {
-    let manifest = read_manifest(input)?;
-    let texture_files = runtime_file_descriptors(
-        input,
-        &manifest,
-        &[
-            ("textureManifest", "textureManifest"),
-            ("browserAtlasIndex", "browserAtlasIndex"),
-            ("nativeRenderIndex", "nativeRenderIndex"),
-            ("animationTable", "animationTable"),
-            ("animationExpectationReport", "animationExpectationReport"),
-        ],
-    )?;
+    let texture_files = session.runtime_file_descriptors(&[
+        ("textureManifest", "textureManifest"),
+        ("browserAtlasIndex", "browserAtlasIndex"),
+        ("nativeRenderIndex", "nativeRenderIndex"),
+        ("animationTable", "animationTable"),
+        ("animationExpectationReport", "animationExpectationReport"),
+    ])?;
     if strict
         && !texture_files.iter().any(|value| {
             value
@@ -1136,16 +1353,14 @@ pub fn compile_dist_texture_pack(
     let animation_pack = json!({
         "schemaVersion": "neonei/rust-animation-pack/current",
         "sourceKind": "dist-data",
-        "files": runtime_file_descriptors(
-            input,
-            &manifest,
+        "files": session.runtime_file_descriptors(
             &[("animationTable", "animationTable"), ("animationExpectationReport", "animationExpectationReport")],
         )?,
     });
 
     let rust_dir = output.join("rust");
     fs::create_dir_all(&rust_dir)?;
-    copy_or_write_empty_native_render_index(input, &manifest, output)?;
+    copy_or_write_empty_native_render_index(session, output)?;
     if debug_json {
         write_json_value(&rust_dir.join("texture-pack.json"), &texture_pack)?;
     }
@@ -1214,7 +1429,7 @@ pub fn build_compact_animation_payload_from_table(animation_table: &[Value]) -> 
     let mut frames = Vec::<[u32; 2]>::new();
 
     let mut sorted_animations = animation_table.iter().collect::<Vec<_>>();
-    sorted_animations.sort_by_key(|left| value_string(*left, "itemId"));
+    sorted_animations.sort_by_key(|left| value_string(left, "itemId"));
 
     for animation in sorted_animations {
         let item_id = intern_compact_string(
@@ -1300,7 +1515,7 @@ pub fn build_compact_texture_payload_from_atlas_items(atlas_items: &[Value]) -> 
     let mut frames = Vec::<[u32; 5]>::new();
 
     let mut sorted_items = atlas_items.iter().collect::<Vec<_>>();
-    sorted_items.sort_by_key(|left| value_string(*left, "itemId"));
+    sorted_items.sort_by_key(|left| value_string(left, "itemId"));
 
     for item in sorted_items {
         let item_id =
@@ -1469,4 +1684,57 @@ pub fn normalize_timeline(
             })
             .collect(),
     )
+}
+
+#[cfg(test)]
+mod framebuffer_capture_index_tests {
+    use super::*;
+
+    #[test]
+    fn duplicate_asset_id_is_rejected_instead_of_splitting_validation_and_output() {
+        let rows = vec![
+            json!({"assetId":"asset:duplicate","variantKey":"variant:first","frames":[]}),
+            json!({"assetId":"asset:duplicate","variantKey":"variant:second","frames":[{"textureKey":"texture:ok"}]}),
+        ];
+        let error = index_framebuffer_captures(&rows).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("duplicate framebuffer capture assetId"));
+    }
+
+    #[test]
+    fn conflicting_variant_key_is_rejected_instead_of_splitting_validation_and_output() {
+        let rows = vec![
+            json!({"assetId":"asset:first","variantKey":"variant:duplicate","timeline":[]}),
+            json!({"assetId":"asset:second","variantKey":"variant:duplicate","timeline":[{"frameIndex":0,"durationMs":50}]}),
+        ];
+        let error = index_framebuffer_captures(&rows).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("conflicting framebuffer capture variantKey"));
+    }
+
+    #[test]
+    fn equivalent_variant_key_aliases_share_one_variant_capture() {
+        let rows = vec![
+            json!({
+                "assetId":"asset:legacy",
+                "variantKey":"variant:shared",
+                "primaryArtifact":"image/shared.gif",
+                "frames":[{"path":"image/shared.gif","index":0}]
+            }),
+            json!({
+                "assetId":"asset:variant",
+                "variantKey":"variant:shared",
+                "primaryArtifact":"image/shared.gif",
+                "frames":[{"path":"image/shared.gif","index":0}]
+            }),
+        ];
+        let (by_asset, by_variant, probes_by_asset, probes_by_variant) =
+            index_framebuffer_captures(&rows).unwrap();
+        assert_eq!(by_asset.len(), 2);
+        assert_eq!(probes_by_asset.len(), 2);
+        assert_eq!(by_variant.len(), 1);
+        assert_eq!(probes_by_variant.len(), 1);
+    }
 }

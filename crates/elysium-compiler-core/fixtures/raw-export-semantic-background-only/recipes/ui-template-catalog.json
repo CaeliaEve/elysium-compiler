@@ -1,9 +1,13 @@
 {
+  "schemaVersion": "nesqlpp/raw-export/alpha1/ui-template-catalog/v2",
+  "source": {
+    "censusSchemaVersion": "nesqlpp/raw-export/alpha1/ui-family-census/v2"
+  },
   "templates": [
     {
       "templateKey": "gt-fixture@default",
       "templateSignature": "gt-fixture",
-      "familyKey": "gregtech-machine|machine|176x90@0#1|unknown",
+      "captureKey": "gregtech-machine|machine|176x90@0#1|unknown",
       "canonicalMachineFamily": "gregtech-machine",
       "layoutKind": "machine",
       "width": 176,

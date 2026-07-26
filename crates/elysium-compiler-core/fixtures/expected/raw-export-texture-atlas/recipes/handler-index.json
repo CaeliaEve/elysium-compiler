@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "neonei/recipe-handler-index/v1",
+  "handlers": [
+    {
+      "canonicalMachineFamily": "gregtech-machine",
+      "catalystItemName": null,
+      "displayName": "Test GT Machine",
+      "gtMultiblockPreferred": false,
+      "handlerClass": "gregtech.nei.GTNEIDefaultHandler",
+      "handlerHeight": 65,
+      "handlerKey": "gt.recipe.test",
+      "handlerWidth": 166,
+      "imageResource": null,
+      "localizedName": "Test GT Machine",
+      "maxRecipesPerPage": 1,
+      "modId": null,
+      "modName": null,
+      "preferredMachineItemName": null,
+      "yShift": 0
+    }
+  ]
+}

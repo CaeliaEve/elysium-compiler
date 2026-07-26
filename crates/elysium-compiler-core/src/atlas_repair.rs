@@ -1,4 +1,4 @@
-use crate::json_ext::{optional_value_string, optional_value_u64, value_string};
+use crate::json_ext::{optional_value_string, optional_value_u64, value_string, value_u64};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
@@ -6,31 +6,7 @@ fn item_id_from_asset_id(asset_id: &str) -> Option<String> {
     asset_id.strip_prefix("nesqlpp:item/").map(str::to_string)
 }
 
-fn normalize_block_lookup_key(mod_id: &str, internal_name: &str, damage: u64) -> Option<String> {
-    let normalized_mod = mod_id
-        .trim()
-        .to_ascii_lowercase()
-        .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
-        .collect::<String>();
-    let normalized_name = internal_name.trim().to_ascii_lowercase();
-    if normalized_mod.is_empty() || normalized_name.is_empty() {
-        None
-    } else {
-        Some(format!("{}:{}:{}", normalized_mod, normalized_name, damage))
-    }
-}
-
-fn decode_item_block_key(item_id: &str) -> Option<String> {
-    let parts = item_id.split('~').collect::<Vec<_>>();
-    if parts.len() < 4 {
-        return None;
-    }
-    let damage = parts[3].parse::<u64>().unwrap_or(0);
-    normalize_block_lookup_key(parts[1], parts[2], damage)
-}
-
-fn parse_buildcraft_facade_target(item: &Value) -> Option<(String, String, u64)> {
+fn is_buildcraft_facade(item: &Value) -> bool {
     let family = value_string(item, "semanticFamily")
         .or_else(|| value_string(item, "family"))
         .unwrap_or_default()
@@ -44,35 +20,137 @@ fn parse_buildcraft_facade_target(item: &Value) -> Option<(String, String, u64)>
     let item_internal_name = value_string(item, "internalName")
         .unwrap_or_default()
         .to_ascii_lowercase();
-    let is_facade = family == "facade.buildcraft"
-        || (item_mod_id == "buildcrafttransport" && item_internal_name == "pipefacade");
-    if !is_facade {
-        return None;
-    }
-    let descriptor = value_string(item, "nbtDescriptor")?;
-    let block_marker = "block:";
-    let block_start = descriptor.find(block_marker)? + block_marker.len();
-    let block_tail = descriptor[block_start..].trim_start();
-    let block_tail = block_tail.strip_prefix('"').unwrap_or(block_tail);
-    let block_end = block_tail.find(['"', ',', '}']).unwrap_or(block_tail.len());
-    let block = &block_tail[..block_end];
-    let (mod_id, internal_name) = block.split_once(':')?;
-    let damage = descriptor
-        .find("metadata:")
-        .and_then(|index| {
-            let tail = descriptor[index + "metadata:".len()..].trim_start();
-            let digits = tail
-                .chars()
-                .take_while(|ch| ch.is_ascii_digit() || *ch == '-')
-                .collect::<String>();
-            digits.parse::<i64>().ok()
-        })
-        .unwrap_or(0)
-        .max(0) as u64;
-    Some((mod_id.to_string(), internal_name.to_string(), damage))
+    family == "facade.buildcraft"
+        || (item_mod_id == "buildcrafttransport" && item_internal_name == "pipefacade")
 }
 
-pub fn repaired_browser_atlas(atlas: &Value, texture_rows: &[Value], item_rows: &[Value]) -> Value {
+fn exact_facade_source<'a>(
+    target: &Value,
+    atlas_by_asset: &'a BTreeMap<String, Value>,
+    atlas_by_item: &'a BTreeMap<String, Value>,
+) -> Option<&'a Value> {
+    let source_asset_id = value_string(target, "sourceAssetId").filter(|value| !value.is_empty());
+    let source_item_id = value_string(target, "sourceItemId").filter(|value| !value.is_empty());
+    let by_asset = source_asset_id
+        .as_ref()
+        .and_then(|asset_id| atlas_by_asset.get(asset_id));
+    let by_item = source_item_id
+        .as_ref()
+        .and_then(|item_id| atlas_by_item.get(item_id));
+
+    match (source_asset_id, source_item_id, by_asset, by_item) {
+        (Some(_), Some(_), Some(asset_entry), Some(item_entry))
+            if value_string(asset_entry, "itemId") == value_string(item_entry, "itemId")
+                && value_string(asset_entry, "assetId") == value_string(item_entry, "assetId") =>
+        {
+            Some(asset_entry)
+        }
+        (Some(_), None, Some(asset_entry), _) => Some(asset_entry),
+        (None, Some(_), _, Some(item_entry)) => Some(item_entry),
+        _ => None,
+    }
+}
+
+fn valid_resolved_facade_target(target: &Value) -> bool {
+    value_string(target, "status").as_deref() == Some("resolved")
+        && value_string(target, "reason").is_some_and(|value| !value.trim().is_empty())
+        && value_string(target, "blockRegistryName").is_some_and(|value| !value.trim().is_empty())
+        && target
+            .get("meta")
+            .and_then(Value::as_i64)
+            .is_some_and(|value| value >= 0)
+        && value_string(target, "sourceItemId").is_some_and(|value| !value.trim().is_empty())
+        && value_string(target, "sourceAssetId").is_some_and(|value| !value.trim().is_empty())
+}
+
+fn expected_facade_status(target_count: u64, resolved_target_count: u64) -> Option<&'static str> {
+    if resolved_target_count > target_count {
+        None
+    } else if target_count > 0 && resolved_target_count == target_count {
+        Some("resolved")
+    } else if resolved_target_count > 0 {
+        Some("partial")
+    } else {
+        Some("unresolved")
+    }
+}
+
+fn validated_facade_targets<'a>(
+    resolution: &'a Value,
+    status: &str,
+) -> Result<&'a [Value], String> {
+    let targets = resolution
+        .get("targets")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "targets must be an array".to_string())?;
+    let target_count = value_u64(resolution, "targetCount")
+        .ok_or_else(|| "targetCount must be an unsigned integer".to_string())?;
+    let resolved_target_count = value_u64(resolution, "resolvedTargetCount")
+        .ok_or_else(|| "resolvedTargetCount must be an unsigned integer".to_string())?;
+    if target_count != targets.len() as u64 {
+        return Err("targetCount must equal targets.length".to_string());
+    }
+    for (index, target) in targets.iter().enumerate() {
+        if value_u64(target, "targetIndex") != Some(index as u64) {
+            return Err("targetIndex values must be contiguous and ordered from zero".to_string());
+        }
+        if !matches!(
+            value_string(target, "status").as_deref(),
+            Some("resolved" | "unresolved")
+        ) {
+            return Err("target status must be resolved or unresolved".to_string());
+        }
+        if !value_string(target, "reason").is_some_and(|value| !value.trim().is_empty()) {
+            return Err("every target must have a non-empty reason".to_string());
+        }
+    }
+    let actual_resolved_target_count = targets
+        .iter()
+        .filter(|target| valid_resolved_facade_target(target))
+        .count() as u64;
+    if resolved_target_count != actual_resolved_target_count {
+        return Err(
+            "resolvedTargetCount must equal the number of structurally valid resolved targets"
+                .to_string(),
+        );
+    }
+    if expected_facade_status(target_count, resolved_target_count) != Some(status) {
+        return Err(
+            "status must be uniquely derived from targetCount and resolvedTargetCount".to_string(),
+        );
+    }
+    Ok(targets)
+}
+
+fn facade_issue(
+    code: &str,
+    item_id: &str,
+    asset_id: &str,
+    status: Option<&str>,
+    reason: impl Into<String>,
+) -> Value {
+    json!({
+        "code": code,
+        "itemId": item_id,
+        "assetId": asset_id,
+        "facadeResolutionStatus": status,
+        "reason": reason.into(),
+        "recommendedFix": "NESQL++ must export one authoritative facadeResolutions row with an exact facade item/asset identity and at least one exact source item/asset target; compiler-side NBT or localized-name inference is forbidden.",
+    })
+}
+
+pub struct AtlasRepairResult {
+    pub items: Vec<Value>,
+    pub repaired_facades: u64,
+    pub unresolved_facades: Vec<Value>,
+}
+
+pub fn repaired_browser_atlas_items(
+    atlas: &Value,
+    texture_rows: &[Value],
+    item_rows: &[Value],
+    facade_resolution_rows: &[Value],
+) -> AtlasRepairResult {
     let mut items = atlas
         .get("items")
         .and_then(Value::as_array)
@@ -126,15 +204,31 @@ pub fn repaired_browser_atlas(atlas: &Value, texture_rows: &[Value], item_rows: 
         existing.insert(item_id, true);
     }
 
-    let atlas_by_block = items
+    let atlas_by_item = items
         .iter()
         .filter_map(|entry| {
             let item_id = value_string(entry, "itemId")?;
-            let key = decode_item_block_key(&item_id)?;
-            Some((key, entry.clone()))
+            Some((item_id, entry.clone()))
         })
         .collect::<BTreeMap<_, _>>();
+    let atlas_by_asset = items
+        .iter()
+        .filter_map(|entry| {
+            let asset_id = value_string(entry, "assetId")?;
+            Some((asset_id, entry.clone()))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut facade_resolutions_by_item = BTreeMap::<String, Vec<&Value>>::new();
+    for resolution in facade_resolution_rows {
+        if let Some(facade_item_id) = value_string(resolution, "facadeItemId") {
+            facade_resolutions_by_item
+                .entry(facade_item_id)
+                .or_default()
+                .push(resolution);
+        }
+    }
     let mut repaired_facades = 0u64;
+    let mut unresolved_facades = Vec::new();
     for item in item_rows {
         let Some(item_id) = value_string(item, "itemId") else {
             continue;
@@ -142,30 +236,131 @@ pub fn repaired_browser_atlas(atlas: &Value, texture_rows: &[Value], item_rows: 
         if existing.contains_key(&item_id) {
             continue;
         }
-        let Some((mod_id, internal_name, damage)) = parse_buildcraft_facade_target(item) else {
+        if !is_buildcraft_facade(item) {
+            continue;
+        }
+        let facade_asset_id = value_string(item, "renderAssetRef")
+            .unwrap_or_else(|| format!("nesqlpp:item/{item_id}"));
+        let Some(resolutions) = facade_resolutions_by_item.get(&item_id) else {
+            unresolved_facades.push(facade_issue(
+                "FACADE_RESOLUTION_FACT_MISSING",
+                &item_id,
+                &facade_asset_id,
+                None,
+                "No facadeResolutions row exists for this exact facadeItemId.",
+            ));
             continue;
         };
-        let Some(key) = normalize_block_lookup_key(&mod_id, &internal_name, damage) else {
+        if resolutions.len() != 1 {
+            unresolved_facades.push(facade_issue(
+                "FACADE_RESOLUTION_FACT_INVALID",
+                &item_id,
+                &facade_asset_id,
+                None,
+                format!(
+                    "Expected exactly one facadeResolutions row for facadeItemId, found {}.",
+                    resolutions.len()
+                ),
+            ));
             continue;
+        }
+        let resolution = resolutions[0];
+        let status = value_string(resolution, "status");
+        let reason = value_string(resolution, "reason").filter(|value| !value.trim().is_empty());
+        let resolved_asset_id =
+            value_string(resolution, "facadeAssetId").filter(|value| !value.trim().is_empty());
+        if reason.is_none()
+            || resolved_asset_id.as_deref() != Some(facade_asset_id.as_str())
+            || !matches!(
+                status.as_deref(),
+                Some("resolved" | "partial" | "unresolved")
+            )
+        {
+            unresolved_facades.push(facade_issue(
+                "FACADE_RESOLUTION_FACT_INVALID",
+                &item_id,
+                &facade_asset_id,
+                status.as_deref(),
+                "Facade resolution status/reason/asset identity violates the authoritative ABI.",
+            ));
+            continue;
+        }
+        let Some(status_value) = status.as_deref() else {
+            unreachable!("status was validated above")
         };
-        let Some(source_atlas) = atlas_by_block.get(&key) else {
+        let targets = match validated_facade_targets(resolution, status_value) {
+            Ok(targets) => targets,
+            Err(error) => {
+                unresolved_facades.push(facade_issue(
+                    "FACADE_RESOLUTION_FACT_INVALID",
+                    &item_id,
+                    &facade_asset_id,
+                    status.as_deref(),
+                    error,
+                ));
+                continue;
+            }
+        };
+        if status_value == "unresolved" {
+            unresolved_facades.push(facade_issue(
+                "FACADE_RESOLUTION_UNRESOLVED",
+                &item_id,
+                &facade_asset_id,
+                status.as_deref(),
+                reason.unwrap_or_else(|| "Facade resolution is unresolved.".to_string()),
+            ));
+            continue;
+        }
+        if targets.is_empty() {
+            unresolved_facades.push(facade_issue(
+                "FACADE_RESOLUTION_FACT_INVALID",
+                &item_id,
+                &facade_asset_id,
+                status.as_deref(),
+                "Resolved or partial facade resolution has no source targets.",
+            ));
+            continue;
+        }
+        let Some((resolved_target, source_atlas)) = targets.iter().find_map(|target| {
+            if !valid_resolved_facade_target(target) {
+                return None;
+            }
+            let source = exact_facade_source(target, &atlas_by_asset, &atlas_by_item)?;
+            (value_string(source, "itemId").as_deref() != Some(item_id.as_str()))
+                .then_some((target, source))
+        }) else {
+            unresolved_facades.push(facade_issue(
+                "FACADE_RESOLUTION_SOURCE_MISSING",
+                &item_id,
+                &facade_asset_id,
+                status.as_deref(),
+                "No ordered facade target joined to one exact existing sourceAssetId/sourceItemId atlas entry.",
+            ));
             continue;
         };
         let mut alias = source_atlas.clone();
         if let Some(object) = alias.as_object_mut() {
             object.insert("itemId".to_string(), json!(item_id));
-            object.insert(
-                "assetId".to_string(),
-                json!(value_string(item, "renderAssetRef").unwrap_or_else(|| {
-                    format!(
-                        "nesqlpp:item/{}",
-                        value_string(item, "itemId").unwrap_or_default()
-                    )
-                })),
-            );
+            object.insert("assetId".to_string(), json!(facade_asset_id));
             object.insert(
                 "sourceItemId".to_string(),
                 source_atlas.get("itemId").cloned().unwrap_or(Value::Null),
+            );
+            object.insert(
+                "sourceAssetId".to_string(),
+                source_atlas.get("assetId").cloned().unwrap_or(Value::Null),
+            );
+            object.insert(
+                "facadeResolutionStatus".to_string(),
+                json!(status.unwrap_or_default()),
+            );
+            object.insert(
+                "facadeResolutionReason".to_string(),
+                json!(reason.unwrap_or_default()),
+            );
+            object.insert(
+                "facadeResolutionTarget".to_string(),
+                resolved_target.clone(),
             );
             object.insert(
                 "semanticAtlasAlias".to_string(),
@@ -174,7 +369,7 @@ pub fn repaired_browser_atlas(atlas: &Value, texture_rows: &[Value], item_rows: 
             object.insert("generatedByCompiler".to_string(), json!(true));
             object.insert(
                 "resolutionMode".to_string(),
-                json!("rust_buildcraft_facade_alias"),
+                json!("authoritative_facade_resolution"),
             );
         }
         items.push(alias);
@@ -182,24 +377,11 @@ pub fn repaired_browser_atlas(atlas: &Value, texture_rows: &[Value], item_rows: 
         repaired_facades += 1;
     }
 
-    let mut repaired = atlas.clone();
-    if !repaired.is_object() {
-        repaired = json!({ "schemaVersion": "browser-atlas-index-repaired" });
+    AtlasRepairResult {
+        items,
+        repaired_facades,
+        unresolved_facades,
     }
-    if let Some(object) = repaired.as_object_mut() {
-        object.insert("items".to_string(), Value::Array(items));
-        let item_count = object
-            .get("items")
-            .and_then(Value::as_array)
-            .map(|values| values.len() as u64)
-            .unwrap_or(0);
-        object.insert("itemCount".to_string(), json!(item_count));
-        object.insert(
-            "rustRepairedBuildCraftFacades".to_string(),
-            json!(repaired_facades),
-        );
-    }
-    repaired
 }
 
 fn atlas_drawable_score(atlas_entry: Option<&Value>) -> i64 {
@@ -269,7 +451,7 @@ fn atlas_drawable_score(atlas_entry: Option<&Value>) -> i64 {
 pub fn select_group_representative(
     exported_representative: Option<String>,
     members: &[String],
-    atlas_by_item: &BTreeMap<String, Value>,
+    atlas_by_item: &BTreeMap<String, &Value>,
 ) -> Option<String> {
     let mut candidates = Vec::new();
     if let Some(representative) = exported_representative.clone() {
@@ -286,8 +468,8 @@ pub fn select_group_representative(
         .into_iter()
         .enumerate()
         .max_by(|(left_index, left), (right_index, right)| {
-            let left_score = atlas_drawable_score(atlas_by_item.get(left));
-            let right_score = atlas_drawable_score(atlas_by_item.get(right));
+            let left_score = atlas_drawable_score(atlas_by_item.get(left).copied());
+            let right_score = atlas_drawable_score(atlas_by_item.get(right).copied());
             left_score
                 .cmp(&right_score)
                 .then_with(|| left_index.cmp(right_index))

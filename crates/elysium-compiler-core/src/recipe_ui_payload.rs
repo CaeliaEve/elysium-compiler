@@ -1,30 +1,9 @@
-use crate::json_ext::{first_non_empty, nested_value_string, value_string};
-use crate::manifest::{
-    read_jsonl_file_values, read_jsonl_values, read_manifest_collection, read_manifest_json,
-    RawManifest, COLLECTION_HANDLER_LAYOUTS,
-};
-use crate::recipe_domain::{
-    captured_ui_family_key, classify_recipe_family_key, public_recipe_handler,
-    public_recipe_layout, recipe_id, should_skip_redundant_nei_workbench_recipe,
-    RecipeHandlerContext,
-};
 use anyhow::{anyhow, Context, Result};
-use serde_json::json;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
-
-pub fn encode_recipe_file_name(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| match character {
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' | '~' => character,
-            _ => '_',
-        })
-        .collect()
-}
 
 pub fn rust_recipe_ui_payload_relative_path(recipe_id: &str) -> String {
     let shard = sha1_hex_prefix(recipe_id.as_bytes(), 2);
@@ -46,86 +25,6 @@ pub fn read_compiled_recipe_ui_payload_index(output: &Path) -> Result<Option<Vec
             .cloned()
             .unwrap_or_default(),
     ))
-}
-
-pub fn build_raw_recipe_ui_payload_index(
-    input: &Path,
-    manifest: &RawManifest,
-) -> Result<Vec<Value>> {
-    let recipe_index = read_manifest_json(input, manifest, "recipeIndex")?
-        .ok_or_else(|| anyhow!("ui-pack compiler blocked: recipeIndex is missing"))?;
-    let handlers = read_jsonl_values(input, manifest, "neiHandlers")?;
-    let layouts = read_manifest_collection(input, manifest, COLLECTION_HANDLER_LAYOUTS)?;
-    let handler_context = RecipeHandlerContext::new(&handlers, &layouts);
-    let mut recipes = Vec::new();
-    for shard in recipe_index
-        .get("shards")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default()
-    {
-        let Some(path) = shard.get("path").and_then(Value::as_str) else {
-            continue;
-        };
-        let shard_path = input.join(path.replace('\\', "/").trim_start_matches('/'));
-        recipes.extend(read_jsonl_file_values(&shard_path)?);
-    }
-
-    let mut entries = Vec::with_capacity(recipes.len());
-    for recipe in &recipes {
-        let recipe_id = recipe_id(recipe);
-        let (handler, layout) = handler_context.resolve(recipe);
-        if should_skip_redundant_nei_workbench_recipe(recipe, handler) {
-            continue;
-        }
-        let public_handler = handler.map(public_recipe_handler);
-        let public_layout = layout
-            .map(public_recipe_layout)
-            .or_else(|| recipe.get("nativeLayout").cloned());
-        let raw_family_key = first_non_empty(&[
-            value_string(recipe, "family"),
-            value_string(recipe, "sourcePlugin"),
-            value_string(recipe, "recipeType"),
-            nested_value_string(recipe, &["machine", "machineId"]),
-        ])
-        .unwrap_or_else(|| "unknown".to_string());
-        let family_key = captured_ui_family_key(handler, layout)
-            .unwrap_or_else(|| classify_recipe_family_key(recipe, &raw_family_key, handler));
-        let recipe_type = first_non_empty(&[
-            value_string(recipe, "recipeType"),
-            nested_value_string(recipe, &["machine", "machineId"]),
-            Some(family_key.clone()),
-        ])
-        .unwrap_or_else(|| family_key.clone());
-        let machine_type = first_non_empty(&[
-            public_handler
-                .as_ref()
-                .and_then(|handler| value_string(handler, "localizedName")),
-            public_handler
-                .as_ref()
-                .and_then(|handler| value_string(handler, "displayName")),
-            nested_value_string(recipe, &["machine", "displayName"]),
-            value_string(recipe, "displayName"),
-            nested_value_string(recipe, &["machine", "machineId"]),
-            Some(recipe_type.clone()),
-        ])
-        .unwrap_or_else(|| recipe_type.clone());
-        let handler_key = public_handler
-            .as_ref()
-            .and_then(|handler| value_string(handler, "handlerKey"));
-        let entry = json!({
-            "recipeId": recipe_id,
-            "path": rust_recipe_ui_payload_relative_path(&recipe_id),
-            "payloadKey": recipe_id,
-            "familyKey": family_key,
-            "recipeType": recipe_type,
-            "machineType": machine_type,
-            "handlerKey": handler_key,
-            "nativeLayout": public_layout,
-        });
-        entries.push(entry);
-    }
-    Ok(entries)
 }
 
 struct RecipeUiPayloadShardWriter {

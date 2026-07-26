@@ -1,0 +1,47 @@
+{
+  "blocking": {
+    "missingRepresentativeCount": 0,
+    "representativeMismatchCount": 0
+  },
+  "counts": {
+    "browserItemCount": 0,
+    "defaultEntryCount": 0,
+    "fallbackGroupCount": 0,
+    "groupCount": 0,
+    "hiddenItemCount": 0,
+    "items": 0,
+    "missingRepresentativeCount": 0,
+    "nativeGroupCount": 0,
+    "recipes": 0,
+    "renderShaderItemsMissingCapture": 0,
+    "renderTextureSpritesMissingTiming": 0,
+    "representativeMismatchCount": 0,
+    "semanticClassifiedTaggedItems": 0,
+    "semanticEstimatedPublicItems": 0,
+    "semanticFamilyCount": 0,
+    "semanticTaggedItems": 0,
+    "semanticTotalItems": 0,
+    "semanticUnclassifiedTaggedItems": 0
+  },
+  "generatedAt": "deterministic-rust-compiler",
+  "schemaVersion": "neonei/rust-semantic-validation-report/current",
+  "semanticReports": {
+    "familyAuditStatus": null,
+    "identityNormalizationStatus": null,
+    "nbtKeyDistributionStatus": null
+  },
+  "source": {
+    "exportReport": "",
+    "neiBrowserContract": "",
+    "semanticFamilyAudit": "",
+    "semanticIdentityNormalizationReport": "",
+    "semanticNbtKeyDistribution": ""
+  },
+  "status": "advisory",
+  "warnings": [
+    {
+      "code": "NEI_BROWSER_CONTRACT_NOT_OK",
+      "status": "missing"
+    }
+  ]
+}
