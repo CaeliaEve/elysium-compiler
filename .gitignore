@@ -3,6 +3,7 @@
 .DS_Store
 *.tmp
 .tmp-runtime/
+.omx/
 dist-data/
 AGENTS.md
 
