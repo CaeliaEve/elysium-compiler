@@ -2,7 +2,7 @@
   "schemaVersion": "neonei/recipe-category-index/v1",
   "categories": [
     {
-      "categoryId": "display~test_gt_machine",
+      "categoryId": "display~test%20gt%20machine",
       "displayName": "Test GT Machine",
       "handler": {
         "canonicalMachineFamily": "gregtech-machine",

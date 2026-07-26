@@ -2,9 +2,9 @@
   "cache": {
     "cacheKeyInputs": {
       "integrityAlgorithm": "sha256",
-      "runtimeId": "rust-a8f663582b0dd034"
+      "runtimeId": "rust-01b22c3ecec7adc4"
     },
-    "estimatedRuntimeCacheBytes": 36603,
+    "estimatedRuntimeCacheBytes": 99573,
     "immutableRuntimeFiles": 28
   },
   "compileScope": "all",
@@ -21,7 +21,7 @@
     "missingFiles": []
   },
   "pathViolations": [],
-  "runtimeId": "rust-a8f663582b0dd034",
+  "runtimeId": "rust-01b22c3ecec7adc4",
   "runtimeSize": {
     "files": {
       "render/index.json": 705,
@@ -29,31 +29,31 @@
       "rust/atlas.meta.bin": 146,
       "rust/browser.bin": 181,
       "rust/groups.bin": 167,
-      "rust/missing-texture-report.json": 512,
+      "rust/missing-texture-report.json": 904,
       "rust/native-ui-export-abi-validation-report.json": 1607,
       "rust/native-ui-layout-report.json": 1138,
-      "rust/pack-validation-report.json": 8705,
+      "rust/pack-validation-report.json": 8708,
       "rust/raw-export-abi-validation-report.json": 4344,
       "rust/recipe-fragmentation-report.json": 489,
       "rust/recipe-handler-metadata-report.json": 540,
-      "rust/recipes.bin": 410,
+      "rust/recipes.bin": 414,
       "rust/search.bin": 342,
       "rust/semantic-validation-report.json": 1249,
       "rust/strings.zh_cn.bin": 208,
-      "rust/suspicious-texture-report.json": 438,
+      "rust/suspicious-texture-report.json": 830,
       "rust/textures.bin": 196,
-      "rust/ui-pack-abi-validation-report.json": 4925,
-      "rust/ui-pack/ui_assets.manifest.json": 267,
+      "rust/ui-pack-abi-validation-report.json": 4934,
+      "rust/ui-pack/ui_assets.manifest.json": 268,
       "rust/ui-pack/ui_bindings.bin": 130,
-      "rust/ui-pack/ui_family_census.json": 1171,
-      "rust/ui-pack/ui_pack_report.json": 3061,
-      "rust/ui-pack/ui_strings.bin": 1032,
-      "rust/ui-pack/ui_template_binding_index.json": 1234,
-      "rust/ui-pack/ui_template_catalog.json": 2987,
-      "rust/ui-pack/ui_templates.bin": 311,
+      "rust/ui-pack/ui_family_census.json": 15085,
+      "rust/ui-pack/ui_pack_report.json": 3063,
+      "rust/ui-pack/ui_strings.bin": 4486,
+      "rust/ui-pack/ui_template_binding_index.json": 1240,
+      "rust/ui-pack/ui_template_catalog.json": 44980,
+      "rust/ui-pack/ui_templates.bin": 3111,
       "textures/atlas/static-fixture.webp": 18
     },
-    "totalBytes": 36603
+    "totalBytes": 99573
   },
   "schema": {
     "capabilities": [

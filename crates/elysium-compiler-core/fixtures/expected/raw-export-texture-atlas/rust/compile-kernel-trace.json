@@ -2,26 +2,26 @@
   "authorityInput": "\\\\?\\E:\\codex\\ae2\\elysium-compiler\\crates\\elysium-compiler-core\\fixtures\\raw-export-texture-atlas",
   "debugJson": false,
   "inputAuthority": "legacy-direct-manifest",
-  "inputGenerationId": "60fd72f68131e6656f503d851599dc68fa0b7aee39d04c6602d05f4768aa1f3d",
+  "inputGenerationId": "13570805469da033336881581db4a706b17ca1182605fe5ffac2162731bf5f41",
   "inputGenerationPolicy": "manifest bytes plus the complete input-tree path/type/length/mtime metadata catalog must remain unchanged for the session lifetime; symlinks are forbidden",
   "manifestIo": {
-    "cacheHitCount": 3,
-    "cacheMissCount": 8,
-    "jsonParseCount": 4,
-    "jsonlParseCount": 2,
-    "jsonlRowParseCount": 2,
+    "cacheHitCount": 0,
+    "cacheMissCount": 18,
+    "jsonParseCount": 9,
+    "jsonlParseCount": 9,
+    "jsonlRowParseCount": 8,
     "loadBytesRead": 698,
     "loadOpenCount": 1,
     "loadReadCount": 1,
     "nativeUiExportAbiValidationCount": 1,
     "parseCount": 1,
     "rawExportAbiValidationCount": 1,
-    "sourceBytesRead": 3947,
-    "sourceCacheReleaseCount": 1,
+    "sourceBytesRead": 14948,
+    "sourceCacheReleaseCount": 4,
     "sourceCacheReleaseMs": 0,
     "sourceDecompressionCount": 0,
-    "sourceOpenCount": 6,
-    "sourceReadCount": 6,
+    "sourceOpenCount": 26,
+    "sourceReadCount": 26,
     "verificationBytesRead": 698,
     "verificationOpenCount": 1,
     "verificationReadCount": 1
@@ -61,7 +61,7 @@
           "rust/raw-export-abi-validation-report.json"
         ]
       },
-      "durationMs": 318,
+      "durationMs": 2,
       "module": "compiler.raw_export_abi",
       "stage": "validate-raw-export-abi",
       "status": "ok"
@@ -101,7 +101,7 @@
           "optional-debug-json"
         ]
       },
-      "durationMs": 334,
+      "durationMs": 22,
       "module": "compiler.runtime_packs",
       "stage": "emit-runtime-packs",
       "status": "ok"
@@ -138,7 +138,7 @@
           "verified-immutable-input-generation"
         ]
       },
-      "durationMs": 2,
+      "durationMs": 1,
       "module": "compiler.input_generation",
       "stage": "verify-input-generation",
       "status": "ok"
@@ -175,7 +175,7 @@
           "rust/ui-pack-abi-validation-report.json"
         ]
       },
-      "durationMs": 3,
+      "durationMs": 4,
       "module": "compiler.native_ui_validation",
       "stage": "validate-native-ui-pack-abi",
       "status": "ok"
@@ -193,7 +193,7 @@
           "rust/pack-validation-report.json"
         ]
       },
-      "durationMs": 450,
+      "durationMs": 5,
       "module": "compiler.pack_abi_validation",
       "stage": "validate-pack-abi",
       "status": "ok"
@@ -213,7 +213,7 @@
           "dist-manifest"
         ]
       },
-      "durationMs": 9,
+      "durationMs": 8,
       "module": "compiler.runtime_reports",
       "stage": "emit-runtime-reports",
       "status": "ok"

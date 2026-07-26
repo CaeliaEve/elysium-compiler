@@ -2,9 +2,9 @@
   "cache": {
     "cacheKeyInputs": {
       "integrityAlgorithm": "sha256",
-      "runtimeId": "rust-2012a8a113e47c0d"
+      "runtimeId": "rust-47545cc7b4d775f8"
     },
-    "estimatedRuntimeCacheBytes": 32681,
+    "estimatedRuntimeCacheBytes": 94867,
     "immutableRuntimeFiles": 21
   },
   "compileScope": "native-ui",
@@ -21,32 +21,32 @@
     "missingFiles": []
   },
   "pathViolations": [],
-  "runtimeId": "rust-2012a8a113e47c0d",
+  "runtimeId": "rust-47545cc7b4d775f8",
   "runtimeSize": {
     "files": {
       "rust/browser.bin": 181,
       "rust/groups.bin": 167,
       "rust/native-ui-export-abi-validation-report.json": 1607,
       "rust/native-ui-layout-report.json": 1138,
-      "rust/pack-validation-report.json": 6882,
+      "rust/pack-validation-report.json": 6885,
       "rust/raw-export-abi-validation-report.json": 4344,
       "rust/recipe-fragmentation-report.json": 489,
       "rust/recipe-handler-metadata-report.json": 540,
-      "rust/recipes.bin": 410,
+      "rust/recipes.bin": 414,
       "rust/search.bin": 342,
       "rust/semantic-validation-report.json": 1249,
       "rust/strings.zh_cn.bin": 208,
-      "rust/ui-pack-abi-validation-report.json": 4931,
-      "rust/ui-pack/ui_assets.manifest.json": 267,
+      "rust/ui-pack-abi-validation-report.json": 4940,
+      "rust/ui-pack/ui_assets.manifest.json": 268,
       "rust/ui-pack/ui_bindings.bin": 130,
-      "rust/ui-pack/ui_family_census.json": 1171,
-      "rust/ui-pack/ui_pack_report.json": 3061,
-      "rust/ui-pack/ui_strings.bin": 1032,
-      "rust/ui-pack/ui_template_binding_index.json": 1234,
-      "rust/ui-pack/ui_template_catalog.json": 2987,
-      "rust/ui-pack/ui_templates.bin": 311
+      "rust/ui-pack/ui_family_census.json": 15085,
+      "rust/ui-pack/ui_pack_report.json": 3063,
+      "rust/ui-pack/ui_strings.bin": 4486,
+      "rust/ui-pack/ui_template_binding_index.json": 1240,
+      "rust/ui-pack/ui_template_catalog.json": 44980,
+      "rust/ui-pack/ui_templates.bin": 3111
     },
-    "totalBytes": 32681
+    "totalBytes": 94867
   },
   "schema": {
     "capabilities": [

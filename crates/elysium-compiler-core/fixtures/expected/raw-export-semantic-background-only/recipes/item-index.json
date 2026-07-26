@@ -5,14 +5,14 @@
       "itemId": "i~minecraft~iron_ingot~0",
       "producedBy": [
         {
-          "categoryId": "display~test_gt_machine",
+          "categoryId": "display~test%20gt%20machine",
           "displayName": "Test GT Machine",
           "recipeId": "r_fixture_gt"
         }
       ],
       "usedIn": [
         {
-          "categoryId": "display~test_gt_machine",
+          "categoryId": "display~test%20gt%20machine",
           "displayName": "Test GT Machine",
           "recipeId": "r_fixture_gt"
         }

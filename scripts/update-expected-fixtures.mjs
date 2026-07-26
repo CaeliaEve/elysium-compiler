@@ -1,6 +1,6 @@
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -57,6 +57,21 @@ const fixtures = [
   },
 ];
 
+// Refresh every committed expected artifact (including .bin binary packs) that exists in the
+// compiled generation. The declared JSON report allowlist above is still refreshed explicitly so
+// newly-declared reports get created; walkExpected keeps everything already committed in sync.
+function walkExpected(root, dir = root, collected = []) {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      walkExpected(root, full, collected);
+    } else {
+      collected.push(relative(root, full).replace(/\\/g, '/'));
+    }
+  }
+  return collected;
+}
+
 for (const fixture of fixtures) {
   const output = mkdtempSync(join(tmpdir(), `elysium-${fixture.name}-`));
   const receipt = mkdtempSync(join(tmpdir(), `elysium-${fixture.name}-receipt-`));
@@ -76,12 +91,31 @@ for (const fixture of fixtures) {
     const pointer = JSON.parse(readFileSync(join(output, 'current.json'), 'utf8'));
     const generationRoot = join(output, ...pointer.relativePath.split('/'));
     const expectedRoot = join(fixturesRoot, 'expected', fixture.name);
-    for (const relativePath of fixture.paths) {
+    const committed = walkExpected(expectedRoot);
+    const targets = new Set([...fixture.paths, ...committed]);
+    let updated = 0;
+    const skipped = [];
+    for (const relativePath of targets) {
+      const source = join(generationRoot, ...relativePath.split('/'));
+      let exists = false;
+      try {
+        exists = statSync(source).isFile();
+      } catch {
+        exists = false;
+      }
+      if (!exists) {
+        skipped.push(relativePath);
+        continue;
+      }
       const target = join(expectedRoot, ...relativePath.split('/'));
       mkdirSync(dirname(target), { recursive: true });
-      copyFileSync(join(generationRoot, ...relativePath.split('/')), target);
+      copyFileSync(source, target);
+      updated++;
     }
-    console.log(`${fixture.name}: updated ${fixture.paths.length} expected artifacts`);
+    console.log(`${fixture.name}: updated ${updated} expected artifacts`);
+    if (skipped.length > 0) {
+      console.log(`${fixture.name}: SKIPPED ${skipped.length} committed artifacts absent from this compile (verify intentional): ${skipped.join(', ')}`);
+    }
   } finally {
     rmSync(output, { recursive: true, force: true });
     rmSync(receipt, { recursive: true, force: true });

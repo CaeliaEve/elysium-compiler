@@ -207,6 +207,30 @@ pub fn normalize_runtime_atlas_file_path(value: Option<String>) -> Option<String
     Some(normalized)
 }
 
+/// Browsers refuse to decode images beyond roughly 16k px per side (Chromium/WebKit), and
+/// WebGL texture limits are commonly 8192 px. An oversized atlas silently breaks the entire
+/// native render path at runtime ("The source image could not be decoded"), so the compiler
+/// rejects such pages instead of shipping them.
+const BROWSER_SAFE_MAX_ATLAS_DIMENSION: u64 = 16384;
+
+/// Reads width/height from PNG IHDR bytes without decoding pixel data.
+fn png_dimensions_from_bytes(bytes: &[u8]) -> Option<(u64, u64)> {
+    if bytes.len() < 24 || bytes[0..8] != [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a] {
+        return None;
+    }
+    let width = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]) as u64;
+    let height = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]) as u64;
+    Some((width, height))
+}
+
+/// Reads width/height from a PNG IHDR header without decoding pixel data.
+fn read_png_dimensions(path: &Path) -> Option<(u64, u64)> {
+    let mut header = [0u8; 24];
+    let mut file = fs::File::open(path).ok()?;
+    std::io::Read::read_exact(&mut file, &mut header).ok()?;
+    png_dimensions_from_bytes(&header)
+}
+
 #[cfg(test)]
 pub fn copy_runtime_atlas_assets(
     input: &Path,
@@ -245,6 +269,15 @@ pub fn copy_runtime_atlas_assets(
                 "{runtime_atlas_file}:missing-source:{raw_relative}"
             ));
             continue;
+        }
+        if let Some((width, height)) = read_png_dimensions(&source_path) {
+            if width > BROWSER_SAFE_MAX_ATLAS_DIMENSION || height > BROWSER_SAFE_MAX_ATLAS_DIMENSION
+            {
+                missing_atlas_asset_files.push(format!(
+                    "{runtime_atlas_file}:oversized-atlas:{width}x{height}:limit-{BROWSER_SAFE_MAX_ATLAS_DIMENSION}"
+                ));
+                continue;
+            }
         }
         let runtime_relative = runtime_atlas_file
             .replace('\\', "/")
@@ -302,6 +335,15 @@ fn copy_runtime_atlas_assets_from_session(
             ));
             continue;
         };
+        if let Some((width, height)) = png_dimensions_from_bytes(bytes.as_slice()) {
+            if width > BROWSER_SAFE_MAX_ATLAS_DIMENSION || height > BROWSER_SAFE_MAX_ATLAS_DIMENSION
+            {
+                missing_atlas_asset_files.push(format!(
+                    "{runtime_atlas_file}:oversized-atlas:{width}x{height}:limit-{BROWSER_SAFE_MAX_ATLAS_DIMENSION}"
+                ));
+                continue;
+            }
+        }
         let runtime_relative = runtime_atlas_file
             .replace('\\', "/")
             .trim_start_matches('/')

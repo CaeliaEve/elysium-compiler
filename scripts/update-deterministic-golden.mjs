@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -38,11 +38,40 @@ try {
   }
   const pointer = JSON.parse(readFileSync(join(output, 'current.json'), 'utf8'));
   const generationRoot = join(output, ...pointer.relativePath.split('/'));
+  // Hash every artifact the compile actually produced (open set), so newly-added artifacts
+  // enter the catalog automatically instead of being silently invisible to the golden check.
+  function walkGeneration(dir, collected = []) {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) {
+        walkGeneration(full, collected);
+      } else {
+        collected.push(relative(generationRoot, full).replace(/\\/g, '/'));
+      }
+    }
+    return collected;
+  }
+  // These artifacts embed wall-clock timestamps/durations and are legitimately different on
+  // every compile. Everything else the compiler produces must be byte-deterministic and is
+  // hashed, so a newly-added artifact automatically joins the catalog instead of being
+  // invisible to the golden check.
+  const NON_DETERMINISTIC = new Set([
+    'compiler-report.json',
+    'generation-seal.json',
+    'rust/compile-kernel-trace.json',
+  ]);
   const previous = JSON.parse(readFileSync(catalogPath, 'utf8'));
-  const artifacts = Object.fromEntries(Object.keys(previous.artifacts).map((relativePath) => [
+  const produced = walkGeneration(generationRoot)
+    .filter((path) => !NON_DETERMINISTIC.has(path))
+    .sort();
+  const artifacts = Object.fromEntries(produced.map((relativePath) => [
     relativePath,
-    sha256(join(generationRoot, ...relativePath.split('/'))),
+    sha256(join(generationRoot, relativePath)),
   ]));
+  const added = produced.filter((path) => !(path in previous.artifacts));
+  const removed = Object.keys(previous.artifacts).filter((path) => !(path in artifacts));
+  if (added.length > 0) console.log(`golden: +${added.length} new artifacts: ${added.join(', ')}`);
+  if (removed.length > 0) console.log(`golden: -${removed.length} removed artifacts: ${removed.join(', ')}`);
   const catalog = {
     schemaVersion: 'elysium-compiler/deterministic-artifact-hashes/v1',
     fixture: 'raw-export-texture-atlas',

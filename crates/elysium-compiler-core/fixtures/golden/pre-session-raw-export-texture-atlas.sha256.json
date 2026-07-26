@@ -33,6 +33,7 @@
     "rust/strings.zh_cn.bin": "7933b9778a30ed8c4d8d00e25934e528f373c7551de0e4ed4605939f29fc924b",
     "rust/suspicious-texture-report.json": "8de9451c8d47638495c340c1c38484fa3de9920cfade2ec011d734de320f7525",
     "rust/textures.bin": "f9e003b01e736e87b10cd5dfa793c802cee47aded8db054b7a36babc04c70ac7",
+    "rust/ui-pack-abi-validation-report.json": "e62213d4cc5387865d47d3b967759e36abaa72fab0c5e9121767216c2d5979ff",
     "rust/ui-pack/ui_assets.manifest.json": "2dd18d82e92a5f7f2a3e54b670537781cc710308c9483b8d7365c912eae47fcc",
     "rust/ui-pack/ui_bindings.bin": "1e13456a38709211e1649bc026f8c724a1932822bf91e82301c2127c6b204170",
     "rust/ui-pack/ui_family_census.json": "be3ff0c23015f9798360dec0628d43b2aa6624ab4d890723fa742d0457d265e1",
@@ -41,7 +42,6 @@
     "rust/ui-pack/ui_template_binding_index.json": "de99ce88a67d1c0390a382abad7901e1362f3f986e2ce7654c5adbd7a6e4f828",
     "rust/ui-pack/ui_template_catalog.json": "e56c026019beb6403ff28e51466828db93c77b937c90518ca8199e20f831a19c",
     "rust/ui-pack/ui_templates.bin": "5f24aa35eb228ce4e14de086cb175c2b78161b04d3d4b6ca2b82f592f0bdb0f4",
-    "rust/ui-pack-abi-validation-report.json": "e62213d4cc5387865d47d3b967759e36abaa72fab0c5e9121767216c2d5979ff",
     "textures/atlas/static-fixture.webp": "2cd42dc525601b347f0b646beee34ce89b1af0ae2d4c8bca9e24919b355fa36e"
   }
 }
