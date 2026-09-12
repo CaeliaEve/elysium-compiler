@@ -1,9 +1,0 @@
-{
-  "recipeCount": 1,
-  "shards": [
-    {
-      "path": "recipes/shards/recipes-000.jsonl",
-      "count": 1
-    }
-  ]
-}

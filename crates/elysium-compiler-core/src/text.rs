@@ -8,21 +8,6 @@ pub fn normalize_text(value: &str) -> String {
         .join(" ")
 }
 
-pub fn normalize_search_terms<'a>(values: impl Iterator<Item = &'a str>) -> String {
-    let mut terms = values
-        .flat_map(|value| {
-            normalize_text(value)
-                .split(' ')
-                .map(str::to_string)
-                .collect::<Vec<_>>()
-        })
-        .filter(|value| !value.trim().is_empty())
-        .collect::<Vec<_>>();
-    terms.sort();
-    terms.dedup();
-    terms.join(" ")
-}
-
 fn pinyin_syllables(localized_name: &str) -> Vec<String> {
     localized_name
         .chars()

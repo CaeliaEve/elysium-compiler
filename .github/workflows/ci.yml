@@ -2,7 +2,7 @@
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, refactor/core]
   pull_request:
 
 jobs:
@@ -14,9 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
       - run: cargo build --release -p elysium-compiler
-      - run: cargo run -p elysium-compiler -- schemas --output schemas/schema-catalog.json
-      - run: git diff --exit-code -- schemas/schema-catalog.json
+      - run: cargo run -p elysium-compiler -- schema --output contracts/schema.json
+      - run: npm ci --prefix contracts
+      - run: npm run generate --prefix contracts
+      - run: git diff --exit-code -- contracts/schema.json contracts/index.d.ts
