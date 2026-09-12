@@ -147,6 +147,8 @@ fn cli_compiles_checks_and_reports_the_same_snapshot() {
 
     let schema = work.path().join("schema.json");
     success(&["schema", "--output", path(&schema)]);
+    fs::write(&schema, b"previous schema").unwrap();
+    success(&["schema", "--output", path(&schema)]);
     let schema: Value = serde_json::from_slice(&fs::read(schema).unwrap()).unwrap();
     assert!(schema["definitions"]["Choice"]["properties"]["returns"].is_object());
     assert!(!run(&["schemas"]).status.success());

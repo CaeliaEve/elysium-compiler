@@ -492,7 +492,15 @@ pub(super) fn destination(path: &Path) -> Result<PathBuf> {
         }
     }
     let existing = existing.context("output path has no existing ancestor")?;
-    Ok(fs::canonicalize(existing)?.join(absolute.strip_prefix(existing)?))
+    let resolved = fs::canonicalize(existing)?;
+    let suffix = absolute.strip_prefix(existing)?;
+    if suffix.as_os_str().is_empty() {
+        // Joining an empty suffix adds a separator: an existing file becomes
+        // a directory path on Unix, so atomic replacement fails with ENOTDIR.
+        Ok(resolved)
+    } else {
+        Ok(resolved.join(suffix))
+    }
 }
 
 fn read(path: &Path, limit: usize) -> Result<Vec<u8>> {
