@@ -1,5 +1,5 @@
 use super::{check::origin, content_id, origin_id, Appearance, Domain, Kind, Origin};
-use crate::identity::{resource_name, Nbt};
+use crate::identity::{registry_name, Nbt};
 use anyhow::{ensure, Context, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -160,7 +160,7 @@ pub(super) fn validate(
             block.id == content_id("block", block)?,
             "block state identity mismatch"
         );
-        resource_name(&block.registry)?;
+        registry_name(&block.registry)?;
         ensure!(
             block.meta <= 15 && block.registry != "minecraft:air",
             "invalid constructed block state"

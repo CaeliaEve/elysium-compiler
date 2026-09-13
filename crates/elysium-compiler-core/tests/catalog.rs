@@ -24,7 +24,7 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
     );
-    assert_eq!(catalog.manifest.counts["browse"], 29);
+    assert_eq!(catalog.manifest.counts["browse"], 32);
     assert_eq!(catalog.manifest.counts["materials"], 2);
     assert_eq!(catalog.manifest.counts["circuits"], 1);
     assert_eq!(catalog.manifest.counts["species"], 3);

@@ -1,5 +1,5 @@
 use super::*;
-use crate::identity::{fluid_id, integer, item_id, resource_name};
+use crate::identity::{fluid_id, integer, item_id, property_key};
 use anyhow::{bail, ensure, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -426,7 +426,7 @@ impl Domain {
                 change::validate(recipe, output, &items)?;
             }
             for (key, property) in &recipe.properties {
-                resource_name(key)?;
+                property_key(key)?;
                 text(&property.name)?;
                 property_value(&property.value, &text, &reference, 0)?;
             }

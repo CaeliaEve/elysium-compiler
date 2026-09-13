@@ -1,5 +1,5 @@
 use elysium_compiler_core::domain::Probe;
-use elysium_compiler_core::identity::{fluid_id, item_id, Nbt};
+use elysium_compiler_core::identity::{fluid_id, item_id, property_key, registry_name, Nbt};
 use elysium_compiler_core::source::{source_path, Source, SourceManifest};
 use serde_json::json;
 use std::fs;
@@ -36,7 +36,11 @@ fn java_source_is_verified_without_losing_identity_or_large_quantities() {
         .unwrap();
     source
         .visit("fluids", |fluid| {
-            assert_eq!(fluid["id"], fluid_id("water", None).unwrap());
+            let nbt: Option<Nbt> = serde_json::from_value(fluid["nbt"].clone()).unwrap();
+            assert_eq!(
+                fluid["id"],
+                fluid_id(fluid["registry"].as_str().unwrap(), nbt.as_ref()).unwrap()
+            );
             Ok(())
         })
         .unwrap();
@@ -74,6 +78,49 @@ fn java_source_is_verified_without_losing_identity_or_large_quantities() {
         item_id("minecraft:stone", 0, Some(&nbt)).unwrap(),
         item_id("minecraft:stone", 0, None).unwrap()
     );
+    for (registry, expected) in [
+        (
+            "BiblioCraft:Armor Stand",
+            "item_49eeed3f0c9fd63f329598282a1406c58accbe6729a6195ebef95e6c4dcd84c1",
+        ),
+        (
+            "ProjRed|Core:projectred.core.part",
+            "item_cc00b969a3e38a4bd9e7c34a9a4ce0d01befa1703559b3ed4b06a95031801347",
+        ),
+        (
+            "兼容|测试:方块 \"A\" /β",
+            "item_ef3cfffdb74e2147983247b80182807f3ed49de488c2837dcc8d9e22e5f40d12",
+        ),
+        (
+            "owner:part:variant",
+            "item_03e51f074fd995a201649bab53fc67bc0e92857f6598cc2692bb981dd02b37b0",
+        ),
+    ] {
+        registry_name(registry).unwrap();
+        assert_eq!(item_id(registry, 0, None).unwrap(), expected);
+        assert!(property_key(registry).is_err());
+        assert!(source_path(registry).is_err());
+    }
+    let variants: std::collections::BTreeSet<_> = [
+        "BiblioCraft:Armor Stand",
+        "BiblioCraft:Armor_Stand",
+        "bibliocraft:Armor Stand",
+        "BiblioCraft:Armor Stand ",
+    ]
+    .iter()
+    .map(|registry| item_id(registry, 0, None).unwrap())
+    .collect();
+    assert_eq!(variants.len(), 4);
+    assert_eq!(
+        fluid_id("Liquid Crystal", None).unwrap(),
+        "fluid_3e9abc09ea399c31f244541b5db47c173b8f1f1eaaef1da2ac06eab0ab773ca6"
+    );
+    for invalid in ["", "stone", ":stone", "minecraft:"] {
+        assert!(registry_name(invalid).is_err());
+        assert!(item_id(invalid, 0, None).is_err());
+    }
+    assert!(fluid_id("", None).is_err());
+    property_key("gt:heat").unwrap();
 }
 
 #[test]

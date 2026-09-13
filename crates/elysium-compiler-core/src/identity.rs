@@ -123,7 +123,7 @@ impl Nbt {
 }
 
 pub fn item_id(registry: &str, meta: i32, nbt: Option<&Nbt>) -> Result<String> {
-    resource_name(registry)?;
+    registry_name(registry)?;
     if let Some(nbt) = nbt {
         nbt.validate()?;
     }
@@ -136,10 +136,7 @@ pub fn item_id(registry: &str, meta: i32, nbt: Option<&Nbt>) -> Result<String> {
 
 pub fn fluid_id(registry: &str, nbt: Option<&Nbt>) -> Result<String> {
     ensure!(
-        !registry.is_empty()
-            && registry.len() <= 256
-            && registry.bytes().all(|byte| byte.is_ascii_alphanumeric()
-                || matches!(byte, b'_' | b'.' | b'-' | b'/' | b':')),
+        !registry.is_empty(),
         "invalid Forge fluid registry name: {registry}"
     );
     if let Some(nbt) = nbt {
@@ -152,17 +149,30 @@ pub fn fluid_id(registry: &str, nbt: Option<&Nbt>) -> Result<String> {
     ))
 }
 
-pub fn resource_name(value: &str) -> Result<()> {
+// Registry names are native identity data, never paths. The first colon
+// separates an item/block namespace; the rest is preserved verbatim.
+pub fn registry_name(value: &str) -> Result<()> {
     let (namespace, name) = value
         .split_once(':')
-        .context("resource name requires a namespace")?;
+        .context("registry name requires a namespace")?;
+    ensure!(
+        !namespace.is_empty() && !name.is_empty(),
+        "invalid namespaced Forge registry key: {value}"
+    );
+    Ok(())
+}
+
+pub fn property_key(value: &str) -> Result<()> {
+    let (namespace, name) = value
+        .split_once(':')
+        .context("property key requires a namespace")?;
     let identifier = |byte: u8| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-');
     ensure!(
         !namespace.is_empty()
             && namespace.bytes().all(identifier)
             && !name.is_empty()
             && name.bytes().all(|byte| identifier(byte) || byte == b'/'),
-        "invalid registered resource name: {value}"
+        "invalid property key: {value}"
     );
     Ok(())
 }
