@@ -77,7 +77,22 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
                 assert_eq!(study.parents[0].completed, None);
                 assert_eq!(study.hidden_parents[0].key, "@fixture_scanned");
                 assert_eq!(study.hidden_parents[0].id, None);
-                assert_eq!(study.item_triggers.as_slice(), std::slice::from_ref(&stone));
+                assert_eq!(study.item_triggers.len(), 3);
+                assert_eq!(
+                    study.item_triggers[0].matches.as_slice(),
+                    std::slice::from_ref(&stone)
+                );
+                let portal = &study.item_triggers[1];
+                assert_eq!(portal.registry, "minecraft:portal");
+                assert_eq!(portal.meta, 32767);
+                assert!(portal.matches.is_empty() && portal.nbt.is_none() && portal.ore.is_none());
+                let tagged = &study.item_triggers[2];
+                assert!(tagged.matches.is_empty());
+                assert_eq!(tagged.ore.as_deref(), Some("fixtureClue"));
+                assert_eq!(
+                    serde_json::to_value(&tagged.nbt).unwrap()["value"]["energy"]["value"],
+                    "9223372036854775807"
+                );
             }
             Table::Items(rows) => {
                 assert_eq!(
@@ -668,7 +683,17 @@ fn invalid_facts_and_damaged_catalogs_cannot_replace_a_published_snapshot() {
             "accepted invalid genetics {issue}"
         );
     }
-    for issue in ["cycle", "aspect", "research", "knowledge"] {
+    for issue in [
+        "cycle",
+        "aspect",
+        "research",
+        "knowledge",
+        "clue_registry",
+        "clue_match",
+        "clue_duplicate",
+        "clue_nbt",
+        "clue_ore",
+    ] {
         let mut invalid = domain.clone();
         let index = invalid
             .research
@@ -693,6 +718,23 @@ fn invalid_facts_and_damaged_catalogs_cannot_replace_a_published_snapshot() {
             }
             "research" => invalid.research[index].parents[0].key = "MISSING".to_owned(),
             "knowledge" => invalid.research[index].parents[0].completed = Some(true),
+            "clue_registry" => {
+                invalid.research[index].item_triggers[1].registry = ":portal".to_owned()
+            }
+            "clue_match" => invalid.research[index].item_triggers[1]
+                .matches
+                .push("item_missing".to_owned()),
+            "clue_duplicate" => {
+                let clue = &mut invalid.research[index].item_triggers[0];
+                clue.matches.push(clue.matches[0].clone());
+            }
+            "clue_nbt" => {
+                invalid.research[index].item_triggers[2].nbt =
+                    Some(elysium_compiler_core::identity::Nbt::Long {
+                        value: "9223372036854775807".to_owned(),
+                    })
+            }
+            "clue_ore" => invalid.research[index].item_triggers[2].ore = Some(String::new()),
             _ => unreachable!(),
         }
         assert!(

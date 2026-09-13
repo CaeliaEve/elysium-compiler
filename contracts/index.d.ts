@@ -439,7 +439,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 10;
+  revision: 11;
   scope: string;
   source: string;
 }
@@ -1128,7 +1128,7 @@ export interface Research {
   hiddenParents: ResearchLink[];
   icon?: string | null;
   id: string;
-  itemTriggers: string[];
+  itemTriggers: Clue[];
   name: string;
   parents: ResearchLink[];
   /**
@@ -1141,6 +1141,28 @@ export interface Research {
   text: string;
   texture?: string | null;
   warp: number;
+}
+/**
+ * A declared TC item trigger, independent of whether NEI lists a concrete example.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "Clue".
+ */
+export interface Clue {
+  /**
+   * Sorted unique IDs of observed catalog items accepted by the native matcher. Empty preserves the condition without inventing an obtainable item.
+   */
+  matches: string[];
+  /**
+   * Raw metadata. 32767 is TC's wildcard, not a concrete item subtype.
+   */
+  meta: number;
+  nbt?: Nbt | null;
+  /**
+   * The first native ore group, checked before item/meta/NBT matching.
+   */
+  ore?: string | null;
+  registry: string;
 }
 /**
  * Bounded geometry records keep large definitions out of a single source row or HTTP response.
@@ -1409,7 +1431,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 10;
+  revision: 11;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1421,7 +1443,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 10;
+  revision: 11;
   scope: Scope;
 }
 /**

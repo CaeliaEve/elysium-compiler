@@ -15,7 +15,7 @@ use std::path::Path;
 pub use store::{Catalog, File, Manifest, Pointer, Publication};
 
 pub const FORMAT: &str = "elysium.catalog";
-pub const REVISION: u32 = 10;
+pub const REVISION: u32 = 11;
 pub const FILE_LIMIT: usize = 16 * 1024 * 1024;
 pub const IMAGE_LIMIT: usize = 80 * 1024 * 1024;
 pub const TABLE_ROWS: usize = 4096;
@@ -511,6 +511,7 @@ fn links(domain: &Domain) -> Vec<Links> {
         for id in study
             .item_triggers
             .iter()
+            .flat_map(|clue| clue.matches.iter())
             .chain(study.icon.iter())
             .collect::<std::collections::BTreeSet<_>>()
         {

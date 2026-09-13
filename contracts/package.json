@@ -1,6 +1,6 @@
 {
   "name": "@elysium/contracts",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Generated source and catalog contract for NESQL and NeoNEI",
   "license": "MIT",
   "main": "index.cjs",

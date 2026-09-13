@@ -1,5 +1,5 @@
 use super::{check::origin, origin_id, Domain, Kind, Origin};
-use crate::identity::integer;
+use crate::identity::{integer, registry_name, Nbt};
 use anyhow::{ensure, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -112,11 +112,26 @@ pub struct Research {
     pub hidden_parents: Vec<ResearchLink>,
     pub siblings: Vec<ResearchLink>,
     pub aspects: Vec<AspectAmount>,
-    pub item_triggers: Vec<String>,
+    pub item_triggers: Vec<Clue>,
     pub entity_triggers: Vec<String>,
     pub aspect_triggers: Vec<String>,
     pub icon: Option<String>,
     pub texture: Option<String>,
+}
+
+/// A declared TC item trigger, independent of whether NEI lists a concrete example.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Clue {
+    pub registry: String,
+    /// Raw metadata. 32767 is TC's wildcard, not a concrete item subtype.
+    pub meta: i32,
+    pub nbt: Option<Nbt>,
+    /// The first native ore group, checked before item/meta/NBT matching.
+    pub ore: Option<String>,
+    /// Sorted unique IDs of observed catalog items accepted by the native matcher.
+    /// Empty preserves the condition without inventing an obtainable item.
+    pub matches: Vec<String>,
 }
 
 pub(super) fn validate(
@@ -372,8 +387,31 @@ pub(super) fn validate(
                 && row.entity_triggers.len() <= 4096,
             "research triggers exceed their budget"
         );
-        for item in &row.item_triggers {
-            reference(Kind::Item, item)?;
+        let mut matches = 0usize;
+        for clue in &row.item_triggers {
+            registry_name(&clue.registry)?;
+            if let Some(nbt) = &clue.nbt {
+                ensure!(
+                    matches!(nbt, Nbt::Compound { .. }),
+                    "research clue NBT must be a compound"
+                );
+                nbt.validate()?;
+            }
+            if let Some(ore) = &clue.ore {
+                ensure!(
+                    !ore.is_empty() && ore.len() <= 256,
+                    "invalid research clue ore name"
+                );
+            }
+            matches += clue.matches.len();
+            ensure!(matches <= 4096, "research clue matches exceed their budget");
+            ensure!(
+                clue.matches.windows(2).all(|pair| pair[0] < pair[1]),
+                "research clue matches must be sorted and unique"
+            );
+            for item in &clue.matches {
+                reference(Kind::Item, item)?;
+            }
         }
         for id in &row.aspect_triggers {
             aspect(id)?;
