@@ -344,7 +344,7 @@ impl Domain {
                     reference(input.kind, &choice.id)?;
                     integer(&choice.amount, 1, i64::MAX)?;
                     ensure!(
-                        choices.insert((&choice.id, serde_json::to_string(&choice.rule)?)),
+                        choices.insert(serde_json::to_string(choice)?),
                         "duplicate input alternative: {}",
                         choice.id
                     );

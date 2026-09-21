@@ -235,6 +235,17 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
                 let recipe = rows.iter().find(|row| row.source.key == "machine").unwrap();
                 recipe_id = recipe.id.clone();
                 assert_eq!(recipe.inputs[0].choices[0].amount, "9007199254740993");
+                assert_eq!(recipe.inputs[0].choices.len(), 3);
+                assert_eq!(recipe.inputs[0].choices[1].amount, "7");
+                assert_eq!(recipe.inputs[0].choices[2].amount, "1");
+                assert_eq!(
+                    recipe.inputs[0].choices[0].id,
+                    recipe.inputs[0].choices[1].id
+                );
+                assert!(matches!(
+                    recipe.inputs[0].choices[2].consume,
+                    elysium_compiler_core::domain::Consumption::Keep
+                ));
                 assert_eq!(recipe.energy.as_deref(), Some("9223372036854775807"));
                 assert_eq!(recipe.outputs[0].chance.numerator, "1");
                 assert_eq!(recipe.outputs[0].chance.denominator, "3");
@@ -565,11 +576,22 @@ fn invalid_facts_and_damaged_catalogs_cannot_replace_a_published_snapshot() {
             "accepted invalid wand {issue}"
         );
     }
-    for issue in ["quantity", "fraction", "reference", "slot", "view"] {
+    for issue in [
+        "quantity",
+        "fraction",
+        "reference",
+        "slot",
+        "view",
+        "alternative",
+    ] {
         let mut invalid = domain.clone();
         match issue {
             "quantity" => {
                 invalid.recipes[0].inputs[0].choices[0].amount = "9007199254740993.0".to_owned()
+            }
+            "alternative" => {
+                let repeated = invalid.recipes[0].inputs[0].choices[0].clone();
+                invalid.recipes[0].inputs[0].choices.push(repeated);
             }
             "fraction" => invalid.recipes[0].outputs[0].chance.denominator = "0".to_owned(),
             "reference" => invalid.recipes[0].outputs[0].id = "fluid_missing".to_owned(),
