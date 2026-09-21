@@ -162,7 +162,7 @@ pub(super) fn validate(
         );
         registry_name(&block.registry)?;
         ensure!(
-            block.meta <= 15 && block.registry != "minecraft:air",
+            block.meta <= u16::MAX.into() && block.registry != "minecraft:air",
             "invalid constructed block state"
         );
         if let Some(nbt) = &block.nbt {

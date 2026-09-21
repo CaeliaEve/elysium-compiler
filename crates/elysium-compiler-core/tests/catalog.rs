@@ -132,6 +132,10 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
                     .find(|block| block.registry == "fixture:controller")
                     .unwrap();
                 let nbt = serde_json::to_value(&controller.nbt).unwrap();
+                assert_eq!(
+                    controller.meta, 65535,
+                    "extended block metadata was truncated"
+                );
                 assert_eq!(nbt["value"]["energy"]["value"], "9007199254740993");
             }
             Table::Builds(rows) => {
@@ -382,6 +386,14 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
 fn invalid_facts_and_damaged_catalogs_cannot_replace_a_published_snapshot() {
     let source = Source::open(&fixture()).unwrap();
     let domain = Domain::load(&source).unwrap();
+    let mut invalid = domain.clone();
+    invalid.blocks[0].meta = 65536;
+    invalid.blocks[0].id = content_id("block", &invalid.blocks[0]).unwrap();
+    assert!(invalid
+        .validate(&source)
+        .unwrap_err()
+        .to_string()
+        .contains("invalid constructed block state"));
     let mut registered = domain.clone();
     let mut repeated = registered.mutations[0].clone();
     repeated.occurrence = 1;
