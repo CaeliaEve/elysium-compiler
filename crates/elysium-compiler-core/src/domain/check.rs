@@ -421,7 +421,7 @@ impl Domain {
                     recipe.id
                 );
                 reference(output.kind, &output.id)?;
-                integer(&output.amount, 1, i64::MAX)?;
+                quantity_bounds(recipe, output)?;
                 chance(&output.chance)?;
                 change::validate(recipe, output, &items)?;
             }
@@ -434,8 +434,6 @@ impl Domain {
                 let view = views
                     .get(id.as_str())
                     .with_context(|| format!("missing recipe view: {id}"))?;
-                let mut bound_inputs = BTreeSet::new();
-                let mut bound_outputs = BTreeSet::new();
                 for element in &view.elements {
                     if let Element::Cost { index, .. } = element {
                         ensure!(
@@ -459,23 +457,16 @@ impl Domain {
                                     inputs.contains(&(*substance, *slot)),
                                     "view refers to a missing input slot"
                                 );
-                                bound_inputs.insert((*substance, *slot));
                             }
                             Direction::Output => {
                                 ensure!(
                                     outputs.contains(&(*substance, *slot)),
                                     "view refers to a missing output slot"
                                 );
-                                bound_outputs.insert((*substance, *slot));
                             }
                         }
                     }
                 }
-                ensure!(
-                    bound_inputs == inputs && bound_outputs == outputs,
-                    "view omits recipe slots: {}",
-                    recipe.id
-                );
             }
         }
         let files: BTreeMap<_, _> = source

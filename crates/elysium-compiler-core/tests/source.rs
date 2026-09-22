@@ -148,6 +148,14 @@ fn source_rejects_corruption_unknown_revisions_and_undeclared_paths() {
     }
     let source = Source::open(&fixture()).unwrap();
     let mut manifest = source.manifest.clone();
+    manifest.revision = 11;
+    manifest.id = manifest.digest().unwrap();
+    assert!(manifest
+        .validate()
+        .unwrap_err()
+        .to_string()
+        .contains("unsupported source revision"));
+    let mut manifest = source.manifest.clone();
     manifest.revision += 1;
     manifest.id = manifest.digest().unwrap();
     assert!(manifest

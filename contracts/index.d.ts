@@ -200,6 +200,24 @@ export type Edit =
       tools: boolean;
     };
 /**
+ * Correlated fluid amounts, evaluated in the declared draw order without sampling.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "Quantity".
+ */
+export type Quantity =
+  | {
+      after: number[];
+      input: number;
+      kind: "draw";
+      limit: string;
+    }
+  | {
+      after: number[];
+      input: number;
+      kind: "remainder";
+    };
+/**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "OutputRole".
  */
@@ -439,7 +457,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 11;
+  revision: 12;
   scope: string;
   source: string;
 }
@@ -1071,7 +1089,7 @@ export interface ResearchLink {
  * via the `definition` "Output".
  */
 export interface Output {
-  amount: string;
+  amount?: string | null;
   chance: Chance;
   /**
    * With a change, id/amount are the first input choice's example, not a fixed result.
@@ -1079,6 +1097,7 @@ export interface Output {
   change?: Change | null;
   id: string;
   kind: Kind;
+  quantity?: Quantity | null;
   role: OutputRole;
   slot: number;
 }
@@ -1431,7 +1450,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 11;
+  revision: 12;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1443,7 +1462,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 11;
+  revision: 12;
   scope: Scope;
 }
 /**

@@ -22,6 +22,7 @@ const files = new Map([
   [executable, `target/release/${executable}`],
   ['README.md', 'README.md'],
   ['docs/refactor.md', 'docs/refactor.md'],
+  ['docs/quantities.md', 'docs/quantities.md'],
   ...['schema.json', 'index.cjs', 'index.d.ts', 'package.json'].map(name => [`contracts/${name}`, `contracts/${name}`]),
 ]);
 mkdirSync(dirname(output), { recursive: true });

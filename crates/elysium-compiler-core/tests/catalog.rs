@@ -249,6 +249,39 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
                 assert_eq!(recipe.energy.as_deref(), Some("9223372036854775807"));
                 assert_eq!(recipe.outputs[0].chance.numerator, "1");
                 assert_eq!(recipe.outputs[0].chance.denominator, "3");
+                assert_eq!(recipe.outputs.len(), 4);
+                assert_eq!(
+                    elysium_compiler_core::domain::quantity_bounds(recipe, &recipe.outputs[1])
+                        .unwrap(),
+                    (70, 98)
+                );
+                assert_eq!(
+                    elysium_compiler_core::domain::quantity_bounds(recipe, &recipe.outputs[2])
+                        .unwrap(),
+                    (1, 10)
+                );
+                assert_eq!(
+                    elysium_compiler_core::domain::quantity_bounds(recipe, &recipe.outputs[3])
+                        .unwrap(),
+                    (1, 20)
+                );
+                assert!(recipe.outputs[1..]
+                    .iter()
+                    .all(|output| output.amount.is_none()));
+                let mut large = recipe.clone();
+                large
+                    .inputs
+                    .iter_mut()
+                    .find(|input| input.kind == elysium_compiler_core::domain::Kind::Fluid)
+                    .unwrap()
+                    .choices[0]
+                    .amount = "9007199254740993".to_owned();
+                assert_eq!(
+                    elysium_compiler_core::domain::quantity_bounds(&large, &large.outputs[1])
+                        .unwrap(),
+                    (9007199254740963, 9007199254740991)
+                );
+                draw_bounds_match_enumerated_outcomes(recipe);
                 let arcane = rows.iter().find(|row| row.source.key == "arcane").unwrap();
                 assert_eq!(
                     arcane.grid.as_ref().unwrap().cells,
@@ -276,7 +309,7 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
                 let imprint = rows.iter().find(|row| row.source.key == "imprint").unwrap();
                 let mut observed = imprint.clone();
                 observed.outputs[0].id = "another_example".to_owned();
-                observed.outputs[0].amount = "2".to_owned();
+                observed.outputs[0].amount = Some("2".to_owned());
                 observed.outputs[0].change.as_mut().unwrap().samples[0].amount = "2".to_owned();
                 assert_eq!(
                     elysium_compiler_core::domain::recipe_id(&observed).unwrap(),
@@ -397,6 +430,86 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
 fn invalid_facts_and_damaged_catalogs_cannot_replace_a_published_snapshot() {
     let source = Source::open(&fixture()).unwrap();
     let domain = Domain::load(&source).unwrap();
+    for issue in [
+        "fixed",
+        "absent",
+        "cycle",
+        "repeat",
+        "order",
+        "limit",
+        "input",
+        "keep",
+        "probability",
+        "exhausted",
+    ] {
+        let mut invalid = domain.clone();
+        let recipe = invalid
+            .recipes
+            .iter_mut()
+            .find(|recipe| recipe.source.key == "machine")
+            .unwrap();
+        use elysium_compiler_core::domain::{Consumption, Kind, Quantity};
+        match issue {
+            "fixed" => recipe.outputs[1].amount = Some("0".to_owned()),
+            "absent" => recipe.outputs[1].quantity = None,
+            "cycle" => {
+                recipe.outputs[1].quantity = Some(Quantity::Remainder {
+                    input: 0,
+                    after: vec![1],
+                })
+            }
+            "repeat" => {
+                recipe.outputs[1].quantity = Some(Quantity::Remainder {
+                    input: 0,
+                    after: vec![2, 2],
+                })
+            }
+            "order" => {
+                recipe.outputs[1].quantity = Some(Quantity::Remainder {
+                    input: 0,
+                    after: vec![3, 2],
+                })
+            }
+            "limit" => {
+                recipe.outputs[2].quantity = Some(Quantity::Draw {
+                    input: 0,
+                    after: vec![],
+                    limit: "0".to_owned(),
+                })
+            }
+            "input" => {
+                recipe.outputs[1].quantity = Some(Quantity::Remainder {
+                    input: 99,
+                    after: vec![2, 3],
+                })
+            }
+            "keep" => {
+                recipe
+                    .inputs
+                    .iter_mut()
+                    .find(|input| input.kind == Kind::Fluid)
+                    .unwrap()
+                    .choices[0]
+                    .consume = Consumption::Keep
+            }
+            "probability" => recipe.outputs[1].chance.denominator = "2".to_owned(),
+            "exhausted" => {
+                recipe
+                    .inputs
+                    .iter_mut()
+                    .find(|input| input.kind == Kind::Fluid)
+                    .unwrap()
+                    .choices[0]
+                    .amount = "2".to_owned()
+            }
+            _ => unreachable!(),
+        }
+        recipe.id = recipe_id(recipe).unwrap();
+        assert!(
+            invalid.validate(&source).is_err(),
+            "accepted invalid quantity {issue}"
+        );
+    }
     let mut invalid = domain.clone();
     invalid.blocks[0].meta = 65536;
     invalid.blocks[0].id = content_id("block", &invalid.blocks[0]).unwrap();
@@ -1061,6 +1174,57 @@ fn invalid_facts_and_damaged_catalogs_cannot_replace_a_published_snapshot() {
         fs::read(output.path().join("current.json")).unwrap(),
         pointer
     );
+}
+
+fn draw_bounds_match_enumerated_outcomes(template: &elysium_compiler_core::domain::Recipe) {
+    use elysium_compiler_core::domain::{quantity_bounds, Kind, Quantity};
+    for gas in 3_i64..=12 {
+        for first in 1_i64..=5 {
+            for second in 1_i64..=5 {
+                let mut recipe = template.clone();
+                recipe
+                    .inputs
+                    .iter_mut()
+                    .find(|row| row.kind == Kind::Fluid)
+                    .unwrap()
+                    .choices[0]
+                    .amount = gas.to_string();
+                recipe.outputs[2].quantity = Some(Quantity::Draw {
+                    input: 0,
+                    after: vec![],
+                    limit: first.to_string(),
+                });
+                recipe.outputs[3].quantity = Some(Quantity::Draw {
+                    input: 0,
+                    after: vec![2],
+                    limit: second.to_string(),
+                });
+                let mut outcomes = Vec::new();
+                let mut impossible = false;
+                // Enumerate the actual inclusive sequential draws, independently
+                // of the compiler's interval propagation.
+                for a in 1..=first.min(gas - 1) {
+                    let cap = second.min(gas - a - 1);
+                    impossible |= cap < 1;
+                    for b in 1..=cap {
+                        outcomes.push(gas - a - b);
+                    }
+                }
+                let bounds = quantity_bounds(&recipe, &recipe.outputs[1]);
+                if impossible {
+                    assert!(bounds.is_err());
+                } else {
+                    assert_eq!(
+                        bounds.unwrap(),
+                        (
+                            *outcomes.iter().min().unwrap(),
+                            *outcomes.iter().max().unwrap()
+                        )
+                    );
+                }
+            }
+        }
+    }
 }
 
 fn refresh_builds(domain: &mut Domain) {

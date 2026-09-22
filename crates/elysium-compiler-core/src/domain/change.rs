@@ -117,7 +117,7 @@ pub(super) fn validate(
         .first()
         .context("output change has no samples")?;
     ensure!(
-        output.id == first.id && output.amount == first.amount,
+        output.id == first.id && output.amount.as_deref() == Some(first.amount.as_str()),
         "default output differs from its first input choice"
     );
     Ok(())

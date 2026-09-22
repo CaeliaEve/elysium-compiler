@@ -5,12 +5,14 @@ mod genetics;
 mod industry;
 mod magic;
 mod model;
+mod quantity;
 mod structure;
 pub use change::{Change, Edit, Stack};
 pub use genetics::*;
 pub use industry::*;
 pub use magic::*;
 pub use model::*;
+pub use quantity::{quantity_bounds, Quantity};
 pub use structure::*;
 
 use crate::identity::Nbt;
@@ -164,7 +166,8 @@ pub struct Output {
     pub slot: u32,
     pub kind: Kind,
     pub id: String,
-    pub amount: String,
+    pub amount: Option<String>,
+    pub quantity: Option<Quantity>,
     pub chance: Chance,
     pub role: OutputRole,
     /// With a change, id/amount are the first input choice's example, not a fixed result.
