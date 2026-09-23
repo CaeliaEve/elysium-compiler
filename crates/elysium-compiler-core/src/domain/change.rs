@@ -1,4 +1,4 @@
-use super::{Item, Kind, Output, Recipe};
+use super::{Consumption, Item, Kind, Match, Output, Recipe};
 use crate::identity::{integer, item_id, Nbt};
 use anyhow::{ensure, Context, Result};
 use schemars::JsonSchema;
@@ -15,6 +15,11 @@ pub struct Stack {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Edit {
+    /// Forestry 4.10.17 native member analysis. A previously analyzed stack is copied
+    /// unchanged; otherwise serialize the individual into a fresh compound after analyze().
+    /// Item, metadata and the entire offered count are retained. Samples are canonical
+    /// native serialization fixed points, so their only tag difference is IsAnalyzed.
+    Analyze,
     /// Copy the input item, metadata, count and tags. Replace root tags, then cap
     /// numeric tags using Minecraft getInteger semantics (missing/non-numeric = 0).
     Patch {
@@ -63,6 +68,54 @@ pub(super) fn validate(
         "output change samples omit input choices"
     );
     match &change.action {
+        Edit::Analyze => {
+            ensure!(
+                recipe.inputs.len() == 2 && recipe.outputs.len() == 1,
+                "analysis requires one subject, one honey input and one result"
+            );
+            let mut branch = None;
+            for choice in &input.choices {
+                let Match::Member { root, analyzed } = &choice.rule else {
+                    anyhow::bail!("analysis requires native member matching")
+                };
+                ensure!(
+                    matches!(choice.consume, Consumption::Stack)
+                        && choice.amount == "1"
+                        && choice.returns.is_empty(),
+                    "analysis consumes a whole stack with one-item examples"
+                );
+                let state = (root.as_str(), *analyzed);
+                ensure!(
+                    branch.is_none_or(|previous| previous == state),
+                    "analysis mixes roots or states"
+                );
+                branch = Some(state);
+            }
+            let (_, done) = branch.context("analysis has no input members")?;
+            let honey = recipe
+                .inputs
+                .iter()
+                .find(|input| input.kind == Kind::Fluid)
+                .context("analysis requires honey")?;
+            ensure!(
+                honey.choices.len() == 1
+                    && honey.choices[0].amount == "100"
+                    && honey.choices[0].returns.is_empty()
+                    && if done {
+                        matches!(honey.choices[0].consume, Consumption::Keep)
+                    } else {
+                        matches!(honey.choices[0].consume, Consumption::Consume)
+                    },
+                "analysis must require 100 mB, consumed only for an unanalyzed subject"
+            );
+            ensure!(
+                recipe.duration.as_deref() == Some(if done { "1" } else { "500" })
+                    && recipe.energy.as_deref() == Some(if done { "1" } else { "2" })
+                    && output.chance.numerator == "1"
+                    && output.chance.denominator == "1",
+                "invalid native analysis cost or chance"
+            );
+        }
         Edit::Patch { set, limits } => {
             ensure!(!set.is_empty() || !limits.is_empty(), "empty output patch");
             ensure!(
@@ -130,6 +183,18 @@ fn apply(
     items: &BTreeMap<&str, &Item>,
 ) -> Result<Stack> {
     let (registry, meta, count, nbt) = match action {
+        Edit::Analyze => {
+            let mut tags = compound(&input.nbt)?
+                .context("analysis sample has no tags")?
+                .clone();
+            tags.insert("IsAnalyzed".into(), Nbt::Byte { value: "1".into() });
+            (
+                &input.registry,
+                input.meta,
+                amount,
+                Some(Nbt::Compound { value: tags }),
+            )
+        }
         Edit::Patch { set, limits } => {
             let mut tags = compound(&input.nbt)?.cloned().unwrap_or_default();
             tags.extend(set.clone());
@@ -186,6 +251,87 @@ fn apply(
         id: item_id(registry, meta, nbt.as_ref())?,
         amount: count.to_owned(),
     })
+}
+
+/// Validate canonical examples, not a substitute genome for an incomplete native stack.
+pub(super) fn member(item: &Item, root: &str, analyzed: bool) -> Result<()> {
+    let tags = compound(&item.nbt)?.context("member sample has no tags")?;
+    let living = match root {
+        "rootTrees" => false,
+        "rootBees" | "rootButterflies" => true,
+        _ => anyhow::bail!("unknown Forestry species root"),
+    };
+    ensure!(
+        matches!(tags.get("IsAnalyzed"), Some(Nbt::Byte { value }) if value == if analyzed { "1" } else { "0" }),
+        "member sample has the wrong analysis state"
+    );
+    for key in tags.keys() {
+        ensure!(
+            matches!(key.as_str(), "IsAnalyzed" | "Genome" | "Mate")
+                || living && matches!(key.as_str(), "Health" | "MaxH")
+                || root == "rootBees" && matches!(key.as_str(), "NA" | "GEN"),
+            "member sample contains nonserialized data"
+        );
+    }
+    if living {
+        for key in ["Health", "MaxH"] {
+            ensure!(
+                matches!(tags.get(key), Some(Nbt::Int { .. })),
+                "living member lacks native health fields"
+            );
+        }
+    }
+    if let Some(value) = tags.get("NA") {
+        ensure!(
+            matches!(value, Nbt::Byte { value } if value == "0"),
+            "noncanonical natural flag"
+        );
+    }
+    if let Some(value) = tags.get("GEN") {
+        ensure!(
+            matches!(value, Nbt::Int { value } if value.parse::<i32>().is_ok_and(|value| value > 0)),
+            "noncanonical generation"
+        );
+    }
+    genome(tags.get("Genome").context("member sample has no genome")?)?;
+    if let Some(mate) = tags.get("Mate") {
+        genome(mate)?;
+    }
+    Ok(())
+}
+
+fn genome(value: &Nbt) -> Result<()> {
+    let Nbt::Compound { value } = value else {
+        anyhow::bail!("invalid genome compound")
+    };
+    ensure!(value.len() == 1, "noncanonical genome fields");
+    let Some(Nbt::List { element, value }) = value.get("Chromosomes") else {
+        anyhow::bail!("genome has no chromosomes")
+    };
+    ensure!(
+        element == "compound" && !value.is_empty() && value.len() <= 128,
+        "invalid chromosome list"
+    );
+    let mut prior = -1;
+    for chromosome in value {
+        let Nbt::Compound { value } = chromosome else {
+            anyhow::bail!("invalid chromosome")
+        };
+        ensure!(value.len() == 3, "noncanonical chromosome fields");
+        let Some(Nbt::Byte { value: slot }) = value.get("Slot") else {
+            anyhow::bail!("missing chromosome slot")
+        };
+        let slot = integer(slot, 0, 127)?;
+        ensure!(slot > prior, "chromosome slots must be ordered and unique");
+        prior = slot;
+        for key in ["UID0", "UID1"] {
+            ensure!(
+                matches!(value.get(key), Some(Nbt::String { value }) if !value.is_empty()),
+                "missing chromosome allele"
+            );
+        }
+    }
+    Ok(())
 }
 
 /// NBTPrimitive conversions in Minecraft 1.7.10, including Java narrowing and

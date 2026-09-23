@@ -354,6 +354,18 @@ impl Domain {
                             "invalid durability consumption"
                         );
                     }
+                    if matches!(choice.consume, Consumption::Stack) {
+                        ensure!(
+                            input.kind == Kind::Item
+                                && matches!(choice.rule, Match::Member { .. })
+                                && recipe.outputs.iter().any(|output| output
+                                    .change
+                                    .as_ref()
+                                    .is_some_and(|change| change.input == input.slot
+                                        && matches!(change.action, Edit::Analyze))),
+                            "whole-stack consumption requires native analysis"
+                        );
+                    }
                     ensure!(
                         choice.returns.len() <= 256,
                         "too many ingredient remainders"
@@ -366,6 +378,13 @@ impl Domain {
                         let item = items[choice.id.as_str()];
                         match &choice.rule {
                             Match::Exact => {}
+                            Match::Member { root, analyzed } => {
+                                ensure!(
+                                    matches!(choice.consume, Consumption::Stack),
+                                    "member matching requires whole-stack analysis"
+                                );
+                                change::member(item, root, *analyzed)?;
+                            }
                             Match::Ore { name, exclusive } => ensure!(
                                 item.tags.contains(name) && (!exclusive || item.tags.len() == 1),
                                 "ore alternative lacks membership: {} in {name}",

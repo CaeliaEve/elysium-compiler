@@ -19,12 +19,12 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let catalog = Catalog::current(directory.path()).unwrap();
     catalog.verify().unwrap();
     assert_eq!(catalog.manifest.id, first.id);
-    assert_eq!(catalog.manifest.counts["recipes"], 14);
+    assert_eq!(catalog.manifest.counts["recipes"], 16);
     assert_eq!(
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
     );
-    assert_eq!(catalog.manifest.counts["browse"], 32);
+    assert_eq!(catalog.manifest.counts["browse"], 37);
     assert_eq!(catalog.manifest.counts["materials"], 2);
     assert_eq!(catalog.manifest.counts["circuits"], 1);
     assert_eq!(catalog.manifest.counts["species"], 3);
@@ -430,6 +430,60 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
 fn invalid_facts_and_damaged_catalogs_cannot_replace_a_published_snapshot() {
     let source = Source::open(&fixture()).unwrap();
     let domain = Domain::load(&source).unwrap();
+    let scans: Vec<_> = domain
+        .recipes
+        .iter()
+        .filter(|recipe| recipe.source.key == "scanner")
+        .collect();
+    assert_eq!(scans.len(), 2);
+    for scan in &scans {
+        assert_eq!(scan.inputs[0].choices.len(), 2);
+        let change = scan.outputs[0].change.as_ref().unwrap();
+        assert_eq!(change.samples.len(), 2);
+        assert_ne!(change.samples[0].id, change.samples[1].id);
+        for sample in &change.samples {
+            assert!(domain.items.iter().any(|item| item.id == sample.id));
+        }
+    }
+    for issue in [
+        "cost", "state", "consume", "honey", "root", "sample", "minimum",
+    ] {
+        use elysium_compiler_core::domain::{Consumption, Match};
+        let mut invalid = domain.clone();
+        let recipe = invalid
+            .recipes
+            .iter_mut()
+            .find(|recipe| {
+                recipe.source.key == "scanner" && recipe.duration.as_deref() == Some("500")
+            })
+            .unwrap();
+        match issue {
+            "cost" => recipe.energy = Some("1".into()),
+            "state" => {
+                if let Match::Member { analyzed, .. } = &mut recipe.inputs[0].choices[0].rule {
+                    *analyzed = true;
+                }
+            }
+            "consume" => recipe.inputs[0].choices[0].consume = Consumption::Consume,
+            "honey" => recipe.inputs[1].choices[0].consume = Consumption::Keep,
+            "root" => {
+                if let Match::Member { root, .. } = &mut recipe.inputs[0].choices[0].rule {
+                    *root = "rootBees".into();
+                }
+            }
+            "sample" => {
+                let change = recipe.outputs[0].change.as_mut().unwrap();
+                change.samples[1].id = change.samples[0].id.clone();
+            }
+            "minimum" => recipe.inputs[0].choices[0].amount = "2".into(),
+            _ => unreachable!(),
+        }
+        recipe.id = recipe_id(recipe).unwrap();
+        assert!(
+            invalid.validate(&source).is_err(),
+            "accepted invalid analysis {issue}"
+        );
+    }
     for issue in [
         "fixed",
         "absent",

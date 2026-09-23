@@ -15,7 +15,7 @@ use std::path::Path;
 pub use store::{Catalog, File, Manifest, Pointer, Publication};
 
 pub const FORMAT: &str = "elysium.catalog";
-pub const REVISION: u32 = 12;
+pub const REVISION: u32 = 13;
 pub const FILE_LIMIT: usize = 16 * 1024 * 1024;
 pub const IMAGE_LIMIT: usize = 80 * 1024 * 1024;
 pub const TABLE_ROWS: usize = 4096;

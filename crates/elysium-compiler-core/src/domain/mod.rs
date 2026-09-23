@@ -112,6 +112,12 @@ pub struct Remainder {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Match {
     Exact,
+    /// A native Forestry member of this registry and root, with the given analysis state.
+    /// Examples use canonical native serialization; other valid genomes are not excluded.
+    Member {
+        root: String,
+        analyzed: bool,
+    },
     Ore {
         name: String,
         exclusive: bool,
@@ -135,7 +141,11 @@ pub enum Match {
 pub enum Consumption {
     Consume,
     Keep,
-    Damage { points: u32 },
+    /// Consume the entire offered stack. `amount` is the minimum/example count.
+    Stack,
+    Damage {
+        points: u32,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]

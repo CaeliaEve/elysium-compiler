@@ -140,6 +140,9 @@ export type Consumption =
       kind: "keep";
     }
   | {
+      kind: "stack";
+    }
+  | {
       kind: "damage";
       points: number;
     };
@@ -150,6 +153,11 @@ export type Consumption =
 export type Match =
   | {
       kind: "exact";
+    }
+  | {
+      analyzed: boolean;
+      kind: "member";
+      root: string;
     }
   | {
       exclusive: boolean;
@@ -178,6 +186,9 @@ export type MagicKind = "arcane" | "crucible" | "infusion";
  * via the `definition` "Edit".
  */
 export type Edit =
+  | {
+      kind: "analyze";
+    }
   | {
       kind: "patch";
       limits: {
@@ -457,7 +468,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 12;
+  revision: 13;
   scope: string;
   source: string;
 }
@@ -1450,7 +1461,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 12;
+  revision: 13;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1462,7 +1473,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 12;
+  revision: 13;
   scope: Scope;
 }
 /**

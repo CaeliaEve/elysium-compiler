@@ -46,6 +46,15 @@ fn java_source_is_verified_without_losing_identity_or_large_quantities() {
         .unwrap();
     source
         .visit("recipes", |recipe| {
+            if recipe["source"]["key"] == "scanner" {
+                assert_eq!(recipe["outputs"][0]["change"]["action"]["kind"], "analyze");
+                assert_eq!(
+                    recipe["inputs"][0]["choices"][0]["consume"]["kind"],
+                    "stack"
+                );
+                assert!(recipe["magic"].is_null());
+                return Ok(());
+            }
             if recipe["source"]["key"] != "machine" {
                 if recipe["source"]["key"] == "wand_creative" {
                     assert_eq!(recipe["magic"]["creative"], true);
