@@ -1413,6 +1413,16 @@ fn test_branch_and_potential_quantities() {
     });
     assert!(quantity_bounds(&neg_sample, &neg_sample.outputs[2]).is_err());
 
+    // Potential with sample > nominal should fail
+    let mut excess_sample = base_recipe.clone();
+    excess_sample.outputs[2].quantity = Some(Quantity::Potential {
+        stat: "forestry.yield".to_string(),
+        condition: None,
+        sample: Some("5".to_string()),
+        nominal: "4".to_string(),
+    });
+    assert!(quantity_bounds(&excess_sample, &excess_sample.outputs[2]).is_err());
+
     // Branch with non-1 probability should fail
     let mut prob_branch = base_recipe.clone();
     prob_branch.outputs[0].chance.denominator = "2".to_string();

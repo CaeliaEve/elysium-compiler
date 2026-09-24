@@ -83,7 +83,13 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
         Quantity::Potential { nominal, sample, .. } => {
             let max_val = integer(nominal, 1, i64::MAX)?;
             if let Some(s) = sample {
-                integer(s, 0, i64::MAX)?;
+                let sample_val = integer(s, 0, i64::MAX)?;
+                ensure!(
+                    sample_val <= max_val,
+                    "potential sample {} exceeds nominal upper bound {}",
+                    sample_val,
+                    max_val
+                );
             }
             Ok((0, max_val))
         }
