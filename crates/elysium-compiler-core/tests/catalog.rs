@@ -1294,3 +1294,127 @@ fn refresh_builds(domain: &mut Domain) {
         }
     }
 }
+
+#[test]
+fn test_branch_and_potential_quantities() {
+    use elysium_compiler_core::domain::{quantity_bounds, Chance, Kind, Output, OutputRole, Quantity, Recipe, Origin};
+    use std::collections::BTreeMap;
+
+    let base_recipe = Recipe {
+        id: "recipe_test".to_string(),
+        source: Origin {
+            owner: "test".to_string(),
+            handler: "test".to_string(),
+            key: "test".to_string(),
+        },
+        category: "test".to_string(),
+        view: None,
+        duration: Some("100".to_string()),
+        energy: Some("32".to_string()),
+        grid: None,
+        magic: None,
+        order: 0,
+        inputs: vec![],
+        outputs: vec![
+            Output {
+                slot: 0,
+                kind: Kind::Fluid,
+                id: "fluid_steam".to_string(),
+                amount: None,
+                quantity: Some(Quantity::Branch {
+                    group: "steam_output".to_string(),
+                    branch: "normal".to_string(),
+                    condition: Some("tRealConsume < threshold".to_string()),
+                    threshold: Some("16000".to_string()),
+                    nominal: "32000".to_string(),
+                }),
+                chance: Chance {
+                    numerator: "1".to_string(),
+                    denominator: "1".to_string(),
+                },
+                role: OutputRole::Result,
+                change: None,
+            },
+            Output {
+                slot: 1,
+                kind: Kind::Fluid,
+                id: "fluid_superheated_steam".to_string(),
+                amount: None,
+                quantity: Some(Quantity::Branch {
+                    group: "steam_output".to_string(),
+                    branch: "superheated".to_string(),
+                    condition: Some("tRealConsume >= threshold".to_string()),
+                    threshold: Some("16000".to_string()),
+                    nominal: "64000".to_string(),
+                }),
+                chance: Chance {
+                    numerator: "1".to_string(),
+                    denominator: "1".to_string(),
+                },
+                role: OutputRole::Result,
+                change: None,
+            },
+            Output {
+                slot: 2,
+                kind: Kind::Item,
+                id: "item_forestry_fruit".to_string(),
+                amount: None,
+                quantity: Some(Quantity::Potential {
+                    stat: "forestry.yield".to_string(),
+                    condition: Some("yield >= 0.1".to_string()),
+                    sample: Some("0".to_string()),
+                    nominal: "4".to_string(),
+                }),
+                chance: Chance {
+                    numerator: "1".to_string(),
+                    denominator: "1".to_string(),
+                },
+                role: OutputRole::Result,
+                change: None,
+            },
+        ],
+        properties: BTreeMap::new(),
+    };
+
+    // Valid bounds checks
+    assert_eq!(quantity_bounds(&base_recipe, &base_recipe.outputs[0]).unwrap(), (0, 32000));
+    assert_eq!(quantity_bounds(&base_recipe, &base_recipe.outputs[1]).unwrap(), (0, 64000));
+    assert_eq!(quantity_bounds(&base_recipe, &base_recipe.outputs[2]).unwrap(), (0, 4));
+
+    // Duplicate branch in the same group should fail
+    let mut duplicate_branch = base_recipe.clone();
+    duplicate_branch.outputs[1].quantity = Some(Quantity::Branch {
+        group: "steam_output".to_string(),
+        branch: "normal".to_string(),
+        condition: None,
+        threshold: None,
+        nominal: "64000".to_string(),
+    });
+    assert!(quantity_bounds(&duplicate_branch, &duplicate_branch.outputs[0]).is_err());
+
+    // Zero nominal should fail
+    let mut zero_nominal = base_recipe.clone();
+    zero_nominal.outputs[0].quantity = Some(Quantity::Branch {
+        group: "steam_output".to_string(),
+        branch: "normal".to_string(),
+        condition: None,
+        threshold: None,
+        nominal: "0".to_string(),
+    });
+    assert!(quantity_bounds(&zero_nominal, &zero_nominal.outputs[0]).is_err());
+
+    // Potential with negative sample should fail
+    let mut neg_sample = base_recipe.clone();
+    neg_sample.outputs[2].quantity = Some(Quantity::Potential {
+        stat: "forestry.yield".to_string(),
+        condition: None,
+        sample: Some("-1".to_string()),
+        nominal: "4".to_string(),
+    });
+    assert!(quantity_bounds(&neg_sample, &neg_sample.outputs[2]).is_err());
+
+    // Branch with non-1 probability should fail
+    let mut prob_branch = base_recipe.clone();
+    prob_branch.outputs[0].chance.denominator = "2".to_string();
+    assert!(quantity_bounds(&prob_branch, &prob_branch.outputs[0]).is_err());
+}

@@ -211,7 +211,7 @@ export type Edit =
       tools: boolean;
     };
 /**
- * Correlated fluid amounts, evaluated in the declared draw order without sampling.
+ * Correlated amounts, evaluated without arbitrary sampling.
  *
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Quantity".
@@ -227,6 +227,21 @@ export type Quantity =
       after: number[];
       input: number;
       kind: "remainder";
+    }
+  | {
+      branch: string;
+      condition?: string | null;
+      group: string;
+      kind: "branch";
+      nominal: string;
+      threshold?: string | null;
+    }
+  | {
+      condition?: string | null;
+      kind: "potential";
+      nominal: string;
+      sample?: string | null;
+      stat: string;
     };
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1473,7 +1488,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 13;
+  revision: 14;
   scope: Scope;
 }
 /**

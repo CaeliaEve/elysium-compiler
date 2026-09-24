@@ -7,6 +7,11 @@ The first two quantity rules preserve the GTNH sparging algorithm. They apply to
 - `draw`: `input`, `after` and a positive decimal `limit`. After the ordered preceding draws in `after`, draw an integer uniformly from 1 through `min(limit, remaining input - 1)`, inclusive.
 - `remainder`: `input` and `after`. Return the input amount minus those ordered draws.
 
+Revision 14 introduces dedicated models for conditional branch outcomes and genetic potential yields:
+
+- `branch`: `group`, `branch`, optional `condition`, optional `threshold`, and a positive decimal `nominal`. Applied to machines with mutually exclusive operating regimes (such as GoodGenerator's Extreme Heat Exchanger, alternating between superheated and normal steam based on consumption threshold). Attains bounds `[0, nominal]` without corrupting the recipe with fixed zero amounts.
+- `potential`: `stat`, optional `condition`, optional `sample`, and a positive decimal `nominal`. Applied to outputs dependent on Forestry tree genetics, machine mode, and tooling (such as GT++ Tree Farm fruit output, which truncates to 0 under base genome yield but yields positive quantities when bred or boosted). Attains bounds `[0, nominal]`.
+
 All computed outputs sharing an input form one group. Each group has exactly one remainder, and its ordered `after` list includes every draw in the group. Omitting a draw or resetting the budget in a second branch is invalid.
 
 Each referenced preceding output must itself be a draw from the same input, with exactly the preceding prefix as its `after` list. References must be unique and cannot include the current output. A chain has at most 128 draws. The compiler rejects a chain if any reachable remaining amount cannot supply a further positive draw while reserving one unit. It also checks that computed outputs have probability one and no item change. An empty `after` list is valid.
