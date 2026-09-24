@@ -1297,7 +1297,9 @@ fn refresh_builds(domain: &mut Domain) {
 
 #[test]
 fn test_branch_and_potential_quantities() {
-    use elysium_compiler_core::domain::{quantity_bounds, Chance, Kind, Output, OutputRole, Quantity, Recipe, Origin};
+    use elysium_compiler_core::domain::{
+        quantity_bounds, Chance, Kind, Origin, Output, OutputRole, Quantity, Recipe,
+    };
     use std::collections::BTreeMap;
 
     let base_recipe = Recipe {
@@ -1377,9 +1379,18 @@ fn test_branch_and_potential_quantities() {
     };
 
     // Valid bounds checks
-    assert_eq!(quantity_bounds(&base_recipe, &base_recipe.outputs[0]).unwrap(), (0, 32000));
-    assert_eq!(quantity_bounds(&base_recipe, &base_recipe.outputs[1]).unwrap(), (0, 64000));
-    assert_eq!(quantity_bounds(&base_recipe, &base_recipe.outputs[2]).unwrap(), (0, 4));
+    assert_eq!(
+        quantity_bounds(&base_recipe, &base_recipe.outputs[0]).unwrap(),
+        (0, 32000)
+    );
+    assert_eq!(
+        quantity_bounds(&base_recipe, &base_recipe.outputs[1]).unwrap(),
+        (0, 64000)
+    );
+    assert_eq!(
+        quantity_bounds(&base_recipe, &base_recipe.outputs[2]).unwrap(),
+        (0, 4)
+    );
 
     // Duplicate branch in the same group should fail
     let mut duplicate_branch = base_recipe.clone();

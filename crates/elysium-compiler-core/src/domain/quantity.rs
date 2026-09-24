@@ -59,11 +59,7 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
         "computed output cannot carry an independent probability"
     );
     match rule {
-        Quantity::Branch {
-            group,
-            nominal,
-            ..
-        } => {
+        Quantity::Branch { group, nominal, .. } => {
             let max_val = integer(nominal, 1, i64::MAX)?;
             let mut seen_branches = BTreeSet::new();
             for candidate in &recipe.outputs {
@@ -74,13 +70,18 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
                 }) = &candidate.quantity
                 {
                     if g == group {
-                        ensure!(seen_branches.insert(b), "duplicate branch in quantity group");
+                        ensure!(
+                            seen_branches.insert(b),
+                            "duplicate branch in quantity group"
+                        );
                     }
                 }
             }
             Ok((0, max_val))
         }
-        Quantity::Potential { nominal, sample, .. } => {
+        Quantity::Potential {
+            nominal, sample, ..
+        } => {
             let max_val = integer(nominal, 1, i64::MAX)?;
             if let Some(s) = sample {
                 let sample_val = integer(s, 0, i64::MAX)?;
