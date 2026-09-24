@@ -589,3 +589,11 @@ fn value_id(prefix: &str, value: &Value) -> Result<String> {
         Sha256::digest(serde_json::to_vec(value)?)
     ))
 }
+
+pub fn validate_change(
+    recipe: &Recipe,
+    output: &Output,
+    items: &BTreeMap<&str, &Item>,
+) -> Result<()> {
+    change::validate(recipe, output, items)
+}

@@ -209,6 +209,11 @@ export type Edit =
        * Both input and base must be armor or have at least one native tool class.
        */
       tools: boolean;
+    }
+  | {
+      kind: "append";
+      path: string;
+      value: Nbt;
     };
 /**
  * Correlated amounts, evaluated without arbitrary sampling.

@@ -32,7 +32,7 @@ impl Nbt {
         Ok(())
     }
 
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         match self {
             Self::Byte { .. } => "byte",
             Self::Short { .. } => "short",

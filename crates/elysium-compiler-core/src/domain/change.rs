@@ -35,6 +35,10 @@ pub enum Edit {
         /// Both input and base must be armor or have at least one native tool class.
         tools: bool,
     },
+    /// Native list append (e.g. Thaumic Machina wand augmentations):
+    /// Copy the input item, metadata, count and tags. Append `value` to the list
+    /// at `path`. If `path` does not exist or is not a list, creates a new list.
+    Append { path: String, value: Nbt },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -150,6 +154,13 @@ pub(super) fn validate(
                 );
             }
         }
+        Edit::Append { path, value } => {
+            ensure!(
+                !path.is_empty() && path.len() <= 65535,
+                "invalid append path"
+            );
+            value.validate()?;
+        }
     }
     for (choice, sample) in input.choices.iter().zip(&change.samples) {
         let offered = items
@@ -245,6 +256,46 @@ fn apply(
                 );
                 (&template.registry, input.meta, amount, input.nbt.clone())
             }
+        }
+        Edit::Append { path, value } => {
+            let mut tags = compound(&input.nbt)?.cloned().unwrap_or_default();
+            let element = value.name().to_string();
+            match tags.get_mut(path) {
+                None => {
+                    tags.insert(
+                        path.clone(),
+                        Nbt::List {
+                            element,
+                            value: vec![value.clone()],
+                        },
+                    );
+                }
+                Some(Nbt::List {
+                    element: existing_elem,
+                    value: list,
+                }) => {
+                    ensure!(
+                        existing_elem == &element,
+                        "append element type mismatch with existing list"
+                    );
+                    list.push(value.clone());
+                }
+                Some(_) => {
+                    tags.insert(
+                        path.clone(),
+                        Nbt::List {
+                            element,
+                            value: vec![value.clone()],
+                        },
+                    );
+                }
+            }
+            (
+                &input.registry,
+                input.meta,
+                amount,
+                Some(Nbt::Compound { value: tags }),
+            )
         }
     };
     Ok(Stack {

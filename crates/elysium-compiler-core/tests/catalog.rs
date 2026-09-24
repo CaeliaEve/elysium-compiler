@@ -1439,3 +1439,172 @@ fn test_branch_and_potential_quantities() {
     prob_branch.outputs[0].chance.denominator = "2".to_string();
     assert!(quantity_bounds(&prob_branch, &prob_branch.outputs[0]).is_err());
 }
+
+#[test]
+fn test_edit_append_wand_augmentations() {
+    use elysium_compiler_core::domain::{
+        validate_change, Change, Choice, Consumption, Edit, Item, Kind, Match, Origin, Output,
+        OutputRole, Recipe, Stack,
+    };
+    use elysium_compiler_core::identity::{item_id, Nbt};
+    use std::collections::BTreeMap;
+
+    fn make_item(id: String, registry: String, nbt: Option<Nbt>) -> Item {
+        Item {
+            id,
+            registry,
+            meta: 0,
+            nbt,
+            name: "Wand".to_string(),
+            tooltip: vec![],
+            stack_limit: 1,
+            durability: 0,
+            tools: BTreeMap::new(),
+            armor: false,
+            tags: vec![],
+            icon: None,
+            order: None,
+            aspects: None,
+        }
+    }
+
+    let wand_base_id = item_id("Thaumcraft:WandCasting", 0, None).unwrap();
+    let wand_base = make_item(
+        wand_base_id.clone(),
+        "Thaumcraft:WandCasting".to_string(),
+        None,
+    );
+
+    let mut augmented_tags = BTreeMap::new();
+    augmented_tags.insert(
+        "Augmentations".to_string(),
+        Nbt::List {
+            element: "string".to_string(),
+            value: vec![Nbt::String {
+                value: "thaumicmachina:frugal".to_string(),
+            }],
+        },
+    );
+    let wand_aug_id = item_id(
+        "Thaumcraft:WandCasting",
+        0,
+        Some(&Nbt::Compound {
+            value: augmented_tags.clone(),
+        }),
+    )
+    .unwrap();
+    let wand_augmented = make_item(
+        wand_aug_id.clone(),
+        "Thaumcraft:WandCasting".to_string(),
+        Some(Nbt::Compound {
+            value: augmented_tags.clone(),
+        }),
+    );
+
+    let mut double_augmented_tags = BTreeMap::new();
+    double_augmented_tags.insert(
+        "Augmentations".to_string(),
+        Nbt::List {
+            element: "string".to_string(),
+            value: vec![
+                Nbt::String {
+                    value: "thaumicmachina:frugal".to_string(),
+                },
+                Nbt::String {
+                    value: "thaumicmachina:potency".to_string(),
+                },
+            ],
+        },
+    );
+    let wand_double_id = item_id(
+        "Thaumcraft:WandCasting",
+        0,
+        Some(&Nbt::Compound {
+            value: double_augmented_tags.clone(),
+        }),
+    )
+    .unwrap();
+    let wand_double = make_item(
+        wand_double_id.clone(),
+        "Thaumcraft:WandCasting".to_string(),
+        Some(Nbt::Compound {
+            value: double_augmented_tags.clone(),
+        }),
+    );
+
+    let mut items = BTreeMap::new();
+    items.insert(wand_base.id.as_str(), &wand_base);
+    items.insert(wand_augmented.id.as_str(), &wand_augmented);
+    items.insert(wand_double.id.as_str(), &wand_double);
+
+    let append_potency = Edit::Append {
+        path: "Augmentations".to_string(),
+        value: Nbt::String {
+            value: "thaumicmachina:potency".to_string(),
+        },
+    };
+
+    // Case 1: Input has existing augmentations -> appends to existing list
+    let change = Change {
+        input: 0,
+        action: append_potency.clone(),
+        samples: vec![Stack {
+            id: wand_double_id.clone(),
+            amount: "1".to_string(),
+        }],
+    };
+    let output = Output {
+        slot: 0,
+        kind: Kind::Item,
+        id: wand_double_id.clone(),
+        amount: Some("1".to_string()),
+        quantity: None,
+        chance: elysium_compiler_core::domain::Chance {
+            numerator: "1".to_string(),
+            denominator: "1".to_string(),
+        },
+        role: OutputRole::Result,
+        change: Some(change),
+    };
+    let recipe = Recipe {
+        id: "recipe_wand_aug".to_string(),
+        source: Origin {
+            owner: "test".to_string(),
+            handler: "wand_aug".to_string(),
+            key: "test".to_string(),
+        },
+        category: "infusion".to_string(),
+        view: None,
+        duration: Some("100".to_string()),
+        energy: Some("32".to_string()),
+        properties: BTreeMap::new(),
+        grid: None,
+        magic: None,
+        order: 0,
+        inputs: vec![elysium_compiler_core::domain::Input {
+            slot: 0,
+            kind: Kind::Item,
+            choices: vec![Choice {
+                id: wand_aug_id.clone(),
+                amount: "1".to_string(),
+                consume: Consumption::Consume,
+                returns: vec![],
+                rule: Match::Exact,
+            }],
+        }],
+        outputs: vec![output.clone()],
+    };
+
+    assert!(validate_change(&recipe, &output, &items).is_ok());
+
+    // Case 2: Append with empty path should fail
+    let invalid_append = Edit::Append {
+        path: "".to_string(),
+        value: Nbt::String {
+            value: "test".to_string(),
+        },
+    };
+    let mut bad_recipe = recipe.clone();
+    bad_recipe.outputs[0].change.as_mut().unwrap().action = invalid_append;
+    assert!(validate_change(&bad_recipe, &bad_recipe.outputs[0], &items).is_err());
+}
