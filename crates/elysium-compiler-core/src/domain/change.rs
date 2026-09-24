@@ -1,6 +1,6 @@
 use super::{Consumption, Item, Kind, Match, Output, Recipe};
 use crate::identity::{integer, item_id, Nbt};
-use anyhow::{ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -274,20 +274,19 @@ fn apply(
                     element: existing_elem,
                     value: list,
                 }) => {
-                    ensure!(
-                        existing_elem == &element,
-                        "append element type mismatch with existing list"
-                    );
-                    list.push(value.clone());
+                    if list.is_empty() || existing_elem == "end" {
+                        *existing_elem = element;
+                        list.push(value.clone());
+                    } else {
+                        ensure!(
+                            existing_elem == &element,
+                            "append element type mismatch with existing list: expected {existing_elem}, got {element}"
+                        );
+                        list.push(value.clone());
+                    }
                 }
                 Some(_) => {
-                    tags.insert(
-                        path.clone(),
-                        Nbt::List {
-                            element,
-                            value: vec![value.clone()],
-                        },
-                    );
+                    bail!("append target path is not a list: {path}");
                 }
             }
             (

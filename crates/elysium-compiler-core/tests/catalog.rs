@@ -1607,4 +1607,123 @@ fn test_edit_append_wand_augmentations() {
     let mut bad_recipe = recipe.clone();
     bad_recipe.outputs[0].change.as_mut().unwrap().action = invalid_append;
     assert!(validate_change(&bad_recipe, &bad_recipe.outputs[0], &items).is_err());
+
+    // Case 3: Input has empty end list (Minecraft native empty list: type=end, value=[])
+    // Appending string should succeed and turn element into "string"
+    let mut empty_end_tags = BTreeMap::new();
+    empty_end_tags.insert(
+        "Augmentations".to_string(),
+        Nbt::List {
+            element: "end".to_string(),
+            value: vec![],
+        },
+    );
+    let wand_empty_end_id = item_id(
+        "Thaumcraft:WandCasting",
+        0,
+        Some(&Nbt::Compound {
+            value: empty_end_tags.clone(),
+        }),
+    )
+    .unwrap();
+    let wand_empty_end = make_item(
+        wand_empty_end_id.clone(),
+        "Thaumcraft:WandCasting".to_string(),
+        Some(Nbt::Compound {
+            value: empty_end_tags,
+        }),
+    );
+    items.insert(wand_empty_end.id.as_str(), &wand_empty_end);
+
+    let append_to_empty = Edit::Append {
+        path: "Augmentations".to_string(),
+        value: Nbt::String {
+            value: "thaumicmachina:frugal".to_string(),
+        },
+    };
+    let change_empty = Change {
+        input: 0,
+        action: append_to_empty,
+        samples: vec![Stack {
+            id: wand_aug_id.clone(),
+            amount: "1".to_string(),
+        }],
+    };
+    let mut empty_recipe = recipe.clone();
+    empty_recipe.inputs[0].choices[0].id = wand_empty_end_id.clone();
+    empty_recipe.outputs[0].id = wand_aug_id.clone();
+    empty_recipe.outputs[0].change = Some(change_empty);
+    assert!(validate_change(&empty_recipe, &empty_recipe.outputs[0], &items).is_ok());
+
+    // Case 4: Target path exists but is not a list (e.g. String) -> should fail
+    let mut non_list_tags = BTreeMap::new();
+    non_list_tags.insert(
+        "Augmentations".to_string(),
+        Nbt::String {
+            value: "invalid_scalar".to_string(),
+        },
+    );
+    let wand_non_list_id = item_id(
+        "Thaumcraft:WandCasting",
+        0,
+        Some(&Nbt::Compound {
+            value: non_list_tags.clone(),
+        }),
+    )
+    .unwrap();
+    let wand_non_list = make_item(
+        wand_non_list_id.clone(),
+        "Thaumcraft:WandCasting".to_string(),
+        Some(Nbt::Compound {
+            value: non_list_tags,
+        }),
+    );
+    items.insert(wand_non_list.id.as_str(), &wand_non_list);
+
+    let mut bad_non_list_recipe = recipe.clone();
+    bad_non_list_recipe.inputs[0].choices[0].id = wand_non_list_id.clone();
+    bad_non_list_recipe.outputs[0]
+        .change
+        .as_mut()
+        .unwrap()
+        .action = append_potency.clone();
+    assert!(validate_change(
+        &bad_non_list_recipe,
+        &bad_non_list_recipe.outputs[0],
+        &items
+    )
+    .is_err());
+
+    // Case 5: Target list exists with non-empty incompatible element type (e.g. int) -> should fail
+    let mut int_list_tags = BTreeMap::new();
+    int_list_tags.insert(
+        "Augmentations".to_string(),
+        Nbt::List {
+            element: "int".to_string(),
+            value: vec![Nbt::Int {
+                value: "42".to_string(),
+            }],
+        },
+    );
+    let wand_int_list_id = item_id(
+        "Thaumcraft:WandCasting",
+        0,
+        Some(&Nbt::Compound {
+            value: int_list_tags.clone(),
+        }),
+    )
+    .unwrap();
+    let wand_int_list = make_item(
+        wand_int_list_id.clone(),
+        "Thaumcraft:WandCasting".to_string(),
+        Some(Nbt::Compound {
+            value: int_list_tags,
+        }),
+    );
+    items.insert(wand_int_list.id.as_str(), &wand_int_list);
+
+    let mut bad_type_recipe = recipe.clone();
+    bad_type_recipe.inputs[0].choices[0].id = wand_int_list_id.clone();
+    bad_type_recipe.outputs[0].change.as_mut().unwrap().action = append_potency;
+    assert!(validate_change(&bad_type_recipe, &bad_type_recipe.outputs[0], &items).is_err());
 }
