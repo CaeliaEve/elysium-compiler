@@ -1328,6 +1328,7 @@ fn test_branch_and_potential_quantities() {
                     branch: "normal".to_string(),
                     condition: Some("tRealConsume < threshold".to_string()),
                     threshold: Some("16000".to_string()),
+                    parameters: None,
                     nominal: "32000".to_string(),
                 }),
                 chance: Chance {
@@ -1347,6 +1348,7 @@ fn test_branch_and_potential_quantities() {
                     branch: "superheated".to_string(),
                     condition: Some("tRealConsume >= threshold".to_string()),
                     threshold: Some("16000".to_string()),
+                    parameters: None,
                     nominal: "64000".to_string(),
                 }),
                 chance: Chance {
@@ -1365,6 +1367,7 @@ fn test_branch_and_potential_quantities() {
                     stat: "forestry.yield".to_string(),
                     condition: Some("yield >= 0.1".to_string()),
                     sample: Some("0".to_string()),
+                    parameters: None,
                     nominal: "4".to_string(),
                 }),
                 chance: Chance {
@@ -1399,6 +1402,7 @@ fn test_branch_and_potential_quantities() {
         branch: "normal".to_string(),
         condition: None,
         threshold: None,
+        parameters: None,
         nominal: "64000".to_string(),
     });
     assert!(quantity_bounds(&duplicate_branch, &duplicate_branch.outputs[0]).is_err());
@@ -1410,6 +1414,7 @@ fn test_branch_and_potential_quantities() {
         branch: "normal".to_string(),
         condition: None,
         threshold: None,
+        parameters: None,
         nominal: "0".to_string(),
     });
     assert!(quantity_bounds(&zero_nominal, &zero_nominal.outputs[0]).is_err());
@@ -1420,6 +1425,7 @@ fn test_branch_and_potential_quantities() {
         stat: "forestry.yield".to_string(),
         condition: None,
         sample: Some("-1".to_string()),
+        parameters: None,
         nominal: "4".to_string(),
     });
     assert!(quantity_bounds(&neg_sample, &neg_sample.outputs[2]).is_err());
@@ -1430,9 +1436,24 @@ fn test_branch_and_potential_quantities() {
         stat: "forestry.yield".to_string(),
         condition: None,
         sample: Some("5".to_string()),
+        parameters: None,
         nominal: "4".to_string(),
     });
     assert!(quantity_bounds(&excess_sample, &excess_sample.outputs[2]).is_err());
+
+    // A valid tree genome may have no fruit at the sampled point.
+    let mut zero_potential = base_recipe.clone();
+    zero_potential.outputs[2].quantity = Some(Quantity::Potential {
+        stat: "forestry.yield".to_string(),
+        condition: Some("canBearFruit=false".to_string()),
+        sample: Some("0".to_string()),
+        parameters: None,
+        nominal: "0".to_string(),
+    });
+    assert_eq!(
+        quantity_bounds(&zero_potential, &zero_potential.outputs[2]).unwrap(),
+        (0, 0)
+    );
 
     // Branch with non-1 probability should fail
     let mut prob_branch = base_recipe.clone();
@@ -1655,7 +1676,7 @@ fn test_edit_append_wand_augmentations() {
     empty_recipe.outputs[0].change = Some(change_empty);
     assert!(validate_change(&empty_recipe, &empty_recipe.outputs[0], &items).is_ok());
 
-    // Case 4: Target path exists but is not a list (e.g. String) -> should fail
+    // Case 4: Target path exists but is not a list and must be rejected.
     let mut non_list_tags = BTreeMap::new();
     non_list_tags.insert(
         "Augmentations".to_string(),

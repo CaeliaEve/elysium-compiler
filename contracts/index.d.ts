@@ -211,6 +211,12 @@ export type Edit =
       tools: boolean;
     }
   | {
+      base: Stack;
+      config: number;
+      kind: "filter";
+      metadata: number;
+    }
+  | {
       kind: "append";
       path: string;
       value: Nbt;
@@ -239,12 +245,18 @@ export type Quantity =
       group: string;
       kind: "branch";
       nominal: string;
+      parameters?: {
+        [k: string]: string;
+      } | null;
       threshold?: string | null;
     }
   | {
       condition?: string | null;
       kind: "potential";
       nominal: string;
+      parameters?: {
+        [k: string]: string;
+      } | null;
       sample?: string | null;
       stat: string;
     };

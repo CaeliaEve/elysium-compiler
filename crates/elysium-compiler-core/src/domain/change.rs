@@ -35,9 +35,17 @@ pub enum Edit {
         /// Both input and base must be armor or have at least one native tool class.
         tools: bool,
     },
+    /// Automagy PreserveFilterRecipe: copy the filter configuration from one
+    /// input and the output metadata from a later filter input.
+    Filter {
+        base: Stack,
+        config: u32,
+        metadata: u32,
+    },
     /// Native list append (e.g. Thaumic Machina wand augmentations):
     /// Copy the input item, metadata, count and tags. Append `value` to the list
-    /// at `path`. If `path` does not exist or is not a list, creates a new list.
+    /// at `path`. Missing paths and Minecraft's empty end-list are created; an
+    /// existing scalar is rejected because it cannot preserve native data.
     Append { path: String, value: Nbt },
 }
 
@@ -154,6 +162,35 @@ pub(super) fn validate(
                 );
             }
         }
+        Edit::Filter {
+            base,
+            config,
+            metadata,
+        } => {
+            let base_item = items
+                .get(base.id.as_str())
+                .context("missing filter base item")?;
+            integer(&base.amount, 1, i64::MAX)?;
+            ensure!(
+                *config != *metadata,
+                "filter configuration and metadata inputs must differ"
+            );
+            let config_input = recipe
+                .inputs
+                .iter()
+                .find(|input| input.kind == Kind::Item && input.slot == *config)
+                .context("filter configuration input is missing")?;
+            let metadata_input = recipe
+                .inputs
+                .iter()
+                .find(|input| input.kind == Kind::Item && input.slot == *metadata)
+                .context("filter metadata input is missing")?;
+            ensure!(
+                !config_input.choices.is_empty() && !metadata_input.choices.is_empty(),
+                "filter inputs have no choices"
+            );
+            ensure!(base_item.id == base.id, "invalid filter base item");
+        }
         Edit::Append { path, value } => {
             ensure!(
                 !path.is_empty() && path.len() <= 65535,
@@ -166,7 +203,7 @@ pub(super) fn validate(
         let offered = items
             .get(choice.id.as_str())
             .context("missing changed input")?;
-        let expected = apply(&change.action, offered, &choice.amount, items)?;
+        let expected = apply(recipe, &change.action, offered, &choice.amount, items)?;
         ensure!(
             sample.id == expected.id && sample.amount == expected.amount,
             "changed output example differs from its NBT rule"
@@ -188,6 +225,7 @@ pub(super) fn validate(
 }
 
 fn apply(
+    recipe: &Recipe,
     action: &Edit,
     input: &Item,
     amount: &str,
@@ -256,6 +294,37 @@ fn apply(
                 );
                 (&template.registry, input.meta, amount, input.nbt.clone())
             }
+        }
+        Edit::Filter {
+            base,
+            config,
+            metadata: _,
+        } => {
+            let template = items
+                .get(base.id.as_str())
+                .context("missing filter template")?;
+            let config_input = recipe
+                .inputs
+                .iter()
+                .find(|input| input.slot == *config)
+                .context("missing filter config input")?;
+            let config_choice = config_input
+                .choices
+                .first()
+                .context("filter config has no choices")?;
+            let config_item = items
+                .get(config_choice.id.as_str())
+                .context("missing filter config item")?;
+            let mut tags = compound(&template.nbt)?.cloned().unwrap_or_default();
+            if let Some(source) = compound(&config_item.nbt)? {
+                tags.extend(source.clone());
+            }
+            (
+                &input.registry,
+                input.meta,
+                amount,
+                Some(Nbt::Compound { value: tags }),
+            )
         }
         Edit::Append { path, value } => {
             let mut tags = compound(&input.nbt)?.cloned().unwrap_or_default();

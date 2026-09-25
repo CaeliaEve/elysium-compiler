@@ -25,6 +25,8 @@ pub enum Quantity {
         condition: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         threshold: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parameters: Option<std::collections::BTreeMap<String, String>>,
         nominal: String,
     },
     Potential {
@@ -33,6 +35,8 @@ pub enum Quantity {
         condition: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         sample: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parameters: Option<std::collections::BTreeMap<String, String>>,
         nominal: String,
     },
 }
@@ -59,7 +63,24 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
         "computed output cannot carry an independent probability"
     );
     match rule {
-        Quantity::Branch { group, nominal, .. } => {
+        Quantity::Branch {
+            group,
+            parameters,
+            nominal,
+            ..
+        } => {
+            if let Some(parameters) = parameters {
+                for key in parameters.keys() {
+                    ensure!(
+                        key.len() <= 64
+                            && key.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+                            && key
+                                .chars()
+                                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
+                        "invalid quantity parameter key"
+                    );
+                }
+            }
             let max_val = integer(nominal, 1, i64::MAX)?;
             let mut seen_branches = BTreeSet::new();
             for candidate in &recipe.outputs {
@@ -80,9 +101,26 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
             Ok((0, max_val))
         }
         Quantity::Potential {
-            nominal, sample, ..
+            nominal,
+            sample,
+            parameters,
+            ..
         } => {
-            let max_val = integer(nominal, 1, i64::MAX)?;
+            if let Some(parameters) = parameters {
+                for key in parameters.keys() {
+                    ensure!(
+                        key.len() <= 64
+                            && key.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+                            && key
+                                .chars()
+                                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
+                        "invalid quantity parameter key"
+                    );
+                }
+            }
+            // Forestry can legally produce no fruit for a valid tree genome.
+            // Zero is a semantic bound here, unlike fixed recipe quantities.
+            let max_val = integer(nominal, 0, i64::MAX)?;
             if let Some(s) = sample {
                 let sample_val = integer(s, 0, i64::MAX)?;
                 ensure!(
