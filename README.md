@@ -10,6 +10,7 @@ elysium-compiler compile --input <source-snapshot> --output <catalog-root> [--re
 elysium-compiler check --input <catalog-root>
 elysium-compiler schema --output <schema.json>
 elysium-compiler resources --input <archive-manifest.json> --output <new-resource-directory>
+elysium-compiler assemble --input <complete-capture-directory> --sha256 <manifest-sha256> --output <source-directory>
 ```
 
 All commands return one JSON result on stdout and diagnostics on stderr. A receipt must be outside both source and catalog directories. Catalog output must be outside source; output paths containing `..` or symbolic links/junctions are rejected before creating directories. Failed validation leaves the current catalog unchanged. There is no old-format reader or migration path.
@@ -19,9 +20,14 @@ It preserves exact bytes and competing paths without guessing game resource
 precedence. Its inventory is separate from a validated Source; see
 [local resource inputs and limits](docs/resources.md).
 
+`assemble` recovers the exact native Source from a completed capture archive,
+including when the game job failed during final publication. Incomplete captures
+and diagnostic reports cannot publish a Source. See [capture recovery](docs/captures.md)
+for integrity checks and the boundary between offline recovery and game recapture.
+
 `inspect` returns `id`, `environment`, `scope` and a `counts` map covering every verified source collection. The old handful of top-level domain counts has been removed; consumers should read `counts`.
 
-Compiler 0.14.1 and contract package 0.14.0 use source/catalog revision 14. Native scanner members, whole-stack consumption and analysis branches are documented in docs/refactor.md. Matching rules belong to individual input alternatives, crafting grids survive exports without views, and magic costs retain typed aspect and research references. The environment declares a sorted set of construction parameters; every structure records one successful build or explicit failure per set. Construction palettes bind each placement's block state to a model or explicit appearance failure. Models preserve native faces, sprite UVs, vertex tint and transparency passes, while textures share the existing asset and atlas pipeline. Complete sources cannot omit requested models. The generated schema pins format and revision to the Rust constants; the contract exports those values as `formats`. No migration reader is provided.
+Compiler 0.14.2 and contract package 0.14.0 use source/catalog revision 14. Native scanner members, whole-stack consumption and analysis branches are documented in docs/refactor.md. Matching rules belong to individual input alternatives, crafting grids survive exports without views, and magic costs retain typed aspect and research references. The environment declares a sorted set of construction parameters; every structure records one successful build or explicit failure per set. Construction palettes bind each placement's block state to a model or explicit appearance failure. Models preserve native faces, sprite UVs, vertex tint and transparency passes, while textures share the existing asset and atlas pipeline. Complete sources cannot omit requested models. The generated schema pins format and revision to the Rust constants; the contract exports those values as `formats`. No migration reader is provided.
 
 Forge registry keys are native identity strings. Item and block keys require nonempty namespace and name parts separated at the first colon; global fluid keys need only be nonempty. Case, spaces, Unicode, punctuation and further colons are preserved in identity hashes and catalog records. Registry keys do not name disk files. Portable file paths and the compiler's namespaced property keys retain their own validation rules. Registry strings preserve the original Forge identity without character rewriting.
 

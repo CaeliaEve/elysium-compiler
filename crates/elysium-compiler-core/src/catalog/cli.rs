@@ -23,6 +23,15 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Reconstruct a verified Source from a complete native capture archive.
+    Assemble {
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long)]
+        sha256: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Match pinned native resource observations to verified local bytes.
     Resolve {
         #[arg(long)]
@@ -78,6 +87,11 @@ enum Command {
 
 pub fn run() -> Result<()> {
     let value = match Cli::parse().command {
+        Command::Assemble {
+            input,
+            sha256,
+            output,
+        } => crate::fragments::assemble(&input, &sha256, &output)?,
         Command::Resolve {
             resources,
             report,

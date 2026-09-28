@@ -1,9 +1,10 @@
-use super::provenance::{CaptureInput, Provenance, SourceProof};
+use super::provenance::{CaptureInput, SourceProof};
 use super::{
     logical_path, publish, selected, staging, Entry, ARCHIVE_LIMIT, ENTRY_LIMIT, FORMAT,
     OUTPUT_LIMIT, REVISION, ROW_LIMIT,
 };
 use crate::catalog::store::destination;
+use crate::provenance::Provenance;
 use crate::source::{is_digest, source_path};
 use anyhow::{ensure, Context, Result};
 use serde::Deserialize;
