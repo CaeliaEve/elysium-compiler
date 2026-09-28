@@ -20,4 +20,6 @@ serde_json.workspace = true
 tempfile.workspace = true
 sha2.workspace = true
 zip.workspace = true
+flate2.workspace = true
+image.workspace = true
 

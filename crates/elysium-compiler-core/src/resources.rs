@@ -3,6 +3,8 @@
 mod binding;
 mod directory;
 pub use binding::resolve;
+mod provenance;
+pub use provenance::CaptureInput;
 
 use crate::catalog::store::destination;
 use crate::source::{is_digest, source_path};

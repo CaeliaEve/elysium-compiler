@@ -94,7 +94,7 @@ Matching is indexed by resource path. The original inventory is never modified.
 
 Bindings are an intermediate resource artifact, not a second recipe protocol and
 not a Source/Catalog. They are not accepted by `inspect` or `compile`. Connecting
-them to capture fragments and proving render equivalence is subsequent work.
+them to capture fragments and substituting verified resources is subsequent work.
 The existing consumer schema and frontend remain unchanged.
 
 The initial actual-instance sample (2026-09-28) used five pinned archives:
@@ -102,3 +102,34 @@ Minecraft, IC2, GregTech, Thaumcraft and Forestry. It produced 21,375 candidates
 and 10,845 blobs; every blob's length and digest was verified independently. This
 is an offline sample, not evidence of complete resource coverage, resource-pack
 precedence, a successful game export or a new full GTNH Catalog.
+
+## Compare direct resources with a formal Source
+
+Compiler 0.14.1 accepts three optional flags together:
+
+```bash
+elysium-compiler resolve --resources <inventory> --report <check.json> --sha256 <check-sha256> --environment <check-environment-id> --source <native-source> --capture <export-job.json> --capture-sha256 <job-sha256> --output <fresh-bindings>
+```
+
+NESQL 0.15.2 supplies the required provenance. The job must be `succeeded`, without
+an error or diagnostic request, and reference exactly this Source. The CLI checks
+the full Source environment, all domain records/references/pixels, both pinned
+receipts and their request digests. Runtime identity excludes only probes,
+profile and handler selection from the full environment; session and explicit
+world must agree. The full environment identities are retained separately and
+need not agree across `data` diagnostics and `full` capture.
+
+Only `resource` assets with an explicit matching PNG path, no timeline and no
+interpolation are considered. The local PNG and native Source PNG must have
+exactly equal dimensions and every decoded RGBA byte, including transparent RGB.
+Different compression is allowed. A mismatch aborts publication; GL captures,
+tints and animation sheets are not certified by name similarity. At least one
+direct resource must match when these flags are supplied.
+
+The bindings manifest additionally records `provenance` and `source`, with the
+Source id, original scope, environment, capture receipt hash and verified asset
+ids/pixel digests. A selection Source remains a selection; this check makes no
+complete-coverage claim. Source and inventory files are read-only, and output
+inside either input directory is refused. Source/Catalog revision and frontend
+contracts are unchanged. This command proves the specific direct PNG bytes; it
+does not yet replace game capture, assemble fragments or publish a Catalog.

@@ -1,3 +1,4 @@
+use super::provenance::{CaptureInput, Provenance, SourceProof};
 use super::{
     logical_path, publish, selected, staging, Entry, ARCHIVE_LIMIT, ENTRY_LIMIT, FORMAT,
     OUTPUT_LIMIT, REVISION, ROW_LIMIT,
@@ -32,11 +33,11 @@ struct Inventory {
     entries: Vec<Entry>,
 }
 
-fn hash(bytes: &[u8]) -> String {
+pub(super) fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-fn read(path: &Path, limit: u64) -> Result<Vec<u8>> {
+pub(super) fn read(path: &Path, limit: u64) -> Result<Vec<u8>> {
     let path = destination(path)?;
     let file = File::open(&path)?;
     ensure!(
@@ -74,6 +75,7 @@ pub fn resolve(
     report_hash: &str,
     environment: &str,
     output: &Path,
+    capture: Option<&CaptureInput>,
 ) -> Result<Value> {
     let resources = destination(resources)?;
     let target = destination(output)?;
@@ -106,6 +108,12 @@ pub fn resolve(
             && hash(&serde_json::to_vec(&report["environment"])?) == environment,
         "resource environment mismatch"
     );
+    if let Some(proof) = report.get("provenance") {
+        Provenance::verify(proof, &report["environment"], &report["request"])?;
+    }
+    let mut source = capture
+        .map(|input| SourceProof::open(input, &report, &target))
+        .transpose()?;
     let requested = report["request"]["check"]["resources"]
         .as_array()
         .context("missing resource selection")?;
@@ -273,6 +281,9 @@ pub fn resolve(
             bytes.len() as u64 == count_value && hash(&bytes) == digest,
             "resource blob mismatch: {resource}"
         );
+        if let Some(source) = &mut source {
+            source.compare(resource, &bytes)?;
+        }
         if !stage.path().join(blob).exists() {
             let mut file = File::create(stage.path().join(blob))?;
             file.write_all(&bytes)?;
@@ -285,11 +296,14 @@ pub fn resolve(
     }
     ensure!(pending.is_empty(), "resource observations are incomplete");
     bindings.sort_by(|a, b| a["resource"].as_str().cmp(&b["resource"].as_str()));
-    let id = publish(
-        &output,
-        stage,
-        json!({"format":"elysium.bindings","revision":1,"environment":environment,"world":world,
-        "inventory":inventory.id,"report":report_hash,"scope":"resources","entries":bindings}),
-    )?;
+    let mut manifest = json!({"format":"elysium.bindings","revision":1,"environment":environment,"world":world,
+        "inventory":inventory.id,"report":report_hash,"scope":"resources","entries":bindings});
+    if let Some(proof) = report.get("provenance") {
+        manifest["provenance"] = proof.clone();
+    }
+    if let Some(source) = source {
+        manifest["source"] = source.finish()?;
+    }
+    let id = publish(&output, stage, manifest)?;
     Ok(json!({"id":id,"output":output,"resources":bindings.len(),"scope":"resources"}))
 }

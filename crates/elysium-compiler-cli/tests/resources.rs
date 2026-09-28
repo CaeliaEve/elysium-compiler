@@ -229,6 +229,223 @@ fn resolve(root: &Path, report: &Value, expected: &str, output: &str) -> Output 
         .unwrap()
 }
 
+// Formal Source fixture, not a diagnostic converted into domain records.
+fn picture_source(root: &Path, env: &Value, pixels: &[u8]) -> Value {
+    use flate2::{write::GzEncoder, Compression};
+    let source = root.join("source");
+    fs::create_dir_all(&source).unwrap();
+    let environment = serde_json::to_vec(env).unwrap();
+    fs::write(source.join("environment.json"), &environment).unwrap();
+    let png_path = format!("assets/{}.png", hash(pixels));
+    fs::create_dir_all(source.join("assets")).unwrap();
+    fs::write(source.join(&png_path), pixels).unwrap();
+    let mut files = vec![
+        json!({"path":"environment.json","kind":"environment","encoding":"json",
+        "bytes":environment.len(),"decodedBytes":environment.len(),"rows":1,"sha256":hash(&environment)}),
+        json!({"path":png_path,"kind":"asset","encoding":"png","bytes":pixels.len(),"decodedBytes":pixels.len(),"rows":0,"sha256":hash(pixels)}),
+    ];
+    let mut assets = vec![];
+    for kind in ["resource", "capture"] {
+        let mut asset = json!({"path":png_path,"width":2,"height":1,"frames":[],"interpolate":false,
+            "source":{"kind":kind,"location":"demo:textures/a.png"}});
+        asset["id"] = json!(format!(
+            "asset_{}",
+            hash(&serde_json::to_vec(&asset).unwrap())
+        ));
+        assets.push(asset);
+    }
+    assets.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+    for kind in elysium_compiler_core::source::CORE_COLLECTIONS {
+        let mut plain = Vec::new();
+        if *kind == "assets" {
+            for asset in &assets {
+                plain.extend(serde_json::to_vec(asset).unwrap());
+                plain.push(b'\n');
+            }
+        }
+        let mut gzip = GzEncoder::new(Vec::new(), Compression::default());
+        gzip.write_all(&plain).unwrap();
+        let bytes = gzip.finish().unwrap();
+        let path = format!("records/{kind}/part-000000.jsonl.gz");
+        fs::create_dir_all(source.join(&path).parent().unwrap()).unwrap();
+        fs::write(source.join(&path), &bytes).unwrap();
+        files.push(json!({"path":path,"kind":kind,"encoding":"jsonl.gzip","bytes":bytes.len(),
+            "decodedBytes":plain.len(),"rows":if *kind == "assets" {2} else {0},"sha256":hash(&bytes)}));
+    }
+    files.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
+    let mut manifest = json!({"format":"elysium.source","revision":14,"producer":{"name":"nesql","version":"fixture"},
+        "environment":hash(&environment),"scope":{"mode":"selection","collections":elysium_compiler_core::source::CORE_COLLECTIONS},"files":files});
+    manifest["id"] = json!(hash(&serde_json::to_vec(&manifest).unwrap()));
+    fs::write(
+        source.join("manifest.json"),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    manifest
+}
+
+fn png(colors: &[u8], fast: bool) -> Vec<u8> {
+    use image::{
+        codecs::png::{CompressionType, FilterType, PngEncoder},
+        ImageEncoder,
+    };
+    let mut out = Vec::new();
+    PngEncoder::new_with_quality(
+        &mut out,
+        if fast {
+            CompressionType::Fast
+        } else {
+            CompressionType::Best
+        },
+        FilterType::NoFilter,
+    )
+    .write_image(colors, 2, 1, image::ExtendedColorType::Rgba8)
+    .unwrap();
+    out
+}
+
+#[test]
+fn links_native_resources_to_source_only_with_matching_session_and_exact_pixels() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    // Include partially transparent and transparent RGB, so alpha and hidden
+    // channels cannot accidentally disappear from the comparison.
+    let colors = [10, 20, 30, 128, 40, 50, 60, 0];
+    let local = png(&colors, true);
+    let native = png(&colors, false);
+    assert_ne!(local, native);
+    let base = archive(root, "base.jar", &[("assets/demo/textures/a.png", &local)]);
+    assert!(run(root, json!([base]), "inventory").status.success());
+    let runtime = json!({"game":"Minecraft 1.7.10","loader":"Forge","locale":"en_US",
+        "mods":[{"id":"fixture","name":"Fixture","version":"1","sha256":base["sha256"]}],
+        "inputs":[],"resources":[],"knowledge":{},"settings":{"iconPixels":"64"}});
+    let mut env = runtime.clone();
+    env["probes"] = json!([{"count":1,"channels":{}}]);
+    env["settings"]["profile"] = json!("full");
+    env["settings"]["handlers"] = json!("");
+    let source = picture_source(root, &env, &native);
+    let mut check_env = env.clone();
+    check_env["settings"]["profile"] = json!("data");
+    let request = json!({"key":"capture","name":"capture","profile":"full","world":"test-copy","handlers":[],"probes":env["probes"]});
+    let mut check_request = request.clone();
+    check_request["profile"] = json!("data");
+    check_request["check"] = json!({"domain":"resources","resources":["demo:textures/a.png"]});
+    let proof = |environment: &Value, request: &Value| {
+        let mut selection = request.clone();
+        selection.as_object_mut().unwrap().remove("key");
+        selection.as_object_mut().unwrap().remove("name");
+        json!({"revision":1,"environment":hash(&serde_json::to_vec(environment).unwrap()),
+            "runtime":hash(&serde_json::to_vec(&runtime).unwrap()),"session":"a".repeat(64),"selection":hash(&serde_json::to_vec(&selection).unwrap())})
+    };
+    let job = json!({"id":"native-source-job","state":"succeeded","request":request,"result":{"id":source["id"],"path":"ignored/relocatable"},
+        "provenance":proof(&env,&request)});
+    let report = json!({"format":"nesql.check","job":"native-resource-job","status":"complete","environment":check_env,
+        "request":check_request,"provenance":proof(&check_env,&check_request),
+        "rows":[{"resource":"demo:textures/a.png","path":"assets/demo/textures/a.png","status":"passed","bytes":local.len().to_string(),"sha256":hash(&local)}]});
+    let invoke = |job: &Value, report: &Value, output: &str| {
+        let job_bytes = serde_json::to_vec(job).unwrap();
+        let report_bytes = serde_json::to_vec(report).unwrap();
+        fs::write(root.join("capture.json"), &job_bytes).unwrap();
+        fs::write(root.join("check.json"), &report_bytes).unwrap();
+        Command::new(env!("CARGO_BIN_EXE_elysium-compiler"))
+            .args(["resolve", "--resources"])
+            .arg(root.join("inventory"))
+            .arg("--report")
+            .arg(root.join("check.json"))
+            .args([
+                "--sha256",
+                &hash(&report_bytes),
+                "--environment",
+                report["provenance"]["environment"].as_str().unwrap(),
+            ])
+            .arg("--source")
+            .arg(root.join("source"))
+            .arg("--capture")
+            .arg(root.join("capture.json"))
+            .args(["--capture-sha256", &hash(&job_bytes), "--output"])
+            .arg(root.join(output))
+            .output()
+            .unwrap()
+    };
+    let output = invoke(&job, &report, "linked");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let linked: Value =
+        serde_json::from_slice(&fs::read(root.join("linked/manifest.json")).unwrap()).unwrap();
+    assert_eq!(linked["source"]["id"], source["id"]);
+    assert_eq!(linked["source"]["scope"]["mode"], "selection");
+    let matches = linked["source"]["assets"].as_array().unwrap();
+    assert_eq!(
+        matches.len(),
+        1,
+        "GL capture was falsely certified as a direct resource"
+    );
+    assert_eq!(matches[0]["pixels"], hash(&colors));
+    for mode in [
+        "session",
+        "runtime",
+        "selection",
+        "source",
+        "failed",
+        "missing",
+        "world",
+        "locale",
+        "pixels",
+        "alpha",
+    ] {
+        picture_source(root, &env, &native);
+        let mut bad = job.clone();
+        match mode {
+            "session" | "runtime" | "selection" => bad["provenance"][mode] = json!("b".repeat(64)),
+            "source" => bad["result"]["id"] = json!("b".repeat(64)),
+            "failed" => bad["state"] = json!("failed"),
+            "missing" => {
+                bad.as_object_mut().unwrap().remove("provenance");
+            }
+            "world" => {
+                bad["request"]["world"] = json!("other-world");
+                bad["provenance"] = proof(&env, &bad["request"]);
+            }
+            "locale" => {
+                let mut changed = env.clone();
+                changed["locale"] = json!("zh_CN");
+                let mut changed_runtime = runtime.clone();
+                changed_runtime["locale"] = json!("zh_CN");
+                let manifest = picture_source(root, &changed, &native);
+                bad["result"]["id"] = manifest["id"].clone();
+                bad["provenance"] = proof(&changed, &request);
+                bad["provenance"]["runtime"] =
+                    json!(hash(&serde_json::to_vec(&changed_runtime).unwrap()));
+            }
+            "pixels" | "alpha" => {
+                let mut changed = colors;
+                changed[if mode == "alpha" { 3 } else { 4 }] += 1;
+                let manifest = picture_source(root, &env, &png(&changed, false));
+                bad["result"]["id"] = manifest["id"].clone();
+            }
+            _ => unreachable!(),
+        }
+        let out = invoke(&bad, &report, "rejected");
+        assert!(!out.status.success(), "accepted {mode}");
+        assert!(!root.join("rejected").exists(), "published {mode}");
+        if matches!(mode, "pixels" | "alpha") {
+            assert!(
+                String::from_utf8_lossy(&out.stderr).contains("pixels differ"),
+                "Failed before pixel comparison"
+            );
+        }
+        if matches!(mode, "locale" | "world" | "session") {
+            assert!(
+                String::from_utf8_lossy(&out.stderr).contains("contexts differ"),
+                "Failed before context comparison"
+            );
+        }
+    }
+}
+
 #[test]
 fn native_resolution_selects_exact_bytes_and_rejects_incomplete_or_mismatched_evidence() {
     let dir = tempfile::tempdir().unwrap();

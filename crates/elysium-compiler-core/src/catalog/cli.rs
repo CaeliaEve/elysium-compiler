@@ -33,6 +33,13 @@ enum Command {
         sha256: String,
         #[arg(long)]
         environment: String,
+        /// Also verify direct PNG pixels against a native Source from this session.
+        #[arg(long, requires_all = ["capture", "capture_sha256"])]
+        source: Option<PathBuf>,
+        #[arg(long, requires_all = ["source", "capture_sha256"])]
+        capture: Option<PathBuf>,
+        #[arg(long, requires_all = ["source", "capture"])]
+        capture_sha256: Option<String>,
         #[arg(long)]
         output: PathBuf,
     },
@@ -76,8 +83,31 @@ pub fn run() -> Result<()> {
             report,
             sha256,
             environment,
+            source,
+            capture,
+            capture_sha256,
             output,
-        } => crate::resources::resolve(&resources, &report, &sha256, &environment, &output)?,
+        } => {
+            let capture =
+                source
+                    .zip(capture)
+                    .zip(capture_sha256)
+                    .map(
+                        |((source, capture), sha256)| crate::resources::CaptureInput {
+                            source,
+                            capture,
+                            sha256,
+                        },
+                    );
+            crate::resources::resolve(
+                &resources,
+                &report,
+                &sha256,
+                &environment,
+                &output,
+                capture.as_ref(),
+            )?
+        }
         Command::Resources { input, output } => crate::resources::import(&input, &output)?,
         Command::Inspect { input } => {
             let source = Source::open(&input)?;
