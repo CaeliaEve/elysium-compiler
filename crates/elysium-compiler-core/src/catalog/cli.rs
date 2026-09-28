@@ -23,6 +23,19 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Match pinned native resource observations to verified local bytes.
+    Resolve {
+        #[arg(long)]
+        resources: PathBuf,
+        #[arg(long)]
+        report: PathBuf,
+        #[arg(long)]
+        sha256: String,
+        #[arg(long)]
+        environment: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Import pinned static archives, preserving all resource candidates.
     Resources {
         #[arg(long)]
@@ -58,6 +71,13 @@ enum Command {
 
 pub fn run() -> Result<()> {
     let value = match Cli::parse().command {
+        Command::Resolve {
+            resources,
+            report,
+            sha256,
+            environment,
+            output,
+        } => crate::resources::resolve(&resources, &report, &sha256, &environment, &output)?,
         Command::Resources { input, output } => crate::resources::import(&input, &output)?,
         Command::Inspect { input } => {
             let source = Source::open(&input)?;

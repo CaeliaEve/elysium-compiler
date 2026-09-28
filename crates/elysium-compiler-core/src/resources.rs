@@ -1,6 +1,8 @@
 //! Offline resource candidates. This inventory is neither a Source nor proof of
 //! game resource precedence; native resolution is required before binding assets.
+mod binding;
 mod directory;
+pub use binding::resolve;
 
 use crate::catalog::store::destination;
 use crate::source::{is_digest, source_path};
@@ -42,7 +44,8 @@ struct Archive {
     sha256: String,
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct Entry {
     archive: String,
     path: String,
@@ -94,23 +97,7 @@ pub fn import(input: &Path, output: &Path) -> Result<Value> {
     }
     manifest.archives.sort_by(|a, b| a.key.cmp(&b.key));
 
-    let output = destination(output)?;
-    ensure!(!output.exists(), "resource output already exists");
-    let parent = output.parent().context("resource output has no parent")?;
-    fs::create_dir_all(parent)?;
-    // Serialize publication by cooperating importers without changing existing results.
-    let lock_path = destination(&parent.join(".resources.lock"))?;
-    let lock = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(lock_path)?;
-    lock.try_lock_exclusive()
-        .context("another resource import is using this directory")?;
-    ensure!(!output.exists(), "resource output already exists");
-    let stage = TempDir::new_in(parent)?;
-    fs::create_dir(stage.path().join("blobs"))?;
+    let (output, stage, _lock) = staging(output)?;
     let mut entries = Vec::new();
     let mut output_bytes = 0_u64;
     let base = input.parent().context("resource input has no parent")?;
@@ -119,21 +106,51 @@ pub fn import(input: &Path, output: &Path) -> Result<Value> {
             .with_context(|| format!("archive {}", archive.key))?;
     }
     entries.sort_by(|a, b| (&a.path, &a.archive).cmp(&(&b.path, &b.archive)));
-    let mut result = json!({"format":FORMAT,"revision":REVISION,"resolution":"unverified",
+    let result = json!({"format":FORMAT,"revision":REVISION,"resolution":"unverified",
         "archives":manifest.archives,"entries":entries});
-    let id = format!("{:x}", Sha256::digest(serde_json::to_vec(&result)?));
-    result["id"] = json!(id);
-    let mut file = File::create(stage.path().join("manifest.json"))?;
-    file.write_all(&serde_json::to_vec_pretty(&result)?)?;
-    file.write_all(b"\n")?;
-    file.sync_all()?;
-    drop(file);
-    ensure!(!output.exists(), "resource output already exists");
-    fs::rename(stage.path(), &output).context("publish resource inventory")?;
+    let id = publish(&output, stage, result)?;
     Ok(
         json!({"id":id,"output":output,"archives":manifest.archives.len(),
         "entries":entries.len(),"resourceBytes":output_bytes,"resolution":"unverified"}),
     )
+}
+
+fn staging(output: &Path) -> Result<(PathBuf, TempDir, File)> {
+    let output = destination(output)?;
+    ensure!(!output.exists(), "resource output already exists");
+    let parent = output.parent().context("resource output has no parent")?;
+    fs::create_dir_all(parent)?;
+    let lock_path = destination(&parent.join(".resources.lock"))?;
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(lock_path)?;
+    lock.try_lock_exclusive()
+        .context("another resource operation is using this directory")?;
+    ensure!(!output.exists(), "resource output already exists");
+    let stage = TempDir::new_in(parent)?;
+    fs::create_dir(stage.path().join("blobs"))?;
+    Ok((output, stage, lock))
+}
+
+fn publish(output: &Path, stage: TempDir, mut manifest: Value) -> Result<String> {
+    let id = format!("{:x}", Sha256::digest(serde_json::to_vec(&manifest)?));
+    manifest["id"] = json!(id);
+    let bytes = serde_json::to_vec_pretty(&manifest)?;
+    ensure!(
+        bytes.len() < 128 * 1024 * 1024,
+        "resource manifest exceeds 128 MiB"
+    );
+    let mut file = File::create(stage.path().join("manifest.json"))?;
+    file.write_all(&bytes)?;
+    file.write_all(b"\n")?;
+    file.sync_all()?;
+    drop(file);
+    ensure!(!output.exists(), "resource output already exists");
+    fs::rename(stage.path(), output).context("publish resources")?;
+    Ok(id)
 }
 
 fn capture(

@@ -62,6 +62,40 @@ resource; 500,000 candidates and 8 GiB total candidate bytes before deduplicatio
 ZIP64, split or prefixed ZIPs, duplicate central names, invalid paths, selected
 links, encryption, CRC errors and size/digest mismatches fail the import. These
 limits deliberately reject unsupported input instead of silently omitting it.
+The serialized output manifest is limited to 128 MiB.
+
+## Native byte resolution
+
+```bash
+elysium-compiler resolve --resources <inventory-directory> --report <native-check.json> --sha256 <report-sha256> --environment <environment-id> --output <new-bindings-directory>
+```
+
+NESQL 0.15.1 adds `start_check` domain `resources` for an explicit selection of
+1–128 namespaced texture or language paths. It hashes streams returned by the
+game resource manager and reads successful targets again before completing the
+report. The ordinary environment fingerprint is checked before and after.
+These diagnostics do not export Source records or verify rendered item pixels.
+
+`resolve` requires the original complete report pinned by SHA256 and an expected
+environment digest (SHA256 of canonical `report.environment`). Every selected
+resource must have exactly one passed observation; stopped, failed, missing or
+duplicate observations are refused. The report bytes and manifest identity are
+verified before matching. A matching archive must appear by digest in the loaded
+mod set or the enabled resource-pack files of that environment. Directory packs
+and generated resources without an archive candidate remain unsupported by this
+offline step; they cannot silently become static assets.
+
+The result is a small `elysium.bindings` staging inventory with copied verified
+blobs. It records world, environment, input inventory and report digests. Each
+entry carries the native resource name, exact byte count and digest, and all
+loaded origins with the same matching bytes. Multiple identical candidates do
+not reveal which pack supplied the stream, so no arbitrary winner is claimed.
+Matching is indexed by resource path. The original inventory is never modified.
+
+Bindings are an intermediate resource artifact, not a second recipe protocol and
+not a Source/Catalog. They are not accepted by `inspect` or `compile`. Connecting
+them to capture fragments and proving render equivalence is subsequent work.
+The existing consumer schema and frontend remain unchanged.
 
 The initial actual-instance sample (2026-09-28) used five pinned archives:
 Minecraft, IC2, GregTech, Thaumcraft and Forestry. It produced 21,375 candidates

@@ -208,3 +208,137 @@ fn rejects_ambiguous_corrupt_and_oversized_archives() {
         );
     }
 }
+
+fn resolve(root: &Path, report: &Value, expected: &str, output: &str) -> Output {
+    let bytes = serde_json::to_vec(report).unwrap();
+    fs::write(root.join("check.json"), &bytes).unwrap();
+    Command::new(env!("CARGO_BIN_EXE_elysium-compiler"))
+        .args(["resolve", "--resources"])
+        .arg(root.join("inventory"))
+        .arg("--report")
+        .arg(root.join("check.json"))
+        .args([
+            "--sha256",
+            &hash(&bytes),
+            "--environment",
+            expected,
+            "--output",
+        ])
+        .arg(root.join(output))
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn native_resolution_selects_exact_bytes_and_rejects_incomplete_or_mismatched_evidence() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let base = archive(root, "base.jar", &[("assets/demo/textures/a.png", b"base")]);
+    let pack = archive(
+        root,
+        "pack.zip",
+        &[("assets/demo/textures/a.png", b"override")],
+    );
+    assert!(run(root, json!([base, pack]), "inventory").status.success());
+    let env = json!({"mods":[{"sha256":base["sha256"]}],"resources":["pack.zip"],"inputs":[{"path":"resourcepacks/pack.zip","sha256":pack["sha256"]}]});
+    let expected = hash(&serde_json::to_vec(&env).unwrap());
+    let report = json!({"format":"nesql.check","job":"fixture","status":"complete","environment":env,
+      "request":{"world":"test-copy","check":{"domain":"resources","resources":["demo:textures/a.png"]}},
+      "rows":[{"resource":"demo:textures/a.png","status":"passed","path":"assets/demo/textures/a.png","bytes":"8","sha256":hash(b"override")}]});
+    let output = resolve(root, &report, &expected, "bound");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let binding: Value =
+        serde_json::from_slice(&fs::read(root.join("bound/manifest.json")).unwrap()).unwrap();
+    assert_eq!(binding["format"], "elysium.bindings");
+    assert_eq!(binding["environment"], expected);
+    assert_eq!(binding["entries"][0]["origins"], json!(["pack.zip"]));
+    assert_eq!(
+        fs::read(
+            root.join("bound")
+                .join(binding["entries"][0]["blob"].as_str().unwrap())
+        )
+        .unwrap(),
+        b"override"
+    );
+    assert!(!resolve(root, &report, &expected, "bound").status.success());
+    assert!(!resolve(root, &report, &expected, "inventory/nested")
+        .status
+        .success());
+    for mode in [
+        "failed",
+        "stopped",
+        "domain",
+        "missing",
+        "extra",
+        "path",
+        "bytes",
+        "digest",
+        "environment",
+        "unloaded",
+        "disabled",
+        "inventory",
+        "blob",
+    ] {
+        let mut bad = report.clone();
+        let mut fingerprint = expected.clone();
+        match mode {
+            "failed" => bad["rows"][0]["status"] = json!("failed"),
+            "stopped" => bad["status"] = json!("stopped"),
+            "domain" => bad["request"]["check"]["domain"] = json!("recipes"),
+            "missing" => bad["rows"] = json!([]),
+            "extra" => bad["rows"]
+                .as_array_mut()
+                .unwrap()
+                .push(report["rows"][0].clone()),
+            "path" => bad["rows"][0]["path"] = json!("assets/demo/textures/other.png"),
+            "bytes" => bad["rows"][0]["bytes"] = json!("08"),
+            "digest" => bad["rows"][0]["sha256"] = json!(hash(b"absent")),
+            "environment" => fingerprint = "0".repeat(64),
+            "unloaded" => {
+                bad["environment"]["inputs"] = json!([]);
+                fingerprint = hash(&serde_json::to_vec(&bad["environment"]).unwrap());
+            }
+            "disabled" => {
+                bad["environment"]["resources"] = json!([]);
+                fingerprint = hash(&serde_json::to_vec(&bad["environment"]).unwrap());
+            }
+            "inventory" => {
+                fs::write(root.join("inventory/manifest.json"), b"{}").unwrap();
+            }
+            "blob" => {
+                fs::write(
+                    root.join("inventory/blobs").join(hash(b"override")),
+                    b"changed",
+                )
+                .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let original = if mode == "inventory" {
+            None
+        } else {
+            Some(fs::read(root.join("inventory/manifest.json")).unwrap())
+        };
+        let out = resolve(root, &bad, &fingerprint, "bad-result");
+        assert!(!out.status.success(), "accepted {mode}");
+        assert!(!root.join("bad-result").exists());
+        // Rebuild the intentionally corrupted manifest for the subsequent blob case.
+        if mode == "inventory" {
+            assert!(run(root, json!([base, pack]), "fresh").status.success());
+            fs::copy(
+                root.join("fresh/manifest.json"),
+                root.join("inventory/manifest.json"),
+            )
+            .unwrap();
+        } else {
+            assert_eq!(
+                original.unwrap(),
+                fs::read(root.join("inventory/manifest.json")).unwrap()
+            );
+        }
+    }
+}
