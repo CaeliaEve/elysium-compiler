@@ -43,6 +43,7 @@ impl Provenance {
             .context("missing runtime settings")?;
         settings.remove("profile");
         settings.remove("handlers");
+        settings.remove("scope");
         ensure!(
             proof.runtime == hash(&serde_json::to_vec(&runtime)?),
             "capture runtime mismatch"
@@ -73,6 +74,22 @@ impl Provenance {
             environment["settings"]["handlers"] == handlers,
             "capture handlers differ from environment"
         );
+        ensure!(
+            environment["settings"]["scope"] == request["scope"],
+            "capture scope differs from environment"
+        );
+        if !request["scope"].is_null() {
+            ensure!(
+                request["scope"] == "recipes"
+                    && request["check"].is_null()
+                    && request["world"]
+                        .as_str()
+                        .is_some_and(|value| !value.is_empty())
+                    && !handlers.is_empty()
+                    && matches!(request["profile"].as_str(), Some("full" | "data")),
+                "invalid recipe capture scope"
+            );
+        }
         Ok(proof)
     }
 }

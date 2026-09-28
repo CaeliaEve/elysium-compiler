@@ -1,5 +1,11 @@
 # Capture recovery
 
+Compiler 0.14.3 also accepts NESQL 0.15.4's explicit `scope: recipes` exports.
+That scope must match the environment, name explicit handlers and a world, and
+remain a `selection` Source. Runtime comparison excludes this request field;
+the complete environment and selection hashes still include it. This supports
+bounded live pipeline validation without claiming full registry coverage.
+
 NESQL 0.15.3 writes closed Source files to `nesql/captures/<job-id>` while the
 production export is running. Compiler 0.14.2 can assemble a completed archive
 without loading Minecraft. Source and Catalog remain revision 14; this transport

@@ -35,6 +35,10 @@ impl SourceProof {
         let job: Value = serde_json::from_slice(&bytes)?;
         let source = Source::open(&input.source)?;
         ensure!(
+            job["request"]["scope"].is_null() || source.manifest.scope.mode == "selection",
+            "scoped capture cannot claim complete Source coverage"
+        );
+        ensure!(
             !output.starts_with(source.root()),
             "bindings output must be outside the Source"
         );

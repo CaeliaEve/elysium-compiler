@@ -77,6 +77,10 @@ pub fn assemble(input: &Path, expected: &str, output: &Path) -> Result<Value> {
     );
     capture.source.validate()?;
     ensure!(
+        capture.request["scope"].is_null() || capture.source.scope.mode == "selection",
+        "scoped capture cannot claim complete Source coverage"
+    );
+    ensure!(
         capture.source.producer.name == "nesql" && capture.request["check"].is_null(),
         "capture is not a native export"
     );

@@ -14,6 +14,10 @@ fn seal(value: &mut Value) {
     value["id"] = json!(hash(&serde_json::to_vec(value).unwrap()));
 }
 fn capture(root: &Path) -> Value {
+    capture_scope(root, false)
+}
+
+fn capture_scope(root: &Path, scoped: bool) -> Value {
     let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../contracts/fixtures/source");
     let mut source: Value =
         serde_json::from_slice(&fs::read(fixture.join("manifest.json")).unwrap()).unwrap();
@@ -21,7 +25,14 @@ fn capture(root: &Path) -> Value {
         serde_json::from_slice(&fs::read(fixture.join("environment.json")).unwrap()).unwrap();
     env["settings"]["profile"] = json!("full");
     env["settings"]["handlers"] = json!("");
-    let request = json!({"key":"fixture","name":"fixture","profile":"full","handlers":[],"probes":env["probes"],"world":"test-copy"});
+    let mut request = json!({"key":"fixture","name":"fixture","profile":"full","handlers":[],"probes":env["probes"],"world":"test-copy"});
+    if scoped {
+        env["settings"]["scope"] = json!("recipes");
+        env["settings"]["handlers"] = json!(format!("category_{}", "a".repeat(64)));
+        request["scope"] = json!("recipes");
+        request["handlers"] = json!([env["settings"]["handlers"]]);
+        source["scope"]["mode"] = json!("selection");
+    }
     let mut selection = request.clone();
     selection.as_object_mut().unwrap().remove("key");
     selection.as_object_mut().unwrap().remove("name");
@@ -35,6 +46,7 @@ fn capture(root: &Path) -> Value {
         .as_object_mut()
         .unwrap()
         .remove("handlers");
+    runtime["settings"].as_object_mut().unwrap().remove("scope");
     let env_bytes = serde_json::to_vec(&env).unwrap();
     let environment = hash(&env_bytes);
     source["environment"] = json!(environment);
@@ -72,6 +84,30 @@ fn run(root: &Path, manifest: &Value, output: &Path) -> Output {
         .arg(output)
         .output()
         .unwrap()
+}
+
+#[test]
+fn scoped_capture_preserves_selection_and_cannot_claim_complete_source() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("capture");
+    let mut manifest = capture_scope(&root, true);
+    let result = run(&root, &manifest, &dir.path().join("scoped"));
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(
+        serde_json::from_slice::<Value>(&result.stdout).unwrap()["scope"]["mode"],
+        "selection"
+    );
+    manifest["source"]["scope"]["mode"] = json!("complete");
+    seal(&mut manifest["source"]);
+    seal(&mut manifest);
+    assert!(!run(&root, &manifest, &dir.path().join("false-complete"))
+        .status
+        .success());
+    assert!(!dir.path().join("false-complete").exists());
 }
 
 #[test]
