@@ -20,3 +20,4 @@ image.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 fs2.workspace = true
+zip.workspace = true

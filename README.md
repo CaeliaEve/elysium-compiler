@@ -9,9 +9,15 @@ elysium-compiler inspect --input <source-snapshot>
 elysium-compiler compile --input <source-snapshot> --output <catalog-root> [--report <receipt.json>]
 elysium-compiler check --input <catalog-root>
 elysium-compiler schema --output <schema.json>
+elysium-compiler resources --input <archive-manifest.json> --output <new-resource-directory>
 ```
 
 All commands return one JSON result on stdout and diagnostics on stderr. A receipt must be outside both source and catalog directories. Catalog output must be outside source; output paths containing `..` or symbolic links/junctions are rejected before creating directories. Failed validation leaves the current catalog unchanged. There is no old-format reader or migration path.
+
+The offline `resources` command imports pinned local JAR/ZIP resource candidates.
+It preserves exact bytes and competing paths without guessing game resource
+precedence. Its inventory is separate from a validated Source; see
+[local resource inputs and limits](docs/resources.md).
 
 `inspect` returns `id`, `environment`, `scope` and a `counts` map covering every verified source collection. The old handful of top-level domain counts has been removed; consumers should read `counts`.
 

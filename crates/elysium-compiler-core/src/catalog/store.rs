@@ -470,7 +470,7 @@ pub fn atomic_json(path: &Path, value: &impl Serialize) -> Result<()> {
 }
 
 /// Validate existing ancestors before creating any output, including Windows junctions.
-pub(super) fn destination(path: &Path) -> Result<PathBuf> {
+pub(crate) fn destination(path: &Path) -> Result<PathBuf> {
     ensure!(
         !path
             .components()

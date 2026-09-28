@@ -1,7 +1,7 @@
 //! Deterministic, validated projections encoded with standard MessagePack maps.
 mod atlas;
 pub mod cli;
-mod store;
+pub(crate) mod store;
 
 use crate::domain::*;
 use crate::source::{Source, SOURCE_REVISION};

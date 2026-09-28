@@ -23,6 +23,13 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Import pinned static archives, preserving all resource candidates.
+    Resources {
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Check all source records, identities, references and pixels.
     Inspect {
         #[arg(long)]
@@ -51,6 +58,7 @@ enum Command {
 
 pub fn run() -> Result<()> {
     let value = match Cli::parse().command {
+        Command::Resources { input, output } => crate::resources::import(&input, &output)?,
         Command::Inspect { input } => {
             let source = Source::open(&input)?;
             Domain::load(&source)?;
