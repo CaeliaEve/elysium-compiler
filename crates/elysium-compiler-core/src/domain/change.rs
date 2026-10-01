@@ -175,6 +175,10 @@ pub(super) fn validate(
                 *config != *metadata,
                 "filter configuration and metadata inputs must differ"
             );
+            ensure!(
+                change.input == *metadata,
+                "filter samples must bind to the metadata input"
+            );
             let config_input = recipe
                 .inputs
                 .iter()
@@ -190,6 +194,18 @@ pub(super) fn validate(
                 "filter inputs have no choices"
             );
             ensure!(base_item.id == base.id, "invalid filter base item");
+            let mut expected = None;
+            for choice in &config_input.choices {
+                let config_item = items
+                    .get(choice.id.as_str())
+                    .context("missing filter config item")?;
+                let tags = filter_tags(base_item, config_item)?;
+                ensure!(
+                    expected.as_ref().is_none_or(|value| value == &tags),
+                    "filter configuration alternatives require separate output branches"
+                );
+                expected = Some(tags);
+            }
         }
         Edit::Append { path, value } => {
             ensure!(
@@ -315,10 +331,7 @@ fn apply(
             let config_item = items
                 .get(config_choice.id.as_str())
                 .context("missing filter config item")?;
-            let mut tags = compound(&template.nbt)?.cloned().unwrap_or_default();
-            if let Some(source) = compound(&config_item.nbt)? {
-                tags.extend(source.clone());
-            }
+            let tags = filter_tags(template, config_item)?;
             (
                 &template.registry,
                 input.meta,
@@ -482,6 +495,14 @@ fn number(tag: Option<&Nbt>) -> Result<i32> {
     })
 }
 
+fn filter_tags(template: &Item, config: &Item) -> Result<BTreeMap<String, Nbt>> {
+    let mut tags = compound(&template.nbt)?.cloned().unwrap_or_default();
+    if let Some(source) = compound(&config.nbt)? {
+        tags.extend(source.clone());
+    }
+    Ok(tags)
+}
+
 fn compound(nbt: &Option<Nbt>) -> Result<Option<&BTreeMap<String, Nbt>>> {
     match nbt {
         None => Ok(None),
@@ -576,5 +597,75 @@ mod tests {
             .unwrap(),
             "only metadata comes from the later filter; its item type is not the product"
         );
+    }
+
+    #[test]
+    fn filter_rejects_samples_bound_to_configuration_instead_of_metadata() {
+        let base = item("automagy:product", 0);
+        let config = item("automagy:paper", 1);
+        let metadata = item("automagy:paper", 2);
+        let mut product = item("automagy:product", 1);
+        product.nbt = Some(Nbt::Compound {
+            value: BTreeMap::new(),
+        });
+        product.id = item_id(&product.registry, product.meta, product.nbt.as_ref()).unwrap();
+        let recipe: Recipe = serde_json::from_value(json!({
+            "id": "recipe_test", "source": {"owner": "automagy", "handler": "test", "key": "test"},
+            "category": "category_test", "inputs": [
+                {"slot": 0, "kind": "item", "choices": [{"id": config.id, "amount": "1",
+                    "consume": {"kind": "consume"}, "returns": [], "rule": {"kind": "exact"}}]},
+                {"slot": 1, "kind": "item", "choices": [{"id": metadata.id, "amount": "1",
+                    "consume": {"kind": "consume"}, "returns": [], "rule": {"kind": "exact"}}]}
+            ], "outputs": [{"slot": 0, "kind": "item", "id": product.id, "amount": "3", "role": "result",
+                "chance": {"numerator": "1", "denominator": "1"},
+                "change": {"input": 0, "action": {"kind": "filter",
+                    "base": {"id": base.id, "amount": "3"}, "config": 0, "metadata": 1},
+                    "samples": [{"id": product.id, "amount": "3"}]}
+            }], "properties": {}, "order": 0
+        })).unwrap();
+        let items = BTreeMap::from([
+            (base.id.as_str(), &base),
+            (config.id.as_str(), &config),
+            (metadata.id.as_str(), &metadata),
+            (product.id.as_str(), &product),
+        ]);
+        assert!(
+            validate(&recipe, &recipe.outputs[0], &items).is_err(),
+            "matching a fabricated sample must not bypass the declared metadata input"
+        );
+        let mut correct_product = product.clone();
+        correct_product.meta = 2;
+        correct_product.id =
+            item_id(&correct_product.registry, 2, correct_product.nbt.as_ref()).unwrap();
+        let mut items = items;
+        items.insert(correct_product.id.as_str(), &correct_product);
+        let mut valid = recipe.clone();
+        valid.outputs[0].id = correct_product.id.clone();
+        let change = valid.outputs[0].change.as_mut().unwrap();
+        change.input = 1;
+        change.samples[0].id = correct_product.id.clone();
+        validate(&valid, &valid.outputs[0], &items).unwrap();
+
+        let mut other_config = config.clone();
+        other_config.nbt = Some(Nbt::Compound {
+            value: BTreeMap::from([(
+                "FilterOptions".into(),
+                Nbt::Compound {
+                    value: BTreeMap::from([("ignoreNBT".into(), Nbt::Byte { value: "1".into() })]),
+                },
+            )]),
+        });
+        other_config.id = item_id(
+            &other_config.registry,
+            other_config.meta,
+            other_config.nbt.as_ref(),
+        )
+        .unwrap();
+        items.insert(other_config.id.as_str(), &other_config);
+        let mut alternative = valid.inputs[0].choices[0].clone();
+        alternative.id = other_config.id.clone();
+        valid.inputs[0].choices.push(alternative);
+        assert!(validate(&valid, &valid.outputs[0], &items).is_err(),
+            "a later configuration candidate with a different native result requires its own branch");
     }
 }
