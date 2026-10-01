@@ -10,6 +10,60 @@ fn fixture() -> PathBuf {
 }
 
 #[test]
+fn recipe_knowledge_keys_do_not_require_research_definitions() {
+    let source = Source::open(&fixture()).unwrap();
+    let mut domain = Domain::load(&source).unwrap();
+    let recipe = domain
+        .recipes
+        .iter_mut()
+        .find(|r| r.magic.is_some())
+        .unwrap();
+    recipe
+        .magic
+        .as_mut()
+        .unwrap()
+        .research
+        .push(elysium_compiler_core::domain::ResearchLink {
+            key: "Portable Node".into(),
+            id: None,
+            completed: Some(false),
+        });
+    recipe.id = recipe_id(recipe).unwrap();
+    domain.validate(&source).unwrap();
+    let mut invalid = domain.clone();
+    let recipe = invalid
+        .recipes
+        .iter_mut()
+        .find(|r| r.magic.is_some())
+        .unwrap();
+    recipe
+        .magic
+        .as_mut()
+        .unwrap()
+        .research
+        .last_mut()
+        .unwrap()
+        .id = Some("invented_research".into());
+    recipe.id = recipe_id(recipe).unwrap();
+    assert!(
+        invalid.validate(&source).is_err(),
+        "unregistered keys cannot invent a page reference"
+    );
+    let mut invalid = domain.clone();
+    invalid.research[0]
+        .parents
+        .push(elysium_compiler_core::domain::ResearchLink {
+            key: "Portable Node".into(),
+            id: None,
+            completed: Some(false),
+        });
+    assert!(
+        invalid.validate(&source).is_err(),
+        "recipe knowledge must not relax research-tree integrity"
+    );
+}
+
+#[test]
 fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let directory = tempfile::tempdir().unwrap();
     let first = compile(&fixture(), directory.path()).unwrap();

@@ -1122,7 +1122,7 @@ export interface Payment {
 export interface ResearchLink {
   completed?: boolean | null;
   /**
-   * Null is permitted only for an unregistered @ knowledge flag, as defined by Thaumcraft.
+   * Null preserves an unregistered recipe knowledge key. Research-tree links require a definition except for Thaumcraft's @ knowledge flags.
    */
   id?: string | null;
   key: string;

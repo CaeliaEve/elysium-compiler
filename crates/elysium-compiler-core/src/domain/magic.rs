@@ -31,7 +31,8 @@ pub struct Aspect {
 #[serde(deny_unknown_fields)]
 pub struct ResearchLink {
     pub key: String,
-    /// Null is permitted only for an unregistered @ knowledge flag, as defined by Thaumcraft.
+    /// Null preserves an unregistered recipe knowledge key. Research-tree links
+    /// require a definition except for Thaumcraft's @ knowledge flags.
     pub id: Option<String>,
     pub completed: Option<bool>,
 }
@@ -216,7 +217,7 @@ pub(super) fn validate(
             amounts(rows)?;
         }
     }
-    let links = |rows: &[ResearchLink]| -> Result<()> {
+    let links = |rows: &[ResearchLink], recipe_prerequisite: bool| -> Result<()> {
         ensure!(rows.len() <= 512, "research links exceed their budget");
         for row in rows {
             ensure!(
@@ -235,7 +236,7 @@ pub(super) fn validate(
                     );
                 }
                 None => ensure!(
-                    row.id.is_none() && row.key.starts_with('@'),
+                    row.id.is_none() && (recipe_prerequisite || row.key.starts_with('@')),
                     "missing research definition: {}",
                     row.key
                 ),
@@ -246,7 +247,7 @@ pub(super) fn validate(
     for recipe in &domain.recipes {
         if let Some(magic) = &recipe.magic {
             amounts(&magic.aspects)?;
-            links(&magic.research)?;
+            links(&magic.research, true)?;
             if let Some(payment) = &magic.payment {
                 ensure!(
                     magic.kind == MagicKind::Arcane
@@ -377,9 +378,9 @@ pub(super) fn validate(
             row.flags.windows(2).all(|pair| pair[0] < pair[1]),
             "research flags must be sorted and unique"
         );
-        links(&row.parents)?;
-        links(&row.hidden_parents)?;
-        links(&row.siblings)?;
+        links(&row.parents, false)?;
+        links(&row.hidden_parents, false)?;
+        links(&row.siblings, false)?;
         amounts(&row.aspects)?;
         ensure!(
             row.item_triggers.len() <= 4096

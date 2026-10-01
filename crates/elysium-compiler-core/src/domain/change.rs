@@ -320,9 +320,9 @@ fn apply(
                 tags.extend(source.clone());
             }
             (
-                &input.registry,
+                &template.registry,
                 input.meta,
-                amount,
+                base.amount.as_str(),
                 Some(Nbt::Compound { value: tags }),
             )
         }
@@ -520,5 +520,61 @@ fn merge(
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn item(registry: &str, meta: i32) -> Item {
+        serde_json::from_value(json!({
+            "id": item_id(registry, meta, None).unwrap(), "registry": registry,
+            "meta": meta, "name": "test", "tooltip": [], "stackLimit": 64,
+            "durability": 0, "tools": {}, "armor": false, "tags": []
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn filter_keeps_recipe_product_and_count() {
+        let base = item("automagy:product", 0);
+        let config = item("automagy:paper", 1);
+        let metadata = item("automagy:paper", 2);
+        let recipe: Recipe = serde_json::from_value(json!({
+            "id": "recipe_test", "source": {"owner": "automagy", "handler": "test", "key": "test"},
+            "category": "category_test", "inputs": [{
+                "slot": 0, "kind": "item", "choices": [{"id": config.id, "amount": "1",
+                "consume": {"kind": "consume"}, "returns": [], "rule": {"kind": "exact"}}]
+            }], "outputs": [], "properties": {}, "order": 0
+        }))
+        .unwrap();
+        let items = BTreeMap::from([(base.id.as_str(), &base), (config.id.as_str(), &config)]);
+        let action = Edit::Filter {
+            base: Stack {
+                id: base.id.clone(),
+                amount: "3".into(),
+            },
+            config: 0,
+            metadata: 1,
+        };
+        let result = apply(&recipe, &action, &metadata, "1", &items).unwrap();
+        assert_eq!(
+            result.amount, "3",
+            "filter must retain the recipe output count"
+        );
+        assert_eq!(
+            result.id,
+            item_id(
+                "automagy:product",
+                2,
+                Some(&Nbt::Compound {
+                    value: BTreeMap::new()
+                })
+            )
+            .unwrap(),
+            "only metadata comes from the later filter; its item type is not the product"
+        );
     }
 }
