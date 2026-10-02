@@ -140,6 +140,9 @@ export type Consumption =
       kind: "keep";
     }
   | {
+      kind: "upto";
+    }
+  | {
       kind: "stack";
     }
   | {
@@ -317,6 +320,12 @@ export type OutputRole = "result" | "return";
  * via the `definition` "Process".
  */
 export type Process =
+  | {
+      energy: number;
+      extra: VatConsumption[];
+      kind: "vat";
+      zeroOutput?: string | null;
+    }
   | {
       cost: number;
       itemsPerLevel: number;
@@ -598,7 +607,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 21;
+  revision: 22;
   scope: string;
   source: string;
 }
@@ -1273,6 +1282,15 @@ export interface Stack {
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "VatConsumption".
+ */
+export interface VatConsumption {
+  amount: number;
+  id: string;
+  rule: Match;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Property".
  */
 export interface Property {
@@ -1600,7 +1618,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 21;
+  revision: 22;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1612,7 +1630,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 22;
+  revision: 23;
   scope: Scope;
 }
 /**

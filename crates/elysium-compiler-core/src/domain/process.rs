@@ -8,6 +8,19 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 mod tests {
     #[test]
+    fn vat_retains_native_understock_and_zero_yield() {
+        let value = serde_json::json!({"kind":"vat","energy":-7,"extra":[{"id":"item_example","rule":{"kind":"wildcard","meta":false,"nbt":true},"amount":0}],"zeroOutput":"fluid_example"});
+        let process: super::Process = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(process).unwrap(), value);
+        let consume: super::Consumption =
+            serde_json::from_value(serde_json::json!({"kind":"upto"})).unwrap();
+        assert_eq!(
+            serde_json::to_value(consume).unwrap(),
+            serde_json::json!({"kind":"upto"})
+        );
+    }
+
+    #[test]
     fn enchanter_preserves_level_gate_and_signed_xp() {
         let value = serde_json::json!({"kind":"enchanter","level":2,"maxLevel":5,"itemsPerLevel":3,"cost":-7});
         let process: super::Process = serde_json::from_value(value.clone()).unwrap();
@@ -75,6 +88,13 @@ pub enum InscriberMode {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// EnderIO precomputed fluid pair and ordered item consumption; see docs/vat.md.
+    Vat {
+        energy: i32,
+        extra: Vec<VatConsumption>,
+        #[serde(rename = "zeroOutput")]
+        zero_output: Option<String>,
+    },
     /// EnderIO manual enchanter. The offered material count determines the level;
     /// cost is signed native XP levels, not energy. See docs/enchanter.md.
     Enchanter {
@@ -119,6 +139,14 @@ pub enum Process {
         #[serde(rename = "compressionTier")]
         compression_tier: u8,
     },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VatConsumption {
+    pub id: String,
+    pub rule: Match,
+    pub amount: i32,
 }
 
 impl Process {
@@ -187,6 +215,15 @@ pub(super) fn validate(
     aspects: &[super::Aspect],
 ) -> Result<()> {
     ensure!(
+        matches!(recipe.process, Some(Process::Vat { .. }))
+            || !recipe
+                .inputs
+                .iter()
+                .flat_map(|i| &i.choices)
+                .any(|c| matches!(c.consume, Consumption::Upto)),
+        "up-to consumption requires a Vat process"
+    );
+    ensure!(
         !recipe
             .inputs
             .iter()
@@ -206,6 +243,12 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    if let Process::Vat {
+        extra, zero_output, ..
+    } = process
+    {
+        return validate_vat(recipe, extra, zero_output.as_deref(), fluids, items);
+    }
     if let Process::Enchanter {
         level,
         items_per_level,
@@ -353,6 +396,119 @@ pub(super) fn validate(
         failures == 1 && successes > 0,
         "harmony requires normal outputs and exactly one failure output"
     );
+    Ok(())
+}
+
+fn validate_vat(
+    recipe: &Recipe,
+    extra: &[VatConsumption],
+    zero_output: Option<&str>,
+    fluids: &BTreeMap<&str, &Fluid>,
+    items: &BTreeMap<&str, &super::Item>,
+) -> Result<()> {
+    ensure!(
+        recipe.duration.is_none()
+            && recipe.energy.is_none()
+            && recipe.grid.is_none()
+            && recipe.magic.is_none()
+            && (2..=3).contains(&recipe.inputs.len()),
+        "invalid Vat process shape"
+    );
+    let count = recipe.inputs.len() - 1;
+    for slot in 0..count {
+        let input = recipe
+            .inputs
+            .iter()
+            .find(|i| i.kind == Kind::Item && i.slot == slot as u32)
+            .context("missing Vat reagent slot")?;
+        ensure!(!input.choices.is_empty(), "empty Vat reagent");
+        for c in &input.choices {
+            integer(&c.amount, 1, i64::from(i32::MAX))?;
+            ensure!(
+                c.returns.is_empty()
+                    && (matches!(c.consume, Consumption::Upto)
+                        || matches!(c.consume, Consumption::Keep) && c.amount == "1"),
+                "invalid Vat reagent consumption"
+            );
+            let base = match &c.rule {
+                Match::Except { base, exclude } => {
+                    ensure!(
+                        exclude
+                            .iter()
+                            .all(|c| matches!(c.rule, Match::Wildcard { nbt: true, .. })),
+                        "invalid Vat priority predicate"
+                    );
+                    base.as_ref()
+                }
+                other => other,
+            };
+            ensure!(
+                matches!(base, Match::Wildcard { nbt: true, .. }),
+                "invalid Vat reagent predicate"
+            );
+        }
+    }
+    let input = recipe
+        .inputs
+        .iter()
+        .find(|i| i.kind == Kind::Fluid && i.slot == 0)
+        .context("missing Vat input fluid")?;
+    ensure!(input.choices.len() == 1, "Vat requires one table fluid");
+    let c = &input.choices[0];
+    integer(&c.amount, 1, 8000)?;
+    ensure!(
+        matches!(c.rule, Match::Exact)
+            && c.returns.is_empty()
+            && (matches!(c.consume, Consumption::Consume)
+                || matches!(c.consume, Consumption::Keep) && c.amount == "1"),
+        "invalid Vat fluid consumption"
+    );
+    ensure!(
+        extra.len() <= 4096
+            && if count == 1 {
+                !extra.is_empty()
+            } else {
+                extra.is_empty()
+            },
+        "invalid Vat optional slot"
+    );
+    for c in extra {
+        let item = items
+            .get(c.id.as_str())
+            .context("missing Vat optional reagent")?;
+        ensure!(
+            matches!(c.rule, Match::Wildcard { nbt: true, .. }),
+            "invalid Vat optional predicate"
+        );
+        c.rule.validate_item(item, items, false, false)?;
+    }
+    if let Some(id) = zero_output {
+        ensure!(
+            fluids.contains_key(id) && recipe.outputs.is_empty(),
+            "invalid Vat zero output reference"
+        );
+    } else {
+        ensure!(recipe.outputs.len() == 1, "Vat requires its table output");
+        let output = &recipe.outputs[0];
+        ensure!(
+            output.kind == Kind::Fluid
+                && output.slot == 0
+                && output.quantity.is_none()
+                && output.change.is_none()
+                && matches!(output.role, OutputRole::Result)
+                && output.chance.numerator == "1"
+                && output.chance.denominator == "1",
+            "invalid Vat fluid result"
+        );
+        integer(
+            output
+                .amount
+                .as_deref()
+                .context("missing Vat output amount")?,
+            1,
+            8000,
+        )?;
+    }
     Ok(())
 }
 

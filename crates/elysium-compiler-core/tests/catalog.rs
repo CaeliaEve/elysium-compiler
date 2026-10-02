@@ -294,12 +294,12 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let catalog = Catalog::current(directory.path()).unwrap();
     catalog.verify().unwrap();
     assert_eq!(catalog.manifest.id, first.id);
-    assert_eq!(catalog.manifest.counts["recipes"], 26);
+    assert_eq!(catalog.manifest.counts["recipes"], 29);
     assert_eq!(
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
     );
-    assert_eq!(catalog.manifest.counts["browse"], 58);
+    assert_eq!(catalog.manifest.counts["browse"], 61);
     assert_eq!(catalog.manifest.counts["materials"], 2);
     assert_eq!(catalog.manifest.counts["circuits"], 1);
     assert_eq!(catalog.manifest.counts["species"], 3);
@@ -2078,6 +2078,39 @@ fn native_processes_reject_false_fixed_outputs_and_consumption() {
     let source = Source::open(&fixture()).unwrap();
     let original = Domain::load(&source).unwrap();
     original.validate(&source).unwrap();
+    for (order, path, replacement) in [
+        (0, "/process", json!(null)),
+        (0, "/process", json!({"kind":"mapScaling"})),
+        (0, "/duration", json!("100")),
+        (0, "/energy", json!("10")),
+        (0, "/inputs/0/choices/0/consume/kind", json!("consume")),
+        (0, "/inputs/0/choices/0/amount", json!("2147483648")),
+        (0, "/inputs/0/choices/0/rule/nbt", json!(false)),
+        (0, "/inputs/2/choices/0/amount", json!("8001")),
+        (0, "/inputs/2/choices/0/consume/kind", json!("upto")),
+        (0, "/outputs/0/amount", json!("0")),
+        (0, "/outputs/0/amount", json!("8001")),
+        (0, "/outputs/0/chance/denominator", json!("2")),
+        (1, "/process/extra", json!([])),
+        (1, "/process/extra/0/id", json!("item_missing")),
+        (2, "/process/zeroOutput", json!("fluid_missing")),
+        (2, "/process/zeroOutput", json!(null)),
+    ] {
+        let mut domain = original.clone();
+        let row = domain
+            .recipes
+            .iter_mut()
+            .find(|r| r.source.handler == "vat" && r.order == order)
+            .unwrap();
+        let mut value = serde_json::to_value(&*row).unwrap();
+        *value.pointer_mut(path).unwrap() = replacement;
+        *row = serde_json::from_value(value).unwrap();
+        row.id = recipe_id(row).unwrap();
+        assert!(
+            domain.validate(&source).is_err(),
+            "accepted false Vat semantics at {path}"
+        );
+    }
     for (path, replacement) in [
         ("/process/level", json!(0)),
         ("/process/level", json!(2)),

@@ -46,6 +46,15 @@ fn java_source_is_verified_without_losing_identity_or_large_quantities() {
         .unwrap();
     source
         .visit("recipes", |recipe| {
+            if recipe["process"]["kind"] == "vat" {
+                assert_eq!(recipe["inputs"][0]["choices"][0]["consume"]["kind"], "upto");
+                assert_eq!(
+                    recipe["outputs"].as_array().unwrap().len(),
+                    if recipe["order"] == 2 { 0 } else { 1 }
+                );
+                assert!(recipe["duration"].is_null() && recipe["energy"].is_null());
+                return Ok(());
+            }
             if recipe["process"]["kind"] == "enchanter" {
                 let level = recipe["process"]["level"].as_u64().unwrap();
                 assert_eq!(

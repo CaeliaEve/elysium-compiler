@@ -14,7 +14,7 @@ pub use genetics::*;
 pub use industry::*;
 pub use magic::*;
 pub use model::*;
-pub use process::{HarmonyMode, HarmonyOutcome, Process};
+pub use process::{HarmonyMode, HarmonyOutcome, Process, VatConsumption};
 pub use quantity::{quantity_bounds, Quantity};
 pub use structure::*;
 
@@ -176,6 +176,8 @@ pub struct MatchCase {
 pub enum Consumption {
     Consume,
     Keep,
+    /// Vat: presence of one item is sufficient; remove min(amount, available) at start.
+    Upto,
     /// Consume the entire offered stack. `amount` is the minimum/example count.
     Stack,
     /// Empty the selected internal fluid buffer at process start; amount is its minimum gate.
