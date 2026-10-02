@@ -15,6 +15,10 @@ pub struct Stack {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Edit {
+    /// Copy the offered map and tags, set count=1 and map_is_scaling byte=1.
+    /// This is the result before ItemMap.onCreated allocates the final world ID.
+    #[serde(rename = "mapScaling")]
+    MapScaling {},
     /// Native Runic augmentation: copy the input and increment RS.HARDEN using
     /// Minecraft getByte coercion followed by signed-byte wrapping.
     Runic,
@@ -88,6 +92,10 @@ pub(super) fn validate(
         "output change samples omit input choices"
     );
     match &change.action {
+        Edit::MapScaling {} => ensure!(
+            matches!(recipe.process, Some(super::Process::MapScaling {})),
+            "pending map output requires its world process"
+        ),
         Edit::Runic => ensure!(
             matches!(recipe.process, Some(super::Process::Runic { .. })),
             "runic output requires its dynamic process"
@@ -269,6 +277,20 @@ fn apply(
     items: &BTreeMap<&str, &Item>,
 ) -> Result<Stack> {
     let (registry, meta, count, nbt) = match action {
+        Edit::MapScaling {} => {
+            ensure!(
+                input.registry == "minecraft:filled_map",
+                "map scaling requires a filled map"
+            );
+            let mut tags = compound(&input.nbt)?.cloned().unwrap_or_default();
+            tags.insert("map_is_scaling".into(), Nbt::Byte { value: "1".into() });
+            (
+                &input.registry,
+                input.meta,
+                "1",
+                Some(Nbt::Compound { value: tags }),
+            )
+        }
         Edit::Runic => {
             let mut tags = compound(&input.nbt)?.cloned().unwrap_or_default();
             let hardened = (number(tags.get("RS.HARDEN"))? as i8).wrapping_add(1);
@@ -715,6 +737,54 @@ mod tests {
             "durability": 0, "tools": {}, "armor": false, "tags": []
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn pending_map_retains_data_but_forces_one_item() {
+        let recipe: Recipe = serde_json::from_value(json!({
+            "id":"test", "source":{"owner":"minecraft","handler":"test","key":"test"},
+            "category":"test", "inputs":[], "outputs":[], "properties":{}, "order":0,
+            "process":{"kind":"mapScaling"}
+        }))
+        .unwrap();
+        for source in [
+            None,
+            Some(Nbt::Compound {
+                value: BTreeMap::from([
+                    (
+                        "owner".into(),
+                        Nbt::String {
+                            value: "retained".into(),
+                        },
+                    ),
+                    ("map_is_scaling".into(), Nbt::Int { value: "0".into() }),
+                ]),
+            }),
+        ] {
+            let mut input = item("minecraft:filled_map", 37);
+            input.nbt = source.clone();
+            let result = apply(
+                &recipe,
+                &Edit::MapScaling {},
+                &input,
+                "17",
+                &BTreeMap::new(),
+            )
+            .unwrap();
+            let mut tags = compound(&source).unwrap().cloned().unwrap_or_default();
+            tags.insert("map_is_scaling".into(), Nbt::Byte { value: "1".into() });
+            assert_eq!(
+                result.id,
+                item_id(
+                    "minecraft:filled_map",
+                    37,
+                    Some(&Nbt::Compound { value: tags })
+                )
+                .unwrap()
+            );
+            assert_eq!(result.amount, "1");
+            assert_eq!(input.nbt, source);
+        }
     }
 
     #[test]

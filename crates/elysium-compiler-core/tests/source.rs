@@ -46,6 +46,15 @@ fn java_source_is_verified_without_losing_identity_or_large_quantities() {
         .unwrap();
     source
         .visit("recipes", |recipe| {
+            if recipe["process"]["kind"] == "mapScaling" {
+                assert_eq!(
+                    recipe["outputs"][0]["change"]["action"]["kind"],
+                    "mapScaling"
+                );
+                assert_eq!(recipe["outputs"][0]["change"]["input"], 4);
+                assert_eq!(recipe["grid"]["cells"].as_array().unwrap().len(), 9);
+                return Ok(());
+            }
             if recipe["process"]["kind"] == "runic" {
                 assert_eq!(recipe["process"]["charge"], 3);
                 assert_eq!(

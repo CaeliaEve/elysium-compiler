@@ -294,12 +294,12 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let catalog = Catalog::current(directory.path()).unwrap();
     catalog.verify().unwrap();
     assert_eq!(catalog.manifest.id, first.id);
-    assert_eq!(catalog.manifest.counts["recipes"], 19);
+    assert_eq!(catalog.manifest.counts["recipes"], 20);
     assert_eq!(
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
     );
-    assert_eq!(catalog.manifest.counts["browse"], 46);
+    assert_eq!(catalog.manifest.counts["browse"], 48);
     assert_eq!(catalog.manifest.counts["materials"], 2);
     assert_eq!(catalog.manifest.counts["circuits"], 1);
     assert_eq!(catalog.manifest.counts["species"], 3);
@@ -2073,11 +2073,36 @@ fn harmony_quantities_require_a_shared_process() {
 }
 
 #[test]
-fn harmony_process_rejects_false_fixed_outputs_and_buffer_semantics() {
+fn native_processes_reject_false_fixed_outputs_and_consumption() {
     use serde_json::json;
     let source = Source::open(&fixture()).unwrap();
     let original = Domain::load(&source).unwrap();
     original.validate(&source).unwrap();
+    for (path, replacement) in [
+        ("/process", json!(null)),
+        ("/duration", json!("1")),
+        ("/grid", json!(null)),
+        ("/grid/cells/4", json!(3)),
+        ("/inputs/4/choices/0/rule/meta", json!(false)),
+        ("/inputs/0/choices/0/rule/meta", json!(true)),
+        ("/outputs/0/change", json!(null)),
+        ("/outputs/0/change/samples/0/amount", json!("2")),
+    ] {
+        let mut domain = original.clone();
+        let row = domain
+            .recipes
+            .iter_mut()
+            .find(|r| r.source.handler == "mapScaling")
+            .unwrap();
+        let mut value = serde_json::to_value(&*row).unwrap();
+        *value.pointer_mut(path).unwrap() = replacement;
+        *row = serde_json::from_value(value).unwrap();
+        row.id = recipe_id(row).unwrap();
+        assert!(
+            domain.validate(&source).is_err(),
+            "accepted false map semantics at {path}"
+        );
+    }
     for (path, replacement) in [
         ("/process", json!(null)),
         ("/process/charge", json!(4)),

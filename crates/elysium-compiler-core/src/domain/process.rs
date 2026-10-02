@@ -8,6 +8,17 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 mod tests {
     #[test]
+    fn map_scaling_requires_an_explicit_world_process() {
+        let value = serde_json::json!({"kind":"mapScaling"});
+        assert!(serde_json::from_value::<super::Process>(value.clone()).is_ok());
+        assert!(serde_json::from_value::<super::super::Edit>(value).is_ok());
+        assert!(serde_json::from_value::<super::Process>(
+            serde_json::json!({"kind":"mapScaling","finalMapId":37})
+        )
+        .is_err());
+    }
+
+    #[test]
     fn runic_costs_preserve_native_rounding_and_large_repetition() {
         for (charge, expected) in [
             (-8, (1, 0, 1)),
@@ -50,6 +61,11 @@ pub enum HarmonyOutcome {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// Vanilla map extension. Input eligibility depends on world MapData (scale < 4).
+    /// The output is a pre-onCreated sample; the world allocates the final map ID.
+    /// Missing data may be initialized server-side. See docs/maps.md.
+    #[serde(rename = "mapScaling")]
+    MapScaling {},
     /// Dynamic TC runic augmentation. Charge, component multiplicity and magic
     /// costs are an observed sample. Actual costs use the offered IRunicArmor's
     /// native final charge, including nested upgrades; see docs/runic.md.
@@ -131,6 +147,9 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    if matches!(process, Process::MapScaling {}) {
+        return validate_map(recipe, items);
+    }
     if let Process::Runic { charge } = process {
         return validate_runic(recipe, *charge, items, aspects);
     }
@@ -250,6 +269,75 @@ pub(super) fn validate(
     ensure!(
         failures == 1 && successes > 0,
         "harmony requires normal outputs and exactly one failure output"
+    );
+    Ok(())
+}
+
+fn validate_map(recipe: &Recipe, items: &BTreeMap<&str, &super::Item>) -> Result<()> {
+    ensure!(
+        recipe.duration.is_none()
+            && recipe.energy.is_none()
+            && recipe.magic.is_none()
+            && recipe.inputs.len() == 9
+            && recipe.outputs.len() == 1,
+        "invalid map scaling process"
+    );
+    let grid = recipe
+        .grid
+        .as_ref()
+        .context("map scaling requires its native grid")?;
+    ensure!(
+        grid.width == 3
+            && grid.height == 3
+            && grid.mirror
+            && grid.cells == (0..9).map(Some).collect::<Vec<_>>(),
+        "invalid map scaling grid"
+    );
+    for slot in 0..9 {
+        let input = recipe
+            .inputs
+            .iter()
+            .find(|i| i.kind == Kind::Item && i.slot == slot)
+            .context("map scaling input missing")?;
+        ensure!(
+            !input.choices.is_empty(),
+            "map scaling input has no samples"
+        );
+        for c in &input.choices {
+            let item = items
+                .get(c.id.as_str())
+                .context("map scaling sample missing")?;
+            ensure!(
+                item.registry
+                    == if slot == 4 {
+                        "minecraft:filled_map"
+                    } else {
+                        "minecraft:paper"
+                    }
+                    && (slot == 4 || item.meta == 0)
+                    && item.meta != 32767
+                    && c.amount == "1"
+                    && matches!(c.consume, Consumption::Consume)
+                    && c.returns.is_empty()
+                    && matches!(c.rule, Match::Wildcard { meta, nbt: true } if meta == (slot == 4)),
+                "invalid map scaling ingredient"
+            );
+        }
+    }
+    let output = &recipe.outputs[0];
+    ensure!(
+        output.kind == Kind::Item
+            && output.slot == 0
+            && output.quantity.is_none()
+            && output.amount.as_deref() == Some("1")
+            && matches!(output.role, OutputRole::Result)
+            && output.chance.numerator == "1"
+            && output.chance.denominator == "1"
+            && output
+                .change
+                .as_ref()
+                .is_some_and(|c| c.input == 4 && matches!(c.action, super::Edit::MapScaling {})),
+        "map scaling requires a pending native result"
     );
     Ok(())
 }

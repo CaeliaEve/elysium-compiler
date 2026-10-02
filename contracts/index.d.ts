@@ -207,6 +207,9 @@ export type MagicKind = "arcane" | "crucible" | "infusion";
  */
 export type Edit =
   | {
+      kind: "mapScaling";
+    }
+  | {
       kind: "runic";
     }
   | {
@@ -311,6 +314,9 @@ export type OutputRole = "result" | "return";
  * via the `definition` "Process".
  */
 export type Process =
+  | {
+      kind: "mapScaling";
+    }
   | {
       charge: number;
       kind: "runic";
@@ -570,7 +576,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 18;
+  revision: 19;
   scope: string;
   source: string;
 }
@@ -1572,7 +1578,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 18;
+  revision: 19;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1584,7 +1590,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 19;
+  revision: 20;
   scope: Scope;
 }
 /**
