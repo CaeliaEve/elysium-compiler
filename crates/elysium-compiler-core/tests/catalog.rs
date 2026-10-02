@@ -294,12 +294,12 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let catalog = Catalog::current(directory.path()).unwrap();
     catalog.verify().unwrap();
     assert_eq!(catalog.manifest.id, first.id);
-    assert_eq!(catalog.manifest.counts["recipes"], 30);
+    assert_eq!(catalog.manifest.counts["recipes"], 31);
     assert_eq!(
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
     );
-    assert_eq!(catalog.manifest.counts["browse"], 64);
+    assert_eq!(catalog.manifest.counts["browse"], 68);
     assert_eq!(catalog.manifest.counts["materials"], 2);
     assert_eq!(catalog.manifest.counts["circuits"], 1);
     assert_eq!(catalog.manifest.counts["species"], 3);
@@ -2078,6 +2078,36 @@ fn native_processes_reject_false_fixed_outputs_and_consumption() {
     let source = Source::open(&fixture()).unwrap();
     let original = Domain::load(&source).unwrap();
     original.validate(&source).unwrap();
+    for (path, replacement) in [
+        ("/process", json!(null)),
+        ("/process/kind", json!("alloy")),
+        ("/process/slots", json!([5])),
+        ("/process/slots/0", json!(6)),
+        ("/inputs/2/slot", json!(2)),
+        ("/inputs/2/choices/0/amount", json!("2")),
+        (
+            "/inputs/2/choices/0/consume",
+            json!({"kind":"damage","points":1}),
+        ),
+        ("/inputs/2/choices/0/rule/meta", json!(false)),
+        ("/inputs/0/choices/0/consume/kind", json!("wear")),
+        ("/outputs/0/quantity/nominal", json!("0")),
+    ] {
+        let mut domain = original.clone();
+        let row = domain
+            .recipes
+            .iter_mut()
+            .find(|r| r.source.handler == "splice")
+            .unwrap();
+        let mut value = serde_json::to_value(&*row).unwrap();
+        *value.pointer_mut(path).unwrap() = replacement;
+        *row = serde_json::from_value(value).unwrap();
+        row.id = recipe_id(row).unwrap();
+        assert!(
+            domain.validate(&source).is_err(),
+            "accepted false splice semantics at {path}"
+        );
+    }
     for (path, replacement) in [
         ("/process", json!(null)),
         ("/duration", json!("1")),

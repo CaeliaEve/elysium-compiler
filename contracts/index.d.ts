@@ -146,6 +146,9 @@ export type Consumption =
       kind: "allocated";
     }
   | {
+      kind: "wear";
+    }
+  | {
       kind: "stack";
     }
   | {
@@ -331,6 +334,11 @@ export type Process =
   | {
       energy: number;
       kind: "alloy";
+      slots: number[];
+    }
+  | {
+      energy: number;
+      kind: "splice";
       slots: number[];
     }
   | {
@@ -620,7 +628,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 23;
+  revision: 24;
   scope: string;
   source: string;
 }
@@ -1631,7 +1639,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 23;
+  revision: 24;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1643,7 +1651,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 24;
+  revision: 25;
   scope: Scope;
 }
 /**

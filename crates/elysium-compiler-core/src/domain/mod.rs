@@ -180,6 +180,8 @@ pub enum Consumption {
     Upto,
     /// An ordered native requirement; the process allocates actual machine slots.
     Allocated,
+    /// Splice tools: conditional damageItem(1, fakePlayer) at completion, not fixed durability.
+    Wear,
     /// Consume the entire offered stack. `amount` is the minimum/example count.
     Stack,
     /// Empty the selected internal fluid buffer at process start; amount is its minimum gate.

@@ -76,9 +76,11 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
     match rule {
         Quantity::SharedRoll { nominal, threshold } => {
             ensure!(
-                matches!(recipe.process, Some(super::Process::Alloy { .. }))
-                    && output.kind == Kind::Item,
-                "shared roll requires an alloy item result"
+                matches!(
+                    recipe.process,
+                    Some(super::Process::Alloy { .. } | super::Process::Splice { .. })
+                ) && output.kind == Kind::Item,
+                "shared roll requires an assembly item result"
             );
             let cutoff: f32 = threshold.parse().context("invalid shared roll threshold")?;
             ensure!(

@@ -8,6 +8,17 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 mod tests {
     #[test]
+    fn splice_retains_tool_wear_separately_from_allocated_ingredients() {
+        let value = serde_json::json!({"kind":"splice","energy":2000,"slots":[5,4,3,2,1,0]});
+        let process: super::Process = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(process).unwrap(), value);
+        assert!(
+            serde_json::from_value::<super::Consumption>(serde_json::json!({"kind":"wear"}))
+                .is_ok()
+        );
+    }
+
+    #[test]
     fn alloy_retains_ordered_allocation_and_shared_roll() {
         let value = serde_json::json!({"kind":"alloy","energy":1200,"slots":[1,0]});
         let process: super::Process = serde_json::from_value(value.clone()).unwrap();
@@ -105,6 +116,8 @@ pub enum InscriberMode {
 pub enum Process {
     /// Registered EnderIO alloy matching and separate consumption traversals.
     Alloy { energy: i32, slots: Vec<i32> },
+    /// Six ingredients plus axe/shears slots; native conditional tool wear at completion.
+    Splice { energy: i32, slots: Vec<i32> },
     /// EnderIO precomputed fluid pair and ordered item consumption; see docs/vat.md.
     Vat {
         energy: i32,
@@ -232,13 +245,24 @@ pub(super) fn validate(
     aspects: &[super::Aspect],
 ) -> Result<()> {
     ensure!(
-        matches!(recipe.process, Some(Process::Alloy { .. }))
+        matches!(
+            recipe.process,
+            Some(Process::Alloy { .. } | Process::Splice { .. })
+        ) || !recipe
+            .inputs
+            .iter()
+            .flat_map(|i| &i.choices)
+            .any(|c| matches!(c.consume, Consumption::Allocated)),
+        "allocated consumption requires a native assembly process"
+    );
+    ensure!(
+        matches!(recipe.process, Some(Process::Splice { .. }))
             || !recipe
                 .inputs
                 .iter()
                 .flat_map(|i| &i.choices)
-                .any(|c| matches!(c.consume, Consumption::Allocated)),
-        "allocated consumption requires a native alloy process"
+                .any(|c| matches!(c.consume, Consumption::Wear)),
+        "conditional tool wear requires a native splice process"
     );
     ensure!(
         matches!(recipe.process, Some(Process::Vat { .. }))
@@ -270,7 +294,10 @@ pub(super) fn validate(
     };
     process.validate_parameters()?;
     if let Process::Alloy { slots, .. } = process {
-        return validate_alloy(recipe, slots);
+        return validate_assembly(recipe, slots, false);
+    }
+    if let Process::Splice { slots, .. } = process {
+        return validate_assembly(recipe, slots, true);
     }
     if let Process::Vat {
         extra, zero_output, ..
@@ -428,21 +455,41 @@ pub(super) fn validate(
     Ok(())
 }
 
-fn validate_alloy(recipe: &Recipe, slots: &[i32]) -> Result<()> {
+fn validate_assembly(recipe: &Recipe, slots: &[i32], splice: bool) -> Result<()> {
+    let max = if splice { 6 } else { 3 };
     ensure!(
         recipe.duration.is_none()
             && recipe.energy.is_none()
             && recipe.grid.is_none()
             && recipe.magic.is_none()
-            && !recipe.inputs.is_empty()
-            && recipe.inputs.len() <= 4096
-            && slots.len() == recipe.inputs.len()
-            && slots.iter().all(|s| (-1..=2).contains(s))
+            && !slots.is_empty()
+            && slots.len() <= max
+            && slots.len() + if splice { 2 } else { 0 } == recipe.inputs.len()
+            && slots.iter().all(|s| (-1..max as i32).contains(s))
             && !recipe.outputs.is_empty()
             && recipe.outputs.len() <= 128,
-        "invalid native alloy shape"
+        "invalid native assembly shape"
     );
     for (index, input) in recipe.inputs.iter().enumerate() {
+        if splice && index >= slots.len() {
+            ensure!(
+                input.kind == Kind::Item
+                    && input.slot == (6 + index - slots.len()) as u32
+                    && !input.choices.is_empty()
+                    && input.choices.iter().all(|c| c.amount == "1"
+                        && c.returns.is_empty()
+                        && matches!(c.consume, Consumption::Wear)
+                        && matches!(
+                            c.rule,
+                            Match::Wildcard {
+                                meta: true,
+                                nbt: true
+                            }
+                        )),
+                "invalid splice axe/shears requirement"
+            );
+            continue;
+        }
         ensure!(
             input.kind == Kind::Item && input.slot == index as u32 && !input.choices.is_empty(),
             "invalid alloy requirement order"
