@@ -15,6 +15,9 @@ pub struct Stack {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Edit {
+    /// Fresh broken spawner: base registry, meta=0, count=1, only mobType string.
+    /// The string is native getMobTypeFromStack(input0), not the full entity NBT.
+    Soul { base: String },
     /// Copy the offered map and tags, set count=1 and map_is_scaling byte=1.
     /// This is the result before ItemMap.onCreated allocates the final world ID.
     #[serde(rename = "mapScaling")]
@@ -92,6 +95,21 @@ pub(super) fn validate(
         "output change samples omit input choices"
     );
     match &change.action {
+        Edit::Soul { base } => {
+            ensure!(
+                matches!(
+                    recipe.process,
+                    Some(super::Process::Soul { spawner: true, .. })
+                ) && change.input == 0
+                    && output.slot == 1,
+                "soul reconstruction requires spawner output"
+            );
+            let item = items.get(base.as_str()).context("missing spawner base")?;
+            ensure!(
+                item.meta == 0 && item.nbt.is_none(),
+                "spawner base must be fresh"
+            );
+        }
         Edit::MapScaling {} => ensure!(
             matches!(recipe.process, Some(super::Process::MapScaling {})),
             "pending map output requires its world process"
@@ -277,6 +295,33 @@ fn apply(
     items: &BTreeMap<&str, &Item>,
 ) -> Result<Stack> {
     let (registry, meta, count, nbt) = match action {
+        Edit::Soul { base } => {
+            let template = items.get(base.as_str()).context("missing spawner base")?;
+            let Some(Match::Soul { filter }) = recipe
+                .inputs
+                .first()
+                .and_then(|i| i.choices.first())
+                .map(|c| &c.rule)
+            else {
+                anyhow::bail!("missing soul predicate")
+            };
+            let name = filter
+                .sample_name(input, items)?
+                .context("missing spawner soul")?;
+            (
+                &template.registry,
+                0,
+                "1",
+                Some(Nbt::Compound {
+                    value: BTreeMap::from([(
+                        "mobType".into(),
+                        Nbt::String {
+                            value: name.to_owned(),
+                        },
+                    )]),
+                }),
+            )
+        }
         Edit::MapScaling {} => {
             ensure!(
                 input.registry == "minecraft:filled_map",

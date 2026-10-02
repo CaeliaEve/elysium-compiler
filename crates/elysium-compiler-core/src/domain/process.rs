@@ -129,6 +129,16 @@ pub enum InscriberMode {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// Native two-slot Soul Binder selection, XP debit and last-vessel completion.
+    Soul {
+        energy: i32,
+        levels: i32,
+        experience: i32,
+        capacity: i32,
+        drains: bool,
+        spawner: bool,
+        earlier: Vec<super::SoulSelector>,
+    },
     /// Native SAG task and grinding-ball lifecycle; see docs/grinding.md.
     Sag {
         energy: i32,
@@ -195,6 +205,20 @@ pub enum Process {
         #[serde(rename = "compressionTier")]
         compression_tier: u8,
     },
+}
+
+#[cfg(test)]
+mod soul_contract_test {
+    #[test]
+    fn soul_preserves_raw_experience_and_native_predicate() {
+        let rule: super::Match = serde_json::from_value(serde_json::json!({"kind":"soul","filter":{"vessel":"vial","names":[null,"Forbidden"],"exclude":true}})).unwrap();
+        assert_eq!(
+            serde_json::to_value(rule).unwrap()["filter"]["names"][0],
+            serde_json::Value::Null
+        );
+        let process: super::Process = serde_json::from_value(serde_json::json!({"kind":"soul","energy":1000,"levels":16,"experience":272,"capacity":825,"drains":false,"spawner":false,"earlier":[]})).unwrap();
+        assert_eq!(serde_json::to_value(process).unwrap()["experience"], 272);
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -271,6 +295,15 @@ pub(super) fn validate(
     aspects: &[super::Aspect],
 ) -> Result<()> {
     ensure!(
+        matches!(recipe.process, Some(Process::Soul { .. }))
+            || !recipe
+                .inputs
+                .iter()
+                .flat_map(|i| &i.choices)
+                .any(|c| matches!(c.rule, Match::Soul { .. })),
+        "soul predicate requires a Soul Binder process"
+    );
+    ensure!(
         matches!(
             recipe.process,
             Some(Process::Alloy { .. } | Process::Splice { .. } | Process::Sag { .. })
@@ -330,6 +363,9 @@ pub(super) fn validate(
     process.validate_parameters()?;
     if matches!(process, Process::Sag { .. }) {
         return super::grinding::validate(recipe, items);
+    }
+    if matches!(process, Process::Soul { .. }) {
+        return super::soul::validate(recipe, items);
     }
     if let Process::Alloy { slots, .. } = process {
         return validate_assembly(recipe, slots, false);

@@ -173,6 +173,10 @@ export type Match =
       kind: "exact";
     }
   | {
+      filter: SoulFilter;
+      kind: "soul";
+    }
+  | {
       kind: "ae";
     }
   | {
@@ -221,6 +225,10 @@ export type MagicKind = "arcane" | "crucible" | "infusion";
  * via the `definition` "Edit".
  */
 export type Edit =
+  | {
+      base: string;
+      kind: "soul";
+    }
   | {
       kind: "mapScaling";
     }
@@ -275,6 +283,10 @@ export type Edit =
  * via the `definition` "Quantity".
  */
 export type Quantity =
+  | {
+      kind: "soul";
+      nominal: string;
+    }
   | {
       kind: "grinding";
       nominal: string;
@@ -339,6 +351,16 @@ export type OutputRole = "result" | "return";
  * via the `definition` "Process".
  */
 export type Process =
+  | {
+      capacity: number;
+      drains: boolean;
+      earlier: SoulSelector[];
+      energy: number;
+      experience: number;
+      kind: "soul";
+      levels: number;
+      spawner: boolean;
+    }
   | {
       balls: GrindingBall[];
       blocked: MatchCase[];
@@ -646,7 +668,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 25;
+  revision: 26;
   scope: string;
   source: string;
 }
@@ -1217,6 +1239,24 @@ export interface Remainder {
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SoulFilter".
+ */
+export interface SoulFilter {
+  /**
+   * Complement for spawner blacklist; includes null in names.
+   */
+  exclude: boolean;
+  /**
+   * Sorted unique native mob strings, with explicit null extraction result.
+   */
+  names: (string | null)[];
+  /**
+   * Empty native vessel item reference; metadata does not constrain input.
+   */
+  vessel: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "MatchCase".
  */
 export interface MatchCase {
@@ -1318,6 +1358,14 @@ export interface Change {
 export interface Stack {
   amount: string;
   id: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SoulSelector".
+ */
+export interface SoulSelector {
+  material: MatchCase;
+  soul: SoulFilter;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1676,7 +1724,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 25;
+  revision: 26;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1688,7 +1736,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 26;
+  revision: 27;
   scope: Scope;
 }
 /**

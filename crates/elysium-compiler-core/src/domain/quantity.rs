@@ -9,6 +9,10 @@ use std::collections::BTreeSet;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Quantity {
+    /// Both fixed Soul Binder outputs share the last-vessel completion gate.
+    Soul {
+        nominal: String,
+    },
     /// SAG shared task draw and correlated completion passes. See docs/grinding.md.
     Grinding {
         nominal: String,
@@ -79,6 +83,16 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
         "computed output cannot carry an independent probability"
     );
     match rule {
+        Quantity::Soul { nominal } => {
+            ensure!(
+                matches!(
+                    recipe.process,
+                    Some(super::Process::Soul { spawner: false, .. })
+                ) && output.kind == Kind::Item,
+                "soul quantity requires fixed Soul Binder outputs"
+            );
+            Ok((0, integer(nominal, 1, i64::from(i32::MAX))?))
+        }
         Quantity::Grinding { nominal, threshold } => {
             let Some(super::Process::Sag { bonus, .. }) = recipe.process else {
                 anyhow::bail!("grinding quantity requires SAG process");

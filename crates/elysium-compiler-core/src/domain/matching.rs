@@ -13,6 +13,17 @@ impl Match {
     ) -> Result<()> {
         match self {
             Self::Exact => {}
+            Self::Soul { filter } => {
+                ensure!(
+                    compound,
+                    "soul predicates cannot be nested in priority filters"
+                );
+                filter.validate(items)?;
+                ensure!(
+                    filter.accepts_sample(item, items)?,
+                    "soul filter rejects its example"
+                );
+            }
             Self::Ae => {
                 ensure!(
                     compound,
@@ -216,6 +227,7 @@ fn simple(rule: &Match, offered: &Item, anchor: &Item) -> bool {
             }
         }
         Match::Ore { .. }
+        | Match::Soul { .. }
         | Match::Member { .. }
         | Match::Except { .. }
         | Match::Infusion { .. } => {

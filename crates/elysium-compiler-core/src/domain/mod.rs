@@ -9,6 +9,7 @@ mod matching;
 mod model;
 mod process;
 mod quantity;
+mod soul;
 mod structure;
 pub use change::{Change, Edit, Stack};
 pub use genetics::*;
@@ -18,6 +19,7 @@ pub use magic::*;
 pub use model::*;
 pub use process::{HarmonyMode, HarmonyOutcome, Process, VatConsumption};
 pub use quantity::{quantity_bounds, Quantity};
+pub use soul::{SoulFilter, SoulSelector};
 pub use structure::*;
 
 use crate::identity::Nbt;
@@ -117,6 +119,11 @@ pub struct Remainder {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Match {
     Exact,
+    /// Native ItemSoulVessel extraction, including null and non-string root ids.
+    /// Canonical display samples do not restrict the admitted input domain.
+    Soul {
+        filter: SoulFilter,
+    },
     /// AE2 precise item matching for an ordinary NBT anchor: literal metadata,
     /// null/empty root equivalence, numeric floats, recursive typed tags. See docs/inscriber.md.
     Ae,
