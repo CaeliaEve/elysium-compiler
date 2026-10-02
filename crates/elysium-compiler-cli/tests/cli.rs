@@ -31,8 +31,8 @@ fn cli_compiles_checks_and_reports_the_same_snapshot() {
     let catalog = work.path().join("catalog");
     let receipt = work.path().join("receipt.json");
     let inspect = success(&["inspect", "--input", path(&source)]);
-    assert_eq!(inspect["counts"]["recipes"], 18);
-    assert_eq!(inspect["counts"]["aspects"], 3);
+    assert_eq!(inspect["counts"]["recipes"], 19);
+    assert_eq!(inspect["counts"]["aspects"], 6);
     assert_eq!(
         inspect["counts"].as_object().unwrap().len(),
         inspect["scope"]["collections"].as_array().unwrap().len()

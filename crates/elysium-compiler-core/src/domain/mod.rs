@@ -115,6 +115,13 @@ pub struct Remainder {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Match {
     Exact,
+    /// Pinned TC untagged infusion component. Match template item/meta, or an
+    /// offered stack whose FIRST native ore group is in ores. Unlike Ore, mere
+    /// membership in a later group is insufficient. Extra offered NBT is allowed.
+    Infusion {
+        template: String,
+        ores: Vec<String>,
+    },
     /// A native Forestry member of this registry and root, with the given analysis state.
     /// Examples use canonical native serialization; other valid genomes are not excluded.
     Member {
@@ -171,6 +178,9 @@ pub enum Consumption {
     /// Empty the selected internal fluid buffer at process start; amount is its minimum gate.
     /// Only valid with a native process that defines the buffer and mode-dependent gate.
     Buffer,
+    /// One item on each distinct pedestal. With Runic, amount is the sample
+    /// multiplicity; the process defines the actual input-dependent count.
+    Pedestals,
     Damage {
         points: u32,
     },

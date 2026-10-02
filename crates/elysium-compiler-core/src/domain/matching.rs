@@ -13,6 +13,24 @@ impl Match {
     ) -> Result<()> {
         match self {
             Self::Exact => {}
+            Self::Infusion { template, ores } => {
+                ensure!(
+                    compound,
+                    "infusion predicate cannot be nested in priority filters"
+                );
+                let anchor = items
+                    .get(template.as_str())
+                    .context("missing infusion template")?;
+                ensure!(
+                    anchor.nbt.is_none() && ores == &anchor.tags,
+                    "invalid infusion ore predicate"
+                );
+                ensure!(
+                    item.registry == anchor.registry && item.meta == anchor.meta
+                        || ores.iter().any(|ore| item.tags.contains(ore)),
+                    "invalid native infusion sample"
+                );
+            }
             Self::Member { root, analyzed } => {
                 ensure!(member, "member matching requires whole-stack analysis");
                 change::member(item, root, *analyzed)?;
@@ -184,7 +202,10 @@ fn simple(rule: &Match, offered: &Item, anchor: &Item) -> bool {
                 (actual, expected) => actual == expected,
             }
         }
-        Match::Ore { .. } | Match::Member { .. } | Match::Except { .. } => {
+        Match::Ore { .. }
+        | Match::Member { .. }
+        | Match::Except { .. }
+        | Match::Infusion { .. } => {
             unreachable!("validated primitive match")
         }
     }

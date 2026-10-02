@@ -15,6 +15,9 @@ pub struct Stack {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Edit {
+    /// Native Runic augmentation: copy the input and increment RS.HARDEN using
+    /// Minecraft getByte coercion followed by signed-byte wrapping.
+    Runic,
     /// Forestry 4.10.17 native member analysis. A previously analyzed stack is copied
     /// unchanged; otherwise serialize the individual into a fresh compound after analyze().
     /// Item, metadata and the entire offered count are retained. Samples are canonical
@@ -85,6 +88,10 @@ pub(super) fn validate(
         "output change samples omit input choices"
     );
     match &change.action {
+        Edit::Runic => ensure!(
+            matches!(recipe.process, Some(super::Process::Runic { .. })),
+            "runic output requires its dynamic process"
+        ),
         Edit::Analyze => {
             ensure!(
                 recipe.inputs.len() == 2 && recipe.outputs.len() == 1,
@@ -262,6 +269,22 @@ fn apply(
     items: &BTreeMap<&str, &Item>,
 ) -> Result<Stack> {
     let (registry, meta, count, nbt) = match action {
+        Edit::Runic => {
+            let mut tags = compound(&input.nbt)?.cloned().unwrap_or_default();
+            let hardened = (number(tags.get("RS.HARDEN"))? as i8).wrapping_add(1);
+            tags.insert(
+                "RS.HARDEN".into(),
+                Nbt::Byte {
+                    value: hardened.to_string(),
+                },
+            );
+            (
+                &input.registry,
+                input.meta,
+                amount,
+                Some(Nbt::Compound { value: tags }),
+            )
+        }
         Edit::Analyze => {
             let mut tags = compound(&input.nbt)?
                 .context("analysis sample has no tags")?
@@ -658,6 +681,22 @@ fn merge(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn runic_byte_coercion_preserves_native_wrap_and_floor() {
+        for (nbt, expected) in [
+            (json!({"type":"int","value":"383"}), -128_i8),
+            (json!({"type":"double","value":"bff8000000000000"}), -1),
+            (json!({"type":"long","value":"9223372036854775807"}), 0),
+            (json!({"type":"string","value":"127"}), 1),
+        ] {
+            let tag: Nbt = serde_json::from_value(nbt).unwrap();
+            assert_eq!(
+                (number(Some(&tag)).unwrap() as i8).wrapping_add(1),
+                expected
+            );
+        }
+    }
 
     fn empty_filter() -> BTreeMap<String, Nbt> {
         BTreeMap::from([(

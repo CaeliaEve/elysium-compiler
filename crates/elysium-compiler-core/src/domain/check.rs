@@ -327,7 +327,7 @@ impl Domain {
                 );
             }
             let mut inputs = BTreeSet::new();
-            process::validate(recipe, &fluid_records)?;
+            process::validate(recipe, &fluid_records, &items, &self.aspects)?;
             for input in &recipe.inputs {
                 ensure!(
                     input.slot <= 65535 && inputs.insert((input.kind, input.slot)),

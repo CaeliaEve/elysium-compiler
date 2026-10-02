@@ -5,6 +5,27 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn runic_costs_preserve_native_rounding_and_large_repetition() {
+        for (charge, expected) in [
+            (-8, (1, 0, 1)),
+            (-5, (1, 1, 3)),
+            (0, (1, 32, 5)),
+            (3, (4, 256, 6)),
+            (30, (31, i32::MAX, 20)),
+            (i32::MAX, (2147483648, i32::MAX, 1073741828)),
+        ] {
+            assert_eq!(super::runic_costs(charge), expected);
+        }
+        assert!(serde_json::from_value::<super::Process>(
+            serde_json::json!({"kind":"runic","charge":3})
+        )
+        .is_ok());
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum HarmonyMode {
@@ -29,6 +50,10 @@ pub enum HarmonyOutcome {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// Dynamic TC runic augmentation. Charge, component multiplicity and magic
+    /// costs are an observed sample. Actual costs use the offered IRunicArmor's
+    /// native final charge, including nested upgrades; see docs/runic.md.
+    Runic { charge: i32 },
     Harmony {
         mode: HarmonyMode,
         hydrogen: String,
@@ -51,10 +76,10 @@ impl Process {
     pub fn max_parallel(&self) -> i64 {
         match self {
             Self::Harmony {
-                mode: HarmonyMode::Single,
+                mode: HarmonyMode::Parallel,
                 ..
-            } => 1,
-            _ => 1_048_576,
+            } => 1_048_576,
+            _ => 1,
         }
     }
 
@@ -69,7 +94,10 @@ impl Process {
             rocket_tier,
             compression_tier,
             ..
-        } = self;
+        } = self
+        else {
+            return Ok(());
+        };
         for value in [hydrogen, helium, ticks, start_eu, output_eu] {
             integer(value, 1, i64::MAX)?;
         }
@@ -86,25 +114,36 @@ impl Process {
     }
 }
 
-pub(super) fn validate(recipe: &Recipe, fluids: &BTreeMap<&str, &Fluid>) -> Result<()> {
+pub(super) fn validate(
+    recipe: &Recipe,
+    fluids: &BTreeMap<&str, &Fluid>,
+    items: &BTreeMap<&str, &super::Item>,
+    aspects: &[super::Aspect],
+) -> Result<()> {
     let Some(process) = &recipe.process else {
         ensure!(
             !recipe.inputs.iter().any(|i| i
                 .choices
                 .iter()
-                .any(|c| matches!(c.consume, Consumption::Buffer))),
+                .any(|c| matches!(c.consume, Consumption::Buffer | Consumption::Pedestals))),
             "buffer consumption requires a native process"
         );
         return Ok(());
     };
     process.validate_parameters()?;
+    if let Process::Runic { charge } = process {
+        return validate_runic(recipe, *charge, items, aspects);
+    }
     let Process::Harmony {
         mode,
         hydrogen,
         helium,
         rocket_tier,
         ..
-    } = process;
+    } = process
+    else {
+        unreachable!()
+    };
     ensure!(
         recipe.duration.is_none()
             && recipe.energy.is_none()
@@ -211,6 +250,160 @@ pub(super) fn validate(recipe: &Recipe, fluids: &BTreeMap<&str, &Fluid>) -> Resu
     ensure!(
         failures == 1 && successes > 0,
         "harmony requires normal outputs and exactly one failure output"
+    );
+    Ok(())
+}
+
+fn runic_costs(charge: i32) -> (i64, i32, i32) {
+    (
+        1 + i64::from(charge.max(0)),
+        (32.0 * 2.0_f64.powi(charge)) as i32,
+        5 + charge / 2,
+    )
+}
+
+fn validate_runic(
+    recipe: &Recipe,
+    charge: i32,
+    items: &BTreeMap<&str, &super::Item>,
+    aspects: &[super::Aspect],
+) -> Result<()> {
+    let (pedestals, vis, instability) = runic_costs(charge);
+    let magic = recipe
+        .magic
+        .as_ref()
+        .context("runic magic sample missing")?;
+    ensure!(
+        magic.kind == super::MagicKind::Infusion
+            && magic.central == Some(0)
+            && magic.instability == Some(instability)
+            && magic.payment.is_none()
+            && !magic.creative
+            && recipe.duration.is_none()
+            && recipe.energy.is_none()
+            && recipe.grid.is_none(),
+        "invalid runic process sample"
+    );
+    ensure!(
+        magic.research.len() == 1 && magic.research[0].key == "RUNICAUGMENTATION",
+        "invalid runic research"
+    );
+    let actual: BTreeMap<_, _> = magic
+        .aspects
+        .iter()
+        .map(|cost| {
+            let aspect = aspects
+                .iter()
+                .find(|aspect| aspect.id == cost.aspect)
+                .context("runic aspect missing")?;
+            ensure!(
+                aspect.source.owner == "Thaumcraft"
+                    && aspect.source.handler == "thaumcraft.api.aspects.Aspect",
+                "invalid runic aspect origin"
+            );
+            Ok((aspect.source.key.as_str(), cost.amount.clone()))
+        })
+        .collect::<Result<_>>()?;
+    let expected = if vis > 0 {
+        BTreeMap::from([
+            ("tutamen", (vis / 2).to_string()),
+            ("praecantatio", (vis / 2).to_string()),
+            ("potentia", vis.to_string()),
+        ])
+    } else {
+        BTreeMap::new()
+    };
+    ensure!(
+        actual == expected,
+        "runic aspect sample differs from native charge formula"
+    );
+    ensure!(
+        recipe.inputs.len() == 3 && recipe.outputs.len() == 1,
+        "runic requires central and two component groups"
+    );
+    for slot in 0..3 {
+        let input = recipe
+            .inputs
+            .iter()
+            .find(|input| input.kind == Kind::Item && input.slot == slot)
+            .context("runic input missing")?;
+        ensure!(
+            !input.choices.is_empty() && (slot != 0 || input.choices.len() == 1),
+            "runic samples require separate central branches"
+        );
+        let mut component_rule = None;
+        for c in &input.choices {
+            ensure!(
+                (slot != 0 || c.returns.is_empty())
+                    && c.amount
+                        == if slot == 2 {
+                            pedestals.to_string()
+                        } else {
+                            "1".into()
+                        },
+                "invalid runic component count"
+            );
+            if slot == 0 {
+                ensure!(
+                    matches!(c.consume, Consumption::Consume)
+                        && matches!(
+                            c.rule,
+                            Match::Wildcard {
+                                meta: true,
+                                nbt: true
+                            }
+                        ),
+                    "invalid runic central predicate"
+                );
+            } else {
+                let Match::Infusion { template, .. } = &c.rule else {
+                    anyhow::bail!("invalid runic component predicate");
+                };
+                let rule = serde_json::to_string(&c.rule)?;
+                ensure!(
+                    component_rule
+                        .as_ref()
+                        .is_none_or(|expected| expected == &rule),
+                    "mixed runic component predicates"
+                );
+                component_rule = Some(rule);
+                let item = items
+                    .get(template.as_str())
+                    .context("runic component missing")?;
+                ensure!(
+                    item.registry
+                        == if slot == 1 {
+                            "minecraft:diamond"
+                        } else {
+                            "Thaumcraft:ItemResource"
+                        }
+                        && item.meta == if slot == 1 { 0 } else { 14 }
+                        && item.nbt.is_none(),
+                    "invalid runic component identity"
+                );
+                ensure!(
+                    if slot == 2 {
+                        matches!(c.consume, Consumption::Pedestals)
+                    } else {
+                        matches!(c.consume, Consumption::Consume)
+                    },
+                    "invalid runic pedestal consumption"
+                );
+            }
+        }
+    }
+    let output = &recipe.outputs[0];
+    ensure!(
+        output.kind == Kind::Item
+            && output.slot == 0
+            && output.quantity.is_none()
+            && matches!(output.role, OutputRole::Result)
+            && output.chance.numerator == "1"
+            && output.chance.denominator == "1"
+            && output.change.as_ref().is_some_and(
+                |change| change.input == 0 && matches!(change.action, super::Edit::Runic)
+            ),
+        "invalid runic transformation"
     );
     Ok(())
 }

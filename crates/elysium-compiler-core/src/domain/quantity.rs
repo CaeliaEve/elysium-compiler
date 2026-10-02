@@ -74,6 +74,10 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
                 .as_ref()
                 .context("harmony quantity lacks its shared process")?;
             process.validate_parameters()?;
+            ensure!(
+                matches!(process, super::Process::Harmony { .. }),
+                "harmony quantity requires harmony process"
+            );
             let base = integer(nominal, 1, i64::MAX)?;
             // Rust's saturating float cast matches Java d2l for nonnegative finite values.
             Ok((0, (base as f64 * process.max_parallel() as f64) as i64))

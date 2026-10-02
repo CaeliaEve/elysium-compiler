@@ -146,6 +146,9 @@ export type Consumption =
       kind: "buffer";
     }
   | {
+      kind: "pedestals";
+    }
+  | {
       kind: "damage";
       points: number;
     };
@@ -156,6 +159,11 @@ export type Consumption =
 export type Match =
   | {
       kind: "exact";
+    }
+  | {
+      kind: "infusion";
+      ores: string[];
+      template: string;
     }
   | {
       analyzed: boolean;
@@ -198,6 +206,9 @@ export type MagicKind = "arcane" | "crucible" | "infusion";
  * via the `definition` "Edit".
  */
 export type Edit =
+  | {
+      kind: "runic";
+    }
   | {
       kind: "analyze";
     }
@@ -299,21 +310,26 @@ export type OutputRole = "result" | "return";
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Process".
  */
-export type Process = {
-  /**
-   * Round-trip decimal representation of the native binary64 base chance.
-   */
-  chance: string;
-  compressionTier: number;
-  helium: string;
-  hydrogen: string;
-  kind: "harmony";
-  mode: HarmonyMode;
-  outputEu: string;
-  rocketTier: number;
-  startEu: string;
-  ticks: string;
-};
+export type Process =
+  | {
+      charge: number;
+      kind: "runic";
+    }
+  | {
+      /**
+       * Round-trip decimal representation of the native binary64 base chance.
+       */
+      chance: string;
+      compressionTier: number;
+      helium: string;
+      hydrogen: string;
+      kind: "harmony";
+      mode: HarmonyMode;
+      outputEu: string;
+      rocketTier: number;
+      startEu: string;
+      ticks: string;
+    };
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "HarmonyMode".
@@ -554,7 +570,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 17;
+  revision: 18;
   scope: string;
   source: string;
 }
@@ -1139,7 +1155,7 @@ export interface MatchCase {
  */
 export interface MagicRecipe {
   /**
-   * Vis for arcane crafting; essentia for crucible and infusion recipes.
+   * Vis for arcane crafting; essentia for crucible and infusion recipes. With Process::Runic these are sample costs, validated against sample charge.
    */
   aspects: AspectAmount[];
   /**
@@ -1556,7 +1572,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 17;
+  revision: 18;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1568,7 +1584,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 18;
+  revision: 19;
   scope: Scope;
 }
 /**

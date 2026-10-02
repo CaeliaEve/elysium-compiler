@@ -51,6 +51,7 @@ pub enum MagicKind {
 pub struct MagicRecipe {
     pub kind: MagicKind,
     /// Vis for arcane crafting; essentia for crucible and infusion recipes.
+    /// With Process::Runic these are sample costs, validated against sample charge.
     pub aspects: Vec<AspectAmount>,
     pub research: Vec<ResearchLink>,
     /// Base infusion instability, independent of the player's altar and stabilizers.
@@ -345,7 +346,8 @@ pub(super) fn validate(
                     "infusion central input is missing"
                 );
                 ensure!(
-                    magic.instability.is_some_and(|value| value >= 0),
+                    magic.instability.is_some_and(|value| value >= 0
+                        || matches!(recipe.process, Some(super::Process::Runic { .. }))),
                     "invalid infusion instability"
                 );
             } else {

@@ -237,7 +237,7 @@ fn recipe_knowledge_keys_do_not_require_research_definitions() {
     let recipe = domain
         .recipes
         .iter_mut()
-        .find(|r| r.magic.is_some())
+        .find(|r| r.magic.is_some() && r.process.is_none())
         .unwrap();
     recipe
         .magic
@@ -255,7 +255,7 @@ fn recipe_knowledge_keys_do_not_require_research_definitions() {
     let recipe = invalid
         .recipes
         .iter_mut()
-        .find(|r| r.magic.is_some())
+        .find(|r| r.magic.is_some() && r.process.is_none())
         .unwrap();
     recipe
         .magic
@@ -294,18 +294,18 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let catalog = Catalog::current(directory.path()).unwrap();
     catalog.verify().unwrap();
     assert_eq!(catalog.manifest.id, first.id);
-    assert_eq!(catalog.manifest.counts["recipes"], 18);
+    assert_eq!(catalog.manifest.counts["recipes"], 19);
     assert_eq!(
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
     );
-    assert_eq!(catalog.manifest.counts["browse"], 42);
+    assert_eq!(catalog.manifest.counts["browse"], 46);
     assert_eq!(catalog.manifest.counts["materials"], 2);
     assert_eq!(catalog.manifest.counts["circuits"], 1);
     assert_eq!(catalog.manifest.counts["species"], 3);
     assert_eq!(catalog.manifest.counts["mutations"], 2);
-    assert_eq!(catalog.manifest.counts["topics"], 12);
-    assert_eq!(catalog.manifest.counts["aspects"], 3);
+    assert_eq!(catalog.manifest.counts["topics"], 15);
+    assert_eq!(catalog.manifest.counts["aspects"], 6);
     assert_eq!(catalog.manifest.counts["research"], 2);
     assert_eq!(catalog.manifest.counts["structures"], 1);
     assert_eq!(catalog.manifest.counts["shapes"], 7);
@@ -677,7 +677,12 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
             .unwrap()
             .recipes
             .iter()
-            .filter(|recipe| recipe.process.is_some())
+            .filter(|recipe| {
+                matches!(
+                    recipe.process,
+                    Some(elysium_compiler_core::domain::Process::Harmony { .. })
+                )
+            })
             .map(|recipe| recipe.id.clone()),
     );
     expected_uses.sort();
@@ -2073,11 +2078,39 @@ fn harmony_process_rejects_false_fixed_outputs_and_buffer_semantics() {
     let source = Source::open(&fixture()).unwrap();
     let original = Domain::load(&source).unwrap();
     original.validate(&source).unwrap();
+    for (path, replacement) in [
+        ("/process", json!(null)),
+        ("/process/charge", json!(4)),
+        ("/magic/instability", json!(7)),
+        ("/magic/aspects/0/amount", json!("1")),
+        ("/inputs/2/choices/0/amount", json!("3")),
+        ("/inputs/2/choices/0/consume/kind", json!("consume")),
+        ("/inputs/1/choices/0/rule/ores", json!(["inventedOre"])),
+        ("/outputs/0/change", json!(null)),
+    ] {
+        let mut domain = original.clone();
+        let row = domain
+            .recipes
+            .iter_mut()
+            .find(|r| r.source.handler == "runic")
+            .unwrap();
+        let mut value = serde_json::to_value(&*row).unwrap();
+        *value.pointer_mut(path).unwrap() = replacement;
+        *row = serde_json::from_value(value).unwrap();
+        row.id = recipe_id(row).unwrap();
+        assert!(
+            domain.validate(&source).is_err(),
+            "accepted false runic semantics at {path}"
+        );
+    }
     assert_eq!(
         original
             .recipes
             .iter()
-            .filter(|r| r.process.is_some())
+            .filter(|r| matches!(
+                r.process,
+                Some(elysium_compiler_core::domain::Process::Harmony { .. })
+            ))
             .count(),
         2
     );
