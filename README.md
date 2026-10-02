@@ -87,5 +87,12 @@ Constructed block metadata preserves the unsigned 16-bit range (0–65535) used 
 
 Input alternatives are distinct when any of their item identity, quantity, consumption, remainders or matching rule differs. Compiler 0.11.2 accepts same-item alternatives with different quantities or consumption and rejects exact duplicate alternatives. The existing Choice record and revision 11 are unchanged; earlier compilers rejected valid same-item variants. Fixed outputs still require positive quantities.
 
+Fluid ingredients retain their registered fluid identity. Their rule is either `exact`
+(including NBT), or `wildcard` with `meta: false, nbt: true` for native machines
+that ignore fluid tags, such as IC2 ore washing. Item metadata, ore dictionary,
+member and root-tag predicates are not valid fluid rules. The existing Choice
+wire format is unchanged; this corrects a validator restriction, without
+normalizing fluid facts or relaxing output identity.
+
 Revision 12 separates fixed output amounts from correlated quantity rules and allows native views to omit semantic slots. The exporter must still retain the complete recipe. See [output quantities and native views](docs/quantities.md) for draw/remainder semantics and validation. Revision 11 snapshots and catalogs are rejected; they must be produced again with the matching exporter/compiler. Historical data is not rewritten by the reader.
 

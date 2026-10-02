@@ -10,6 +10,78 @@ fn fixture() -> PathBuf {
 }
 
 #[test]
+fn fluid_registry_predicates_preserve_nbt_policy_without_item_metadata_rules() {
+    use elysium_compiler_core::domain::{Kind, Match};
+    let source = Source::open(&fixture()).unwrap();
+    let original = Domain::load(&source).unwrap();
+    for (rule, valid) in [
+        (Match::Exact, true),
+        (
+            Match::Wildcard {
+                meta: false,
+                nbt: true,
+            },
+            true,
+        ),
+        (
+            Match::Wildcard {
+                meta: true,
+                nbt: true,
+            },
+            false,
+        ),
+        (
+            Match::Wildcard {
+                meta: false,
+                nbt: false,
+            },
+            false,
+        ),
+        (
+            Match::Ore {
+                name: "water".into(),
+                exclusive: false,
+            },
+            false,
+        ),
+    ] {
+        let mut domain = original.clone();
+        let recipe = domain
+            .recipes
+            .iter_mut()
+            .find(|recipe| recipe.inputs.iter().any(|input| input.kind == Kind::Fluid))
+            .unwrap();
+        recipe
+            .inputs
+            .iter_mut()
+            .find(|input| input.kind == Kind::Fluid)
+            .unwrap()
+            .choices[0]
+            .rule = rule;
+        recipe.id = recipe_id(recipe).unwrap();
+        let projected = recipe.clone();
+        let result = domain.validate(&source);
+        if valid {
+            result.unwrap();
+            let encoded =
+                rmp_serde::to_vec_named(&Table::Recipes(vec![projected.clone()])).unwrap();
+            let Table::Recipes(decoded) = rmp_serde::from_slice::<Table>(&encoded).unwrap() else {
+                panic!("wrong catalog table")
+            };
+            assert_eq!(
+                serde_json::to_value(&decoded[0]).unwrap(),
+                serde_json::to_value(&projected).unwrap()
+            );
+        } else {
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("fluid ingredients"));
+        }
+    }
+}
+
+#[test]
 fn recipe_knowledge_keys_do_not_require_research_definitions() {
     let source = Source::open(&fixture()).unwrap();
     let mut domain = Domain::load(&source).unwrap();

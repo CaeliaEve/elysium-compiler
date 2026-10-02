@@ -337,8 +337,15 @@ impl Domain {
                 for choice in &input.choices {
                     if input.kind == Kind::Fluid {
                         ensure!(
-                            matches!(choice.rule, Match::Exact),
-                            "fluid ingredients require exact registry/NBT alternatives"
+                            matches!(
+                                choice.rule,
+                                Match::Exact
+                                    | Match::Wildcard {
+                                        meta: false,
+                                        nbt: true
+                                    }
+                            ),
+                            "fluid ingredients require a fixed registry with exact or ignored NBT"
                         );
                     }
                     reference(input.kind, &choice.id)?;

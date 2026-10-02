@@ -122,6 +122,8 @@ pub enum Match {
         name: String,
         exclusive: bool,
     },
+    /// Ignore selected parts of an ingredient's identity. For fluids, the only
+    /// wildcard is `meta: false, nbt: true`; the fluid registry is always fixed.
     Wildcard {
         meta: bool,
         nbt: bool,
