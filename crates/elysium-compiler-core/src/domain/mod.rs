@@ -178,6 +178,8 @@ pub enum Consumption {
     Keep,
     /// Vat: presence of one item is sufficient; remove min(amount, available) at start.
     Upto,
+    /// An ordered native requirement; the process allocates actual machine slots.
+    Allocated,
     /// Consume the entire offered stack. `amount` is the minimum/example count.
     Stack,
     /// Empty the selected internal fluid buffer at process start; amount is its minimum gate.

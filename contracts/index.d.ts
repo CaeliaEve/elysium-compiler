@@ -143,6 +143,9 @@ export type Consumption =
       kind: "upto";
     }
   | {
+      kind: "allocated";
+    }
+  | {
       kind: "stack";
     }
   | {
@@ -267,6 +270,11 @@ export type Edit =
  */
 export type Quantity =
   | {
+      kind: "sharedRoll";
+      nominal: string;
+      threshold: string;
+    }
+  | {
       kind: "harmony";
       nominal: string;
       outcome: HarmonyOutcome;
@@ -320,6 +328,11 @@ export type OutputRole = "result" | "return";
  * via the `definition` "Process".
  */
 export type Process =
+  | {
+      energy: number;
+      kind: "alloy";
+      slots: number[];
+    }
   | {
       energy: number;
       extra: VatConsumption[];
@@ -607,7 +620,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 22;
+  revision: 23;
   scope: string;
   source: string;
 }
@@ -1618,7 +1631,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 22;
+  revision: 23;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1630,7 +1643,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 23;
+  revision: 24;
   scope: Scope;
 }
 /**

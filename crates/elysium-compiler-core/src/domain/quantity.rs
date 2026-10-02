@@ -9,6 +9,12 @@ use std::collections::BTreeSet;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Quantity {
+    /// One shared Java nextFloat draw, output when threshold >= draw. See docs/alloy.md.
+    #[serde(rename = "sharedRoll")]
+    SharedRoll {
+        nominal: String,
+        threshold: String,
+    },
     /// All outputs share the recipe's native process outcome and yield.
     Harmony {
         outcome: super::HarmonyOutcome,
@@ -68,6 +74,20 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
         "computed output cannot carry an independent probability"
     );
     match rule {
+        Quantity::SharedRoll { nominal, threshold } => {
+            ensure!(
+                matches!(recipe.process, Some(super::Process::Alloy { .. }))
+                    && output.kind == Kind::Item,
+                "shared roll requires an alloy item result"
+            );
+            let cutoff: f32 = threshold.parse().context("invalid shared roll threshold")?;
+            ensure!(
+                cutoff.is_finite() && (0.0..=1.0).contains(&cutoff),
+                "invalid native float cutoff"
+            );
+            // Capacity and destination state may further reduce completed output.
+            Ok((0, integer(nominal, 1, i64::from(i32::MAX))?))
+        }
         Quantity::Harmony { nominal, .. } => {
             let process = recipe
                 .process

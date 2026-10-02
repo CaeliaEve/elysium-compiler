@@ -294,12 +294,12 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let catalog = Catalog::current(directory.path()).unwrap();
     catalog.verify().unwrap();
     assert_eq!(catalog.manifest.id, first.id);
-    assert_eq!(catalog.manifest.counts["recipes"], 29);
+    assert_eq!(catalog.manifest.counts["recipes"], 30);
     assert_eq!(
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
     );
-    assert_eq!(catalog.manifest.counts["browse"], 61);
+    assert_eq!(catalog.manifest.counts["browse"], 64);
     assert_eq!(catalog.manifest.counts["materials"], 2);
     assert_eq!(catalog.manifest.counts["circuits"], 1);
     assert_eq!(catalog.manifest.counts["species"], 3);
@@ -2078,6 +2078,36 @@ fn native_processes_reject_false_fixed_outputs_and_consumption() {
     let source = Source::open(&fixture()).unwrap();
     let original = Domain::load(&source).unwrap();
     original.validate(&source).unwrap();
+    for (path, replacement) in [
+        ("/process", json!(null)),
+        ("/duration", json!("1")),
+        ("/energy", json!("10")),
+        ("/process/slots", json!([1])),
+        ("/process/slots/0", json!(3)),
+        ("/inputs/0/slot", json!(2)),
+        ("/inputs/0/choices/0/consume/kind", json!("consume")),
+        ("/inputs/0/choices/0/rule/nbt", json!(false)),
+        ("/outputs/0/quantity/threshold", json!("NaN")),
+        ("/outputs/0/quantity/threshold", json!("1.1")),
+        ("/outputs/0/quantity/nominal", json!("0")),
+        ("/outputs/0/chance/denominator", json!("2")),
+        ("/outputs/0/amount", json!("2")),
+    ] {
+        let mut domain = original.clone();
+        let row = domain
+            .recipes
+            .iter_mut()
+            .find(|r| r.source.handler == "alloy")
+            .unwrap();
+        let mut value = serde_json::to_value(&*row).unwrap();
+        *value.pointer_mut(path).unwrap() = replacement;
+        *row = serde_json::from_value(value).unwrap();
+        row.id = recipe_id(row).unwrap();
+        assert!(
+            domain.validate(&source).is_err(),
+            "accepted false alloy semantics at {path}"
+        );
+    }
     for (order, path, replacement) in [
         (0, "/process", json!(null)),
         (0, "/process", json!({"kind":"mapScaling"})),

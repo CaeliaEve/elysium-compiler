@@ -8,6 +8,21 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 mod tests {
     #[test]
+    fn alloy_retains_ordered_allocation_and_shared_roll() {
+        let value = serde_json::json!({"kind":"alloy","energy":1200,"slots":[1,0]});
+        let process: super::Process = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(process).unwrap(), value);
+        assert!(serde_json::from_value::<super::Consumption>(
+            serde_json::json!({"kind":"allocated"})
+        )
+        .is_ok());
+        assert!(serde_json::from_value::<super::Quantity>(
+            serde_json::json!({"kind":"sharedRoll","nominal":"2","threshold":"0.0"})
+        )
+        .is_ok());
+    }
+
+    #[test]
     fn vat_retains_native_understock_and_zero_yield() {
         let value = serde_json::json!({"kind":"vat","energy":-7,"extra":[{"id":"item_example","rule":{"kind":"wildcard","meta":false,"nbt":true},"amount":0}],"zeroOutput":"fluid_example"});
         let process: super::Process = serde_json::from_value(value.clone()).unwrap();
@@ -88,6 +103,8 @@ pub enum InscriberMode {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// Registered EnderIO alloy matching and separate consumption traversals.
+    Alloy { energy: i32, slots: Vec<i32> },
     /// EnderIO precomputed fluid pair and ordered item consumption; see docs/vat.md.
     Vat {
         energy: i32,
@@ -215,6 +232,15 @@ pub(super) fn validate(
     aspects: &[super::Aspect],
 ) -> Result<()> {
     ensure!(
+        matches!(recipe.process, Some(Process::Alloy { .. }))
+            || !recipe
+                .inputs
+                .iter()
+                .flat_map(|i| &i.choices)
+                .any(|c| matches!(c.consume, Consumption::Allocated)),
+        "allocated consumption requires a native alloy process"
+    );
+    ensure!(
         matches!(recipe.process, Some(Process::Vat { .. }))
             || !recipe
                 .inputs
@@ -243,6 +269,9 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    if let Process::Alloy { slots, .. } = process {
+        return validate_alloy(recipe, slots);
+    }
     if let Process::Vat {
         extra, zero_output, ..
     } = process
@@ -396,6 +425,50 @@ pub(super) fn validate(
         failures == 1 && successes > 0,
         "harmony requires normal outputs and exactly one failure output"
     );
+    Ok(())
+}
+
+fn validate_alloy(recipe: &Recipe, slots: &[i32]) -> Result<()> {
+    ensure!(
+        recipe.duration.is_none()
+            && recipe.energy.is_none()
+            && recipe.grid.is_none()
+            && recipe.magic.is_none()
+            && !recipe.inputs.is_empty()
+            && recipe.inputs.len() <= 4096
+            && slots.len() == recipe.inputs.len()
+            && slots.iter().all(|s| (-1..=2).contains(s))
+            && !recipe.outputs.is_empty()
+            && recipe.outputs.len() <= 128,
+        "invalid native alloy shape"
+    );
+    for (index, input) in recipe.inputs.iter().enumerate() {
+        ensure!(
+            input.kind == Kind::Item && input.slot == index as u32 && !input.choices.is_empty(),
+            "invalid alloy requirement order"
+        );
+        let amount = &input.choices[0].amount;
+        integer(amount, 1, i64::from(i32::MAX))?;
+        for c in &input.choices {
+            ensure!(
+                &c.amount == amount
+                    && matches!(c.consume, Consumption::Allocated)
+                    && matches!(c.rule, Match::Wildcard { nbt: true, .. })
+                    && c.returns.is_empty(),
+                "invalid alloy requirement semantics"
+            );
+        }
+    }
+    for (index, output) in recipe.outputs.iter().enumerate() {
+        ensure!(
+            output.kind == Kind::Item
+                && output.slot == index as u32
+                && matches!(output.role, OutputRole::Result)
+                && matches!(output.quantity, Some(Quantity::SharedRoll { .. })),
+            "alloy result lacks its shared roll or ordered slot"
+        );
+        super::quantity_bounds(recipe, output)?;
+    }
     Ok(())
 }
 
