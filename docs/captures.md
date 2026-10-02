@@ -8,7 +8,7 @@ bounded live pipeline validation without claiming full registry coverage.
 
 NESQL 0.15.3 writes closed Source files to `nesql/captures/<job-id>` while the
 production export is running. Compiler 0.14.2 can assemble a completed archive
-without loading Minecraft. Source and Catalog remain revision 14; this transport
+without loading Minecraft. Source revision 15 and Catalog revision 14 are used; this transport
 envelope is `elysium.capture`, revision 1.
 
 ## Files and completion

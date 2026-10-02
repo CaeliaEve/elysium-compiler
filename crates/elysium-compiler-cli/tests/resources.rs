@@ -273,7 +273,7 @@ fn picture_source(root: &Path, env: &Value, pixels: &[u8]) -> Value {
             "decodedBytes":plain.len(),"rows":if *kind == "assets" {2} else {0},"sha256":hash(&bytes)}));
     }
     files.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
-    let mut manifest = json!({"format":"elysium.source","revision":14,"producer":{"name":"nesql","version":"fixture"},
+    let mut manifest = json!({"format":"elysium.source","revision":elysium_compiler_core::source::SOURCE_REVISION,"producer":{"name":"nesql","version":"fixture"},
         "environment":hash(&environment),"scope":{"mode":"selection","collections":elysium_compiler_core::source::CORE_COLLECTIONS},"files":files});
     manifest["id"] = json!(hash(&serde_json::to_vec(&manifest).unwrap()));
     fs::write(

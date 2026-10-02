@@ -213,8 +213,14 @@ export type Edit =
   | {
       base: Stack;
       config: number;
+      /**
+       * One native InventoryWithFilterOptions.writeCustomNBT result per config choice, in the same order. Numeric item lookup happens in the pinned game registry; these observations are not a promise to replay arbitrary NBT.
+       */
+      configurations: {
+        [k: string]: Nbt;
+      }[];
       kind: "filter";
-      metadata: number;
+      metadata?: number | null;
     }
   | {
       kind: "append";
@@ -500,7 +506,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 13;
+  revision: 14;
   scope: string;
   source: string;
 }
@@ -1493,7 +1499,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 13;
+  revision: 14;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1505,7 +1511,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 14;
+  revision: 15;
   scope: Scope;
 }
 /**

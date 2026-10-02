@@ -35,12 +35,17 @@ pub enum Edit {
         /// Both input and base must be armor or have at least one native tool class.
         tools: bool,
     },
-    /// Automagy PreserveFilterRecipe: copy the filter configuration from one
-    /// input and the output metadata from a later filter input.
+    /// Automagy PreserveFilterRecipe. Preserve the base item/count/tags; replace
+    /// ContainedItems and FilterOptions using native inventory serialization.
+    /// A later filter supplies metadata; otherwise the base metadata is retained.
     Filter {
         base: Stack,
         config: u32,
-        metadata: u32,
+        metadata: Option<u32>,
+        /// One native InventoryWithFilterOptions.writeCustomNBT result per config
+        /// choice, in the same order. Numeric item lookup happens in the pinned game
+        /// registry; these observations are not a promise to replay arbitrary NBT.
+        configurations: Vec<BTreeMap<String, Nbt>>,
     },
     /// Native list append (e.g. Thaumic Machina wand augmentations):
     /// Copy the input item, metadata, count and tags. Append `value` to the list
@@ -166,42 +171,51 @@ pub(super) fn validate(
             base,
             config,
             metadata,
+            configurations,
         } => {
             let base_item = items
                 .get(base.id.as_str())
                 .context("missing filter base item")?;
             integer(&base.amount, 1, i64::MAX)?;
             ensure!(
-                *config != *metadata,
-                "filter configuration and metadata inputs must differ"
+                metadata.is_none_or(|metadata| metadata > *config),
+                "filter metadata input must follow configuration"
             );
             ensure!(
-                change.input == *metadata,
-                "filter samples must bind to the metadata input"
+                change.input == metadata.unwrap_or(*config),
+                "filter samples must bind to metadata, or configuration when metadata is absent"
             );
             let config_input = recipe
                 .inputs
                 .iter()
                 .find(|input| input.kind == Kind::Item && input.slot == *config)
                 .context("filter configuration input is missing")?;
-            let metadata_input = recipe
-                .inputs
-                .iter()
-                .find(|input| input.kind == Kind::Item && input.slot == *metadata)
-                .context("filter metadata input is missing")?;
+            if let Some(metadata) = metadata {
+                let metadata_input = recipe
+                    .inputs
+                    .iter()
+                    .find(|input| input.kind == Kind::Item && input.slot == *metadata)
+                    .context("filter metadata input is missing")?;
+                ensure!(
+                    !metadata_input.choices.is_empty(),
+                    "filter metadata input has no choices"
+                );
+            }
             ensure!(
-                !config_input.choices.is_empty() && !metadata_input.choices.is_empty(),
-                "filter inputs have no choices"
+                !config_input.choices.is_empty()
+                    && configurations.len() == config_input.choices.len(),
+                "filter configuration observations omit input choices"
             );
             ensure!(base_item.id == base.id, "invalid filter base item");
             let mut expected = None;
-            for choice in &config_input.choices {
+            for (choice, observation) in config_input.choices.iter().zip(configurations) {
                 let config_item = items
                     .get(choice.id.as_str())
                     .context("missing filter config item")?;
-                let tags = filter_tags(base_item, config_item)?;
+                filter_configuration(config_item, observation)?;
+                let tags = filter_tags(base_item, observation)?;
                 ensure!(
-                    expected.as_ref().is_none_or(|value| value == &tags),
+                    metadata.is_none() || expected.as_ref().is_none_or(|value| value == &tags),
                     "filter configuration alternatives require separate output branches"
                 );
                 expected = Some(tags);
@@ -314,7 +328,8 @@ fn apply(
         Edit::Filter {
             base,
             config,
-            metadata: _,
+            metadata,
+            configurations,
         } => {
             let template = items
                 .get(base.id.as_str())
@@ -322,19 +337,28 @@ fn apply(
             let config_input = recipe
                 .inputs
                 .iter()
-                .find(|input| input.slot == *config)
+                .find(|input| input.kind == Kind::Item && input.slot == *config)
                 .context("missing filter config input")?;
-            let config_choice = config_input
-                .choices
-                .first()
-                .context("filter config has no choices")?;
-            let config_item = items
-                .get(config_choice.id.as_str())
-                .context("missing filter config item")?;
-            let tags = filter_tags(template, config_item)?;
+            let index = if metadata.is_some() {
+                0
+            } else {
+                config_input
+                    .choices
+                    .iter()
+                    .position(|choice| choice.id == input.id)
+                    .context("filter sample is not a configuration choice")?
+            };
+            let configuration = configurations
+                .get(index)
+                .context("missing native filter configuration")?;
+            let tags = filter_tags(template, configuration)?;
             (
                 &template.registry,
-                input.meta,
+                if metadata.is_some() {
+                    input.meta
+                } else {
+                    template.meta
+                },
                 base.amount.as_str(),
                 Some(Nbt::Compound { value: tags }),
             )
@@ -495,12 +519,98 @@ fn number(tag: Option<&Nbt>) -> Result<i32> {
     })
 }
 
-fn filter_tags(template: &Item, config: &Item) -> Result<BTreeMap<String, Nbt>> {
+fn filter_tags(
+    template: &Item,
+    configuration: &BTreeMap<String, Nbt>,
+) -> Result<BTreeMap<String, Nbt>> {
     let mut tags = compound(&template.nbt)?.cloned().unwrap_or_default();
-    if let Some(source) = compound(&config.nbt)? {
-        tags.extend(source.clone());
-    }
+    tags.remove("FilterOptions");
+    tags.extend(configuration.clone());
     Ok(tags)
+}
+
+/// Inventory item ids are runtime observations. Check their canonical structure,
+/// and independently recompute the options that do not require the game registry.
+fn filter_configuration(config: &Item, observed: &BTreeMap<String, Nbt>) -> Result<()> {
+    Nbt::Compound {
+        value: observed.clone(),
+    }
+    .validate()?;
+    ensure!(
+        observed
+            .keys()
+            .all(|key| matches!(key.as_str(), "ContainedItems" | "FilterOptions")),
+        "filter serialization includes unrelated root tags"
+    );
+    let Some(Nbt::List { element, value }) = observed.get("ContainedItems") else {
+        bail!("filter serialization has no inventory list")
+    };
+    ensure!(
+        value.len() <= 9
+            && if value.is_empty() {
+                element == "end"
+            } else {
+                element == "compound"
+            },
+        "invalid native filter inventory list"
+    );
+    let mut previous = -1;
+    for entry in value {
+        let Nbt::Compound { value: entry } = entry else {
+            bail!("invalid filter inventory entry")
+        };
+        ensure!(
+            entry
+                .keys()
+                .all(|key| matches!(key.as_str(), "Slot" | "id" | "Count" | "Damage" | "tag")),
+            "nonserialized filter inventory field"
+        );
+        let Some(Nbt::Byte { value: slot }) = entry.get("Slot") else {
+            bail!("invalid filter inventory slot")
+        };
+        let slot = integer(slot, 0, 8)?;
+        ensure!(
+            slot > previous,
+            "filter inventory slots must be sorted and unique"
+        );
+        previous = slot;
+        ensure!(
+            matches!(entry.get("id"), Some(Nbt::Short { .. }))
+                && matches!(entry.get("Damage"), Some(Nbt::Short { .. }))
+                && matches!(entry.get("Count"), Some(Nbt::Int { .. }))
+                && entry
+                    .get("tag")
+                    .is_none_or(|tag| matches!(tag, Nbt::Compound { .. })),
+            "invalid native filter stack serialization"
+        );
+    }
+    let mut options = BTreeMap::new();
+    if let Some(Nbt::Compound { value: source }) =
+        compound(&config.nbt)?.and_then(|tags| tags.get("FilterOptions"))
+    {
+        for key in ["useItemCount", "ignoreNBT", "ignoreMetadata"] {
+            if number(source.get(key))? as i8 != 0 {
+                options.insert(key.into(), Nbt::Byte { value: "1".into() });
+            }
+        }
+        if let Some(Nbt::String { value }) = source.get("nameFilter") {
+            let value = value.trim_matches(|c| c <= '\u{20}');
+            if !value.is_empty() {
+                options.insert(
+                    "nameFilter".into(),
+                    Nbt::String {
+                        value: value.into(),
+                    },
+                );
+            }
+        }
+    }
+    let expected = (!options.is_empty()).then_some(Nbt::Compound { value: options });
+    ensure!(
+        observed.get("FilterOptions") == expected.as_ref(),
+        "filter options differ from native normalization"
+    );
+    Ok(())
 }
 
 fn compound(nbt: &Option<Nbt>) -> Result<Option<&BTreeMap<String, Nbt>>> {
@@ -549,6 +659,16 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn empty_filter() -> BTreeMap<String, Nbt> {
+        BTreeMap::from([(
+            "ContainedItems".into(),
+            Nbt::List {
+                element: "end".into(),
+                value: vec![],
+            },
+        )])
+    }
+
     fn item(registry: &str, meta: i32) -> Item {
         serde_json::from_value(json!({
             "id": item_id(registry, meta, None).unwrap(), "registry": registry,
@@ -556,6 +676,54 @@ mod tests {
             "durability": 0, "tools": {}, "armor": false, "tags": []
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn filter_matches_native_automagy_fixtures() {
+        let fixtures: serde_json::Value =
+            serde_json::from_str(include_str!("filter-native-fixtures.json")).unwrap();
+        for fixture in fixtures.as_array().unwrap() {
+            let mut base = item("minecraft:paper", 7);
+            base.nbt = serde_json::from_value(fixture["base"].clone()).unwrap();
+            base.id = item_id(&base.registry, base.meta, base.nbt.as_ref()).unwrap();
+            let mut config = item("Automagy:enchantedPaper", 1);
+            config.nbt = serde_json::from_value(fixture["config"].clone()).unwrap();
+            config.id = item_id(&config.registry, config.meta, config.nbt.as_ref()).unwrap();
+            let metadata = item("Automagy:enchantedPaper", 2);
+            let has_metadata = fixture["hasMetadata"].as_bool().unwrap();
+            let mut product = item("minecraft:paper", fixture["meta"].as_i64().unwrap() as i32);
+            product.nbt = serde_json::from_value(fixture["expected"].clone()).unwrap();
+            product.id = item_id(&product.registry, product.meta, product.nbt.as_ref()).unwrap();
+            let recipe: Recipe = serde_json::from_value(json!({
+                "id":"recipe_test", "source":{"owner":"Automagy","handler":"native-test","key":"native-test"},
+                "category":"category_test", "inputs":[
+                    {"slot":0,"kind":"item","choices":[{"id":config.id,"amount":"1","consume":{"kind":"consume"},"returns":[],"rule":{"kind":"exact"}}]},
+                    {"slot":1,"kind":"item","choices":[{"id":metadata.id,"amount":"1","consume":{"kind":"consume"},"returns":[],"rule":{"kind":"exact"}}]}
+                ], "outputs":[{"slot":0,"kind":"item","id":product.id,"amount":"3","role":"result",
+                    "chance":{"numerator":"1","denominator":"1"}, "change":{
+                        "input": if has_metadata {1} else {0}, "action":{"kind":"filter",
+                            "base":{"id":base.id,"amount":"3"}, "config":0, "metadata":if has_metadata {Some(1)} else {None},
+                            "configurations":[fixture["normalized"]["value"].clone()]},
+                        "samples":[{"id":product.id,"amount":"3"}]}}], "properties":{},"order":0
+            })).expect("native filter contract accepts optional metadata and normalized configuration facts");
+            let items = BTreeMap::from([
+                (base.id.as_str(), &base),
+                (config.id.as_str(), &config),
+                (metadata.id.as_str(), &metadata),
+                (product.id.as_str(), &product),
+            ]);
+            validate(&recipe, &recipe.outputs[0], &items).unwrap();
+            let mut corrupt = recipe.clone();
+            if let Some(change) = corrupt.outputs[0].change.as_mut() {
+                let mut action = serde_json::to_value(&change.action).unwrap();
+                action["configurations"][0]["owner"] = json!({"type":"string","value":"injected"});
+                change.action = serde_json::from_value(action).unwrap();
+            }
+            assert!(
+                validate(&corrupt, &corrupt.outputs[0], &items).is_err(),
+                "arbitrary config root tags must not be copied"
+            );
+        }
     }
 
     #[test]
@@ -578,7 +746,8 @@ mod tests {
                 amount: "3".into(),
             },
             config: 0,
-            metadata: 1,
+            metadata: Some(1),
+            configurations: vec![empty_filter()],
         };
         let result = apply(&recipe, &action, &metadata, "1", &items).unwrap();
         assert_eq!(
@@ -591,7 +760,7 @@ mod tests {
                 "automagy:product",
                 2,
                 Some(&Nbt::Compound {
-                    value: BTreeMap::new()
+                    value: empty_filter()
                 })
             )
             .unwrap(),
@@ -606,7 +775,7 @@ mod tests {
         let metadata = item("automagy:paper", 2);
         let mut product = item("automagy:product", 1);
         product.nbt = Some(Nbt::Compound {
-            value: BTreeMap::new(),
+            value: empty_filter(),
         });
         product.id = item_id(&product.registry, product.meta, product.nbt.as_ref()).unwrap();
         let recipe: Recipe = serde_json::from_value(json!({
@@ -619,7 +788,7 @@ mod tests {
             ], "outputs": [{"slot": 0, "kind": "item", "id": product.id, "amount": "3", "role": "result",
                 "chance": {"numerator": "1", "denominator": "1"},
                 "change": {"input": 0, "action": {"kind": "filter",
-                    "base": {"id": base.id, "amount": "3"}, "config": 0, "metadata": 1},
+                    "base": {"id": base.id, "amount": "3"}, "config": 0, "metadata": 1, "configurations": [empty_filter()]},
                     "samples": [{"id": product.id, "amount": "3"}]}
             }], "properties": {}, "order": 0
         })).unwrap();
@@ -665,6 +834,18 @@ mod tests {
         let mut alternative = valid.inputs[0].choices[0].clone();
         alternative.id = other_config.id.clone();
         valid.inputs[0].choices.push(alternative);
+        if let Edit::Filter { configurations, .. } =
+            &mut valid.outputs[0].change.as_mut().unwrap().action
+        {
+            let mut normalized = empty_filter();
+            normalized.insert(
+                "FilterOptions".into(),
+                Nbt::Compound {
+                    value: BTreeMap::from([("ignoreNBT".into(), Nbt::Byte { value: "1".into() })]),
+                },
+            );
+            configurations.push(normalized);
+        }
         assert!(validate(&valid, &valid.outputs[0], &items).is_err(),
             "a later configuration candidate with a different native result requires its own branch");
     }
