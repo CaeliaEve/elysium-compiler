@@ -122,6 +122,7 @@ fn selective_tag_removal_is_bounded_and_survives_catalog_encoding() {
             .iter_mut()
             .find(|recipe| {
                 recipe.magic.is_none()
+                    && recipe.process.is_none()
                     && recipe.outputs.iter().all(|output| output.change.is_none())
                     && recipe.inputs.iter().any(|input| input.kind == Kind::Item)
             })
@@ -194,7 +195,10 @@ fn fluid_registry_predicates_preserve_nbt_policy_without_item_metadata_rules() {
         let recipe = domain
             .recipes
             .iter_mut()
-            .find(|recipe| recipe.inputs.iter().any(|input| input.kind == Kind::Fluid))
+            .find(|recipe| {
+                recipe.process.is_none()
+                    && recipe.inputs.iter().any(|input| input.kind == Kind::Fluid)
+            })
             .unwrap();
         recipe
             .inputs
@@ -290,12 +294,12 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let catalog = Catalog::current(directory.path()).unwrap();
     catalog.verify().unwrap();
     assert_eq!(catalog.manifest.id, first.id);
-    assert_eq!(catalog.manifest.counts["recipes"], 16);
+    assert_eq!(catalog.manifest.counts["recipes"], 18);
     assert_eq!(
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
     );
-    assert_eq!(catalog.manifest.counts["browse"], 38);
+    assert_eq!(catalog.manifest.counts["browse"], 42);
     assert_eq!(catalog.manifest.counts["materials"], 2);
     assert_eq!(catalog.manifest.counts["circuits"], 1);
     assert_eq!(catalog.manifest.counts["species"], 3);
@@ -667,10 +671,24 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     else {
         panic!("links table")
     };
-    assert_eq!(
-        links.iter().find(|links| links.id == stone).unwrap().uses,
-        [recipe_id.clone()]
+    let mut expected_uses = vec![recipe_id.clone()];
+    expected_uses.extend(
+        Domain::load(&Source::open(&fixture()).unwrap())
+            .unwrap()
+            .recipes
+            .iter()
+            .filter(|recipe| recipe.process.is_some())
+            .map(|recipe| recipe.id.clone()),
     );
+    expected_uses.sort();
+    let mut actual_uses = links
+        .iter()
+        .find(|links| links.id == stone)
+        .unwrap()
+        .uses
+        .clone();
+    actual_uses.sort();
+    assert_eq!(actual_uses, expected_uses);
     assert_eq!(
         links
             .iter()
@@ -1586,6 +1604,7 @@ fn test_branch_and_potential_quantities() {
         energy: Some("32".to_string()),
         grid: None,
         magic: None,
+        process: None,
         order: 0,
         inputs: vec![],
         outputs: vec![
@@ -1872,6 +1891,7 @@ fn test_edit_append_wand_augmentations() {
         properties: BTreeMap::new(),
         grid: None,
         magic: None,
+        process: None,
         order: 0,
         inputs: vec![elysium_compiler_core::domain::Input {
             slot: 0,
@@ -2018,4 +2038,100 @@ fn test_edit_append_wand_augmentations() {
     bad_type_recipe.inputs[0].choices[0].id = wand_int_list_id.clone();
     bad_type_recipe.outputs[0].change.as_mut().unwrap().action = append_potency;
     assert!(validate_change(&bad_type_recipe, &bad_type_recipe.outputs[0], &items).is_err());
+}
+#[test]
+fn harmony_quantities_require_a_shared_process() {
+    use elysium_compiler_core::domain::{quantity_bounds, Recipe};
+    let value = serde_json::json!({
+        "id":"test", "source":{"owner":"tectech","handler":"harmony","key":"planet"},
+        "category":"test", "order":0, "inputs":[], "properties":{},
+        "duration":null,"energy":null,"grid":null,"magic":null,"view":null,
+        "process":{"kind":"harmony","mode":"parallel","hydrogen":"1000000000",
+            "helium":"1000000000","ticks":"360000","startEu":"123456789012345",
+            "outputEu":"234567890123456","chance":"0.95","rocketTier":1,"compressionTier":1},
+        "outputs":[{"slot":0,"kind":"item","id":"test","amount":null,"change":null,
+            "role":"result","chance":{"numerator":"1","denominator":"1"},
+            "quantity":{"kind":"harmony","outcome":"success","nominal":"9223372036854775807"}}]
+    });
+    let recipe: Recipe = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(
+        quantity_bounds(&recipe, &recipe.outputs[0]).unwrap(),
+        (0, i64::MAX)
+    );
+    let mut invalid = value;
+    invalid.as_object_mut().unwrap().remove("process");
+    let missing: Recipe = serde_json::from_value(invalid).unwrap();
+    assert!(quantity_bounds(&missing, &missing.outputs[0]).is_err());
+    let mut invalid = recipe.clone();
+    invalid.outputs[0].chance.denominator = "2".into();
+    assert!(quantity_bounds(&invalid, &invalid.outputs[0]).is_err());
+}
+
+#[test]
+fn harmony_process_rejects_false_fixed_outputs_and_buffer_semantics() {
+    use serde_json::json;
+    let source = Source::open(&fixture()).unwrap();
+    let original = Domain::load(&source).unwrap();
+    original.validate(&source).unwrap();
+    assert_eq!(
+        original
+            .recipes
+            .iter()
+            .filter(|r| r.process.is_some())
+            .count(),
+        2
+    );
+    for (path, value) in [
+        ("/duration", json!("20")),
+        ("/energy", json!("0")),
+        ("/process/chance", json!("NaN")),
+        ("/process/hydrogen", json!("0")),
+        ("/process/compressionTier", json!(9)),
+        ("/process/rocketTier", json!(10)),
+        ("/inputs/0/choices/0/consume/kind", json!("consume")),
+        ("/inputs/0/choices/0/rule/meta", json!(false)),
+        ("/inputs/1/choices/0/consume/kind", json!("consume")),
+        ("/inputs/1/choices/0/amount", json!("1")),
+        (
+            "/inputs/1/choices/0/id",
+            json!(fluid_id("water", None).unwrap()),
+        ),
+        ("/outputs/0/amount", json!("123")),
+        ("/outputs/0/chance/denominator", json!("2")),
+        ("/outputs/1/quantity/nominal", json!("28800")),
+        ("/outputs/1/quantity/outcome", json!("success")),
+        ("/outputs/1/id", json!(fluid_id("water", None).unwrap())),
+        ("/process", json!(null)),
+    ] {
+        let mut domain = original.clone();
+        let recipe = domain
+            .recipes
+            .iter_mut()
+            .find(|r| {
+                matches!(
+                    r.process,
+                    Some(elysium_compiler_core::domain::Process::Harmony {
+                        mode: elysium_compiler_core::domain::HarmonyMode::Parallel,
+                        ..
+                    })
+                )
+            })
+            .unwrap();
+        let mut value_recipe = serde_json::to_value(&*recipe).unwrap();
+        *value_recipe.pointer_mut(path).unwrap() = value;
+        *recipe = serde_json::from_value(value_recipe).unwrap();
+        recipe.id = recipe_id(recipe).unwrap();
+        assert!(
+            domain.validate(&source).is_err(),
+            "accepted broken process at {path}"
+        );
+    }
+    let bytes = rmp_serde::to_vec_named(&Table::Recipes(original.recipes.clone())).unwrap();
+    let Table::Recipes(roundtrip) = rmp_serde::from_slice::<Table>(&bytes).unwrap() else {
+        panic!()
+    };
+    assert_eq!(
+        serde_json::to_value(roundtrip).unwrap(),
+        serde_json::to_value(original.recipes).unwrap()
+    );
 }

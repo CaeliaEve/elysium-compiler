@@ -11,6 +11,11 @@ impl Domain {
             .map(|item| (item.id.as_str(), item))
             .collect();
         let fluids: BTreeSet<_> = self.fluids.iter().map(|fluid| fluid.id.as_str()).collect();
+        let fluid_records: BTreeMap<_, _> = self
+            .fluids
+            .iter()
+            .map(|fluid| (fluid.id.as_str(), fluid))
+            .collect();
         let texts: BTreeSet<_> = self.strings.iter().map(|text| text.id.as_str()).collect();
         let views: BTreeMap<_, _> = self
             .views
@@ -322,6 +327,7 @@ impl Domain {
                 );
             }
             let mut inputs = BTreeSet::new();
+            process::validate(recipe, &fluid_records)?;
             for input in &recipe.inputs {
                 ensure!(
                     input.slot <= 65535 && inputs.insert((input.kind, input.slot)),

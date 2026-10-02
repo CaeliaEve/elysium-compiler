@@ -6,6 +6,7 @@ mod industry;
 mod magic;
 mod matching;
 mod model;
+mod process;
 mod quantity;
 mod structure;
 pub use change::{Change, Edit, Stack};
@@ -13,6 +14,7 @@ pub use genetics::*;
 pub use industry::*;
 pub use magic::*;
 pub use model::*;
+pub use process::{HarmonyMode, HarmonyOutcome, Process};
 pub use quantity::{quantity_bounds, Quantity};
 pub use structure::*;
 
@@ -166,6 +168,9 @@ pub enum Consumption {
     Keep,
     /// Consume the entire offered stack. `amount` is the minimum/example count.
     Stack,
+    /// Empty the selected internal fluid buffer at process start; amount is its minimum gate.
+    /// Only valid with a native process that defines the buffer and mode-dependent gate.
+    Buffer,
     Damage {
         points: u32,
     },
@@ -302,6 +307,8 @@ pub struct Recipe {
     pub properties: BTreeMap<String, Property>,
     pub grid: Option<Grid>,
     pub magic: Option<MagicRecipe>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub process: Option<Process>,
     pub view: Option<String>,
     pub order: u32,
 }
@@ -595,15 +602,16 @@ pub fn recipe_id(recipe: &Recipe) -> Result<String> {
                 .remove("samples");
         }
     }
-    value_id(
-        "recipe",
-        &json!({
-            "source": recipe.source, "category": recipe.category,
-            "inputs": recipe.inputs, "outputs": outputs,
-            "duration": recipe.duration, "energy": recipe.energy, "properties": values,
-            "grid": recipe.grid, "magic": magic,
-        }),
-    )
+    let mut key = json!({
+        "source": recipe.source, "category": recipe.category,
+        "inputs": recipe.inputs, "outputs": outputs,
+        "duration": recipe.duration, "energy": recipe.energy, "properties": values,
+        "grid": recipe.grid, "magic": magic,
+    });
+    if let Some(process) = &recipe.process {
+        key["process"] = serde_json::to_value(process)?;
+    }
+    value_id("recipe", &key)
 }
 
 fn value_id(prefix: &str, value: &Value) -> Result<String> {

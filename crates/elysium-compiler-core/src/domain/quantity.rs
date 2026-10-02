@@ -9,6 +9,11 @@ use std::collections::BTreeSet;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Quantity {
+    /// All outputs share the recipe's native process outcome and yield.
+    Harmony {
+        outcome: super::HarmonyOutcome,
+        nominal: String,
+    },
     Draw {
         input: u32,
         after: Vec<u32>,
@@ -41,7 +46,7 @@ pub enum Quantity {
     },
 }
 
-/// Exact attainable bounds; the rules, rather than these bounds, retain correlation.
+/// Conservative display bounds; the rules retain correlation and attainable values.
 pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
     let Some(rule) = &output.quantity else {
         let value = integer(
@@ -63,6 +68,16 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
         "computed output cannot carry an independent probability"
     );
     match rule {
+        Quantity::Harmony { nominal, .. } => {
+            let process = recipe
+                .process
+                .as_ref()
+                .context("harmony quantity lacks its shared process")?;
+            process.validate_parameters()?;
+            let base = integer(nominal, 1, i64::MAX)?;
+            // Rust's saturating float cast matches Java d2l for nonnegative finite values.
+            Ok((0, (base as f64 * process.max_parallel() as f64) as i64))
+        }
         Quantity::Branch {
             group,
             parameters,

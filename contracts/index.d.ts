@@ -143,6 +143,9 @@ export type Consumption =
       kind: "stack";
     }
   | {
+      kind: "buffer";
+    }
+  | {
       kind: "damage";
       points: number;
     };
@@ -244,6 +247,11 @@ export type Edit =
  */
 export type Quantity =
   | {
+      kind: "harmony";
+      nominal: string;
+      outcome: HarmonyOutcome;
+    }
+  | {
       after: number[];
       input: number;
       kind: "draw";
@@ -277,9 +285,40 @@ export type Quantity =
     };
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "HarmonyOutcome".
+ */
+export type HarmonyOutcome = "success" | "failure";
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "OutputRole".
  */
 export type OutputRole = "result" | "return";
+/**
+ * Native shared process, not independent probabilities on individual outputs. See docs/harmony.md for state, energy, rounding and correlated yield rules.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "Process".
+ */
+export type Process = {
+  /**
+   * Round-trip decimal representation of the native binary64 base chance.
+   */
+  chance: string;
+  compressionTier: number;
+  helium: string;
+  hydrogen: string;
+  kind: "harmony";
+  mode: HarmonyMode;
+  outputEu: string;
+  rocketTier: number;
+  startEu: string;
+  ticks: string;
+};
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "HarmonyMode".
+ */
+export type HarmonyMode = "single" | "parallel";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "ResearchFlag".
@@ -515,7 +554,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 16;
+  revision: 17;
   scope: string;
   source: string;
 }
@@ -1027,6 +1066,7 @@ export interface Recipe {
   magic?: MagicRecipe | null;
   order: number;
   outputs: Output[];
+  process?: Process | null;
   /**
    * Namespaced properties with an explicit value type and unit.
    */
@@ -1516,7 +1556,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 16;
+  revision: 17;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1528,7 +1568,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 17;
+  revision: 18;
   scope: Scope;
 }
 /**
