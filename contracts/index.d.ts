@@ -179,6 +179,11 @@ export type Match =
   | {
       keys: string[];
       kind: "without_tags";
+    }
+  | {
+      base: Match;
+      exclude: MatchCase[];
+      kind: "except";
     };
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -510,7 +515,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 15;
+  revision: 16;
   scope: string;
   source: string;
 }
@@ -1079,6 +1084,14 @@ export interface Remainder {
   kind: Kind;
 }
 /**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "MatchCase".
+ */
+export interface MatchCase {
+  id: string;
+  rule: Match;
+}
+/**
  * Registered recipe costs before equipment discounts and observed research prerequisites.
  *
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1503,7 +1516,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 15;
+  revision: 16;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1515,7 +1528,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 16;
+  revision: 17;
   scope: Scope;
 }
 /**

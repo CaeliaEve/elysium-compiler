@@ -10,6 +10,72 @@ fn fixture() -> PathBuf {
 }
 
 #[test]
+fn prior_matches_are_bounded_references_not_positive_alternatives() {
+    use elysium_compiler_core::domain::{Kind, Match};
+    use serde_json::json;
+    let source = Source::open(&fixture()).unwrap();
+    let original = Domain::load(&source).unwrap();
+    let stone = item_id("minecraft:stone", 0, None).unwrap();
+    let exact = json!({"kind":"exact"});
+    let excluded = json!({"id":stone,"rule":exact});
+    let valid = json!({"kind":"except","base":{"kind":"wildcard","meta":true,"nbt":true},"exclude":[excluded]});
+    for (rule, allowed) in [
+        (valid.clone(), true),
+        (json!({"kind":"except","base":exact,"exclude":[]}), false),
+        (
+            json!({"kind":"except","base":exact,"exclude":[excluded.clone(),excluded.clone()]}),
+            false,
+        ),
+        (
+            json!({"kind":"except","base":exact,"exclude":[{"id":"item_missing","rule":exact}]}),
+            false,
+        ),
+        (
+            json!({"kind":"except","base":valid.clone(),"exclude":[excluded.clone()]}),
+            false,
+        ),
+        (
+            json!({"kind":"except","base":exact,"exclude":[{"id":stone,"rule":valid}]}),
+            false,
+        ),
+        (
+            json!({"kind":"except","base":{"kind":"member","root":"rootTrees","analyzed":false},"exclude":[excluded]}),
+            false,
+        ),
+    ] {
+        let mut domain = original.clone();
+        let rule: Match = serde_json::from_value(rule).unwrap();
+        let recipe = domain
+            .recipes
+            .iter_mut()
+            .find(|r| r.source.key == "machine")
+            .unwrap();
+        let input = recipe
+            .inputs
+            .iter_mut()
+            .find(|input| input.kind == Kind::Item)
+            .unwrap();
+        input.choices.truncate(1);
+        input.choices[0].rule = rule;
+        recipe.id = recipe_id(recipe).unwrap();
+        let result = domain.validate(&source);
+        if allowed {
+            result.unwrap(); // The anchor may be excluded; other metadata/NBT still matches.
+            let bytes = rmp_serde::to_vec_named(&Table::Recipes(domain.recipes.clone())).unwrap();
+            let Table::Recipes(decoded) = rmp_serde::from_slice::<Table>(&bytes).unwrap() else {
+                panic!()
+            };
+            assert_eq!(
+                serde_json::to_value(decoded).unwrap(),
+                serde_json::to_value(&domain.recipes).unwrap()
+            );
+        } else {
+            assert!(result.is_err(), "accepted invalid prior-match rule");
+        }
+    }
+}
+
+#[test]
 fn selective_tag_removal_is_bounded_and_survives_catalog_encoding() {
     use elysium_compiler_core::domain::{Kind, Match};
     use serde_json::json;
@@ -229,7 +295,7 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
     );
-    assert_eq!(catalog.manifest.counts["browse"], 37);
+    assert_eq!(catalog.manifest.counts["browse"], 38);
     assert_eq!(catalog.manifest.counts["materials"], 2);
     assert_eq!(catalog.manifest.counts["circuits"], 1);
     assert_eq!(catalog.manifest.counts["species"], 3);
@@ -1115,7 +1181,7 @@ fn invalid_facts_and_damaged_catalogs_cannot_replace_a_published_snapshot() {
                 invalid
                     .items
                     .iter_mut()
-                    .find(|row| row.registry == "minecraft:stone")
+                    .find(|row| row.registry == "minecraft:stone" && row.nbt.is_none())
                     .unwrap()
                     .aspects
                     .as_mut()

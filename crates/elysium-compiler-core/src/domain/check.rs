@@ -383,75 +383,12 @@ impl Domain {
                     }
                     if input.kind == Kind::Item {
                         let item = items[choice.id.as_str()];
-                        match &choice.rule {
-                            Match::Exact => {}
-                            Match::Member { root, analyzed } => {
-                                ensure!(
-                                    matches!(choice.consume, Consumption::Stack),
-                                    "member matching requires whole-stack analysis"
-                                );
-                                change::member(item, root, *analyzed)?;
-                            }
-                            Match::Ore { name, exclusive } => ensure!(
-                                item.tags.contains(name) && (!exclusive || item.tags.len() == 1),
-                                "ore alternative lacks membership: {} in {name}",
-                                choice.id
-                            ),
-                            Match::Wildcard { meta, nbt } => {
-                                ensure!(*meta || *nbt, "wildcard must ignore metadata or NBT")
-                            }
-                            Match::WithoutTags { keys } => {
-                                ensure!(
-                                    !keys.is_empty()
-                                        && keys.len() <= 4096
-                                        && keys.windows(2).all(|pair| pair[0] < pair[1])
-                                        && keys.iter().all(|key| key.len() <= 65535),
-                                    "removed tag keys must be bounded, sorted and unique"
-                                );
-                                if let Some(crate::identity::Nbt::Compound { value }) = &item.nbt {
-                                    ensure!(
-                                        !value.is_empty()
-                                            && keys.iter().all(|key| !value.contains_key(key)),
-                                        "removed tag keys leave an unreachable reference NBT"
-                                    );
-                                }
-                            }
-                            Match::Tags {
-                                keys,
-                                present,
-                                absent,
-                                ..
-                            } => {
-                                let tags = match &item.nbt {
-                                    Some(crate::identity::Nbt::Compound { value }) => Some(value),
-                                    _ => None,
-                                };
-                                let mut used = BTreeSet::new();
-                                for list in [keys, present, absent] {
-                                    ensure!(
-                                        list.len() <= 4096
-                                            && list.windows(2).all(|pair| pair[0] < pair[1]),
-                                        "tag constraints must be sorted and unique"
-                                    );
-                                    for key in list {
-                                        ensure!(
-                                            key.len() <= 65535 && used.insert(key),
-                                            "overlapping tag constraints"
-                                        );
-                                    }
-                                }
-                                ensure!(
-                                    keys.iter()
-                                        .chain(present)
-                                        .all(|key| tags.is_some_and(|tags| tags.contains_key(key)))
-                                        && absent
-                                            .iter()
-                                            .all(|key| tags
-                                                .is_none_or(|tags| !tags.contains_key(key))),
-                                    "tag constraint rejects its representative item"
-                                );
-                            }
-                        }
+                        choice.rule.validate_item(
+                            item,
+                            &items,
+                            matches!(choice.consume, Consumption::Stack),
+                            true,
+                        )?;
                     }
                 }
             }

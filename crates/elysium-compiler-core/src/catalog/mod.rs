@@ -15,7 +15,7 @@ use std::path::Path;
 pub use store::{Catalog, File, Manifest, Pointer, Publication};
 
 pub const FORMAT: &str = "elysium.catalog";
-pub const REVISION: u32 = 15;
+pub const REVISION: u32 = 16;
 pub const FILE_LIMIT: usize = 16 * 1024 * 1024;
 pub const IMAGE_LIMIT: usize = 80 * 1024 * 1024;
 pub const TABLE_ROWS: usize = 4096;
@@ -198,7 +198,12 @@ pub fn compile(input: &Path, output: &Path) -> Result<Publication> {
     write!("textures", &textures, Textures);
     let entries = entries(&domain);
     write!("browse", &entries, Browse);
-    let links = links(&domain);
+    let items: BTreeMap<_, _> = domain
+        .items
+        .iter()
+        .map(|item| (item.id.as_str(), item))
+        .collect();
+    let links = links(&domain, &items);
     write!("links", &links, Links);
     let index: Vec<_> = domain
         .recipes
@@ -211,7 +216,13 @@ pub fn compile(input: &Path, output: &Path) -> Result<Publication> {
             targets: recipe
                 .inputs
                 .iter()
-                .flat_map(|input| input.choices.iter().map(|choice| choice.id.clone()))
+                .flat_map(|input| {
+                    input
+                        .choices
+                        .iter()
+                        .filter(|choice| indexes_choice(input, choice, &items))
+                        .map(|choice| choice.id.clone())
+                })
                 .chain(
                     recipe
                         .outputs
@@ -464,7 +475,68 @@ fn terms(name: &str, registry: &str, tooltip: &[String], tags: &[String]) -> Str
     normalize_text(&plain)
 }
 
-fn links(domain: &Domain) -> Vec<Links> {
+fn indexes_choice(input: &Input, choice: &Choice, items: &BTreeMap<&str, &Item>) -> bool {
+    input.kind != Kind::Item
+        || choice
+            .rule
+            .indexes_example(items[choice.id.as_str()], items)
+}
+
+#[cfg(test)]
+#[test]
+fn exclusion_references_never_become_use_edges() {
+    let source = Source::open(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../contracts/fixtures/source"),
+    )
+    .unwrap();
+    let mut domain = Domain::load(&source).unwrap();
+    domain
+        .recipes
+        .retain(|recipe| recipe.source.key == "machine");
+    for category in &mut domain.categories {
+        category.machines.clear();
+    }
+    let recipe = &mut domain.recipes[0];
+    let input = recipe
+        .inputs
+        .iter_mut()
+        .find(|input| input.kind == Kind::Item)
+        .unwrap();
+    input.choices.truncate(1);
+    let id = input.choices[0].id.clone();
+    input.choices[0].rule = Match::Except {
+        base: Box::new(Match::Wildcard {
+            meta: true,
+            nbt: true,
+        }),
+        exclude: vec![MatchCase {
+            id: id.clone(),
+            rule: Match::Exact,
+        }],
+    };
+    recipe.id = recipe_id(recipe).unwrap();
+    domain.validate(&source).unwrap();
+    let items: BTreeMap<_, _> = domain.items.iter().map(|i| (i.id.as_str(), i)).collect();
+    let input = domain.recipes[0]
+        .inputs
+        .iter()
+        .find(|i| i.kind == Kind::Item)
+        .unwrap();
+    assert!(!indexes_choice(input, &input.choices[0], &items));
+    assert!(links(&domain, &items)
+        .iter()
+        .find(|l| l.id == id)
+        .unwrap()
+        .uses
+        .is_empty());
+    assert_eq!(
+        domain.recipes.len(),
+        1,
+        "excluding the anchor must not drop the broad recipe"
+    );
+}
+
+fn links(domain: &Domain, items: &BTreeMap<&str, &Item>) -> Vec<Links> {
     let mut links: BTreeMap<&str, Links> = domain
         .items
         .iter()
@@ -602,7 +674,7 @@ fn links(domain: &Domain) -> Vec<Links> {
         }
         for input in &recipe.inputs {
             for choice in &input.choices {
-                if used.insert(&choice.id) {
+                if indexes_choice(input, choice, items) && used.insert(&choice.id) {
                     links
                         .get_mut(choice.id.as_str())
                         .expect("validated reference")

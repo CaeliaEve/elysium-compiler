@@ -4,6 +4,7 @@ mod check;
 mod genetics;
 mod industry;
 mod magic;
+mod matching;
 mod model;
 mod quantity;
 mod structure;
@@ -142,6 +143,20 @@ pub enum Match {
     WithoutTags {
         keys: Vec<String>,
     },
+    /// Match the base predicate, except any listed earlier predicate. Each
+    /// exclusion has its own item anchor; it is not an accepted alternative.
+    /// Exactly one level is permitted; members and nested exclusions are rejected.
+    Except {
+        base: Box<Match>,
+        exclude: Vec<MatchCase>,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MatchCase {
+    pub id: String,
+    pub rule: Match,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
