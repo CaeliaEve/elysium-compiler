@@ -175,6 +175,10 @@ export type Match =
       kind: "tags";
       meta: boolean;
       present: string[];
+    }
+  | {
+      keys: string[];
+      kind: "without_tags";
     };
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -506,7 +510,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 14;
+  revision: 15;
   scope: string;
   source: string;
 }
@@ -1499,7 +1503,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 14;
+  revision: 15;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1511,7 +1515,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 15;
+  revision: 16;
   scope: Scope;
 }
 /**

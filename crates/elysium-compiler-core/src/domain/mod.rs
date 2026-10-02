@@ -136,6 +136,12 @@ pub enum Match {
         present: Vec<String>,
         absent: Vec<String>,
     },
+    /// Match exact registry/metadata and remaining NBT after removing only these
+    /// root keys from the offered stack. Normalize an empty offered compound to
+    /// null, then compare it to the unmodified choice's NBT. All other tags matter.
+    WithoutTags {
+        keys: Vec<String>,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]

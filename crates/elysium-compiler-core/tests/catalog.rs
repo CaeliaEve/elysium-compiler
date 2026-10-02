@@ -10,6 +10,85 @@ fn fixture() -> PathBuf {
 }
 
 #[test]
+fn selective_tag_removal_is_bounded_and_survives_catalog_encoding() {
+    use elysium_compiler_core::domain::{Kind, Match};
+    use serde_json::json;
+    let source = Source::open(&fixture()).unwrap();
+    let original = Domain::load(&source).unwrap();
+    for (keys, nbt, valid) in [
+        (vec!["frypanKill"], json!(null), true),
+        (vec![], json!(null), false),
+        (vec!["frypanKill", "frypanKill"], json!(null), false),
+        (vec!["z", "a"], json!(null), false),
+        (
+            vec!["frypanKill"],
+            json!({"type":"compound","value":{}}),
+            false,
+        ),
+        (
+            vec!["frypanKill"],
+            json!({"type":"compound","value":{"frypanKill":{"type":"byte","value":"0"}}}),
+            false,
+        ),
+        (
+            vec!["frypanKill"],
+            json!({"type":"compound","value":{"owner":{"type":"string","value":"required"}}}),
+            true,
+        ),
+    ] {
+        let rule: Match =
+            serde_json::from_value(json!({"kind":"without_tags", "keys":keys})).unwrap();
+        let mut domain = original.clone();
+        let mut item = domain
+            .items
+            .iter()
+            .find(|item| item.id == item_id("minecraft:stone", 0, None).unwrap())
+            .unwrap()
+            .clone();
+        item.nbt = serde_json::from_value(nbt).unwrap();
+        item.order = None;
+        item.id = item_id(&item.registry, item.meta, item.nbt.as_ref()).unwrap();
+        if !domain.items.iter().any(|existing| existing.id == item.id) {
+            domain.items.push(item.clone());
+        }
+        let recipe = domain
+            .recipes
+            .iter_mut()
+            .find(|recipe| {
+                recipe.magic.is_none()
+                    && recipe.outputs.iter().all(|output| output.change.is_none())
+                    && recipe.inputs.iter().any(|input| input.kind == Kind::Item)
+            })
+            .unwrap();
+        let choice = &mut recipe
+            .inputs
+            .iter_mut()
+            .find(|input| input.kind == Kind::Item)
+            .unwrap()
+            .choices[0];
+        choice.id = item.id;
+        choice.rule = rule;
+        recipe.id = recipe_id(recipe).unwrap();
+        let projected = recipe.clone();
+        let result = domain.validate(&source);
+        if valid {
+            result.unwrap();
+            let bytes = rmp_serde::to_vec_named(&Table::Recipes(vec![projected.clone()])).unwrap();
+            let Table::Recipes(decoded) = rmp_serde::from_slice::<Table>(&bytes).unwrap() else {
+                panic!("wrong table")
+            };
+            assert_eq!(
+                serde_json::to_value(&decoded[0]).unwrap(),
+                serde_json::to_value(&projected).unwrap()
+            );
+        } else {
+            let error = result.unwrap_err().to_string();
+            assert!(error.contains("removed tag keys"), "{error}");
+        }
+    }
+}
+
+#[test]
 fn fluid_registry_predicates_preserve_nbt_policy_without_item_metadata_rules() {
     use elysium_compiler_core::domain::{Kind, Match};
     let source = Source::open(&fixture()).unwrap();

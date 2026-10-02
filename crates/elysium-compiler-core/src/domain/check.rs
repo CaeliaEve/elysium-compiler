@@ -400,6 +400,22 @@ impl Domain {
                             Match::Wildcard { meta, nbt } => {
                                 ensure!(*meta || *nbt, "wildcard must ignore metadata or NBT")
                             }
+                            Match::WithoutTags { keys } => {
+                                ensure!(
+                                    !keys.is_empty()
+                                        && keys.len() <= 4096
+                                        && keys.windows(2).all(|pair| pair[0] < pair[1])
+                                        && keys.iter().all(|key| key.len() <= 65535),
+                                    "removed tag keys must be bounded, sorted and unique"
+                                );
+                                if let Some(crate::identity::Nbt::Compound { value }) = &item.nbt {
+                                    ensure!(
+                                        !value.is_empty()
+                                            && keys.iter().all(|key| !value.contains_key(key)),
+                                        "removed tag keys leave an unreachable reference NBT"
+                                    );
+                                }
+                            }
                             Match::Tags {
                                 keys,
                                 present,
