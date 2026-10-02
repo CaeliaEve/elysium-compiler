@@ -10,7 +10,7 @@ exports.topicKinds = Object.freeze(schema.definitions.TopicKind.enum);
 
 const ajv = new Ajv({ strict: true, allowUnionTypes: true });
 for (const [name, minimum, maximum] of [
-  ['uint8', 0, 255], ['uint32', 0, 4294967295], ['int32', -2147483648, 2147483647],
+  ['uint8', 0, 255], ['uint16', 0, 65535], ['uint32', 0, 4294967295], ['int32', -2147483648, 2147483647],
   ['uint64', 0, Number.MAX_SAFE_INTEGER],
 ]) ajv.addFormat(name, { type: 'number', validate: value =>
   Number.isSafeInteger(value) && value >= minimum && value <= maximum });

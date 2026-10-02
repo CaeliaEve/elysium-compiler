@@ -8,6 +8,13 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 mod tests {
     #[test]
+    fn enchanter_preserves_level_gate_and_signed_xp() {
+        let value = serde_json::json!({"kind":"enchanter","level":2,"maxLevel":5,"itemsPerLevel":3,"cost":-7});
+        let process: super::Process = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(process).unwrap(), value);
+    }
+
+    #[test]
     fn map_scaling_requires_an_explicit_world_process() {
         let value = serde_json::json!({"kind":"mapScaling"});
         assert!(serde_json::from_value::<super::Process>(value.clone()).is_ok());
@@ -68,6 +75,16 @@ pub enum InscriberMode {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// EnderIO manual enchanter. The offered material count determines the level;
+    /// cost is signed native XP levels, not energy. See docs/enchanter.md.
+    Enchanter {
+        level: u16,
+        #[serde(rename = "maxLevel")]
+        max_level: u16,
+        #[serde(rename = "itemsPerLevel")]
+        items_per_level: u32,
+        cost: i32,
+    },
     /// AE2 registered recipe, after the name-press guard and earlier registry
     /// rows. top absent has a native empty-slot predicate; see docs/inscriber.md.
     Inscriber {
@@ -116,6 +133,23 @@ impl Process {
     }
 
     pub(super) fn validate_parameters(&self) -> Result<()> {
+        if let Self::Enchanter {
+            level,
+            max_level,
+            items_per_level,
+            ..
+        } = self
+        {
+            ensure!(
+                *level > 0
+                    && *level <= *max_level
+                    && *max_level <= 32767
+                    && *items_per_level > 0
+                    && u64::from(*level) * u64::from(*items_per_level) <= 64,
+                "invalid enchanter level or input count"
+            );
+            return Ok(());
+        }
         let Self::Harmony {
             hydrogen,
             helium,
@@ -172,6 +206,14 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    if let Process::Enchanter {
+        level,
+        items_per_level,
+        ..
+    } = process
+    {
+        return validate_enchanter(recipe, *level, *items_per_level, items);
+    }
     if let Process::Inscriber {
         mode,
         top,
@@ -310,6 +352,121 @@ pub(super) fn validate(
     ensure!(
         failures == 1 && successes > 0,
         "harmony requires normal outputs and exactly one failure output"
+    );
+    Ok(())
+}
+
+fn validate_enchanter(
+    recipe: &Recipe,
+    level: u16,
+    items_per_level: u32,
+    items: &BTreeMap<&str, &super::Item>,
+) -> Result<()> {
+    use crate::identity::Nbt;
+    ensure!(
+        recipe.duration.is_none()
+            && recipe.energy.is_none()
+            && recipe.grid.is_none()
+            && recipe.magic.is_none()
+            && recipe.inputs.len() == 2
+            && recipe.outputs.len() == 1,
+        "invalid enchanter process shape"
+    );
+    for slot in 0..2 {
+        let input = recipe
+            .inputs
+            .iter()
+            .find(|i| i.slot == slot && i.kind == Kind::Item)
+            .context("missing enchanter input")?;
+        let amount = if slot == 0 {
+            1
+        } else {
+            u32::from(level) * items_per_level
+        };
+        ensure!(!input.choices.is_empty(), "empty enchanter input");
+        for choice in &input.choices {
+            ensure!(
+                choice.amount == amount.to_string()
+                    && matches!(choice.consume, Consumption::Consume)
+                    && choice.returns.is_empty(),
+                "invalid enchanter material consumption"
+            );
+            if slot == 0 {
+                let book = items
+                    .get(choice.id.as_str())
+                    .context("missing writable book")?;
+                ensure!(
+                    book.registry == "minecraft:writable_book"
+                        && matches!(
+                            choice.rule,
+                            Match::Wildcard {
+                                meta: true,
+                                nbt: true
+                            }
+                        ),
+                    "invalid enchanter book predicate"
+                );
+            } else {
+                let base = match &choice.rule {
+                    Match::Except { base, .. } => base.as_ref(),
+                    other => other,
+                };
+                ensure!(
+                    matches!(base, Match::Wildcard { nbt: true, .. }),
+                    "invalid enchanter material predicate"
+                );
+                if let Match::Except { exclude, .. } = &choice.rule {
+                    ensure!(
+                        exclude
+                            .iter()
+                            .all(|c| matches!(c.rule, Match::Wildcard { nbt: true, .. })),
+                        "invalid enchanter priority predicate"
+                    );
+                }
+            }
+        }
+    }
+    let output = &recipe.outputs[0];
+    ensure!(
+        output.kind == Kind::Item
+            && output.slot == 0
+            && output.amount.as_deref() == Some("1")
+            && output.quantity.is_none()
+            && output.change.is_none()
+            && matches!(output.role, OutputRole::Result)
+            && output.chance.numerator == "1"
+            && output.chance.denominator == "1",
+        "invalid enchanter result"
+    );
+    let book = items
+        .get(output.id.as_str())
+        .context("missing enchanted book")?;
+    ensure!(
+        book.registry == "minecraft:enchanted_book" && book.meta == 0,
+        "invalid enchanted book identity"
+    );
+    let Some(Nbt::Compound { value: root }) = &book.nbt else {
+        anyhow::bail!("missing enchantment NBT")
+    };
+    let Some(Nbt::List {
+        element,
+        value: list,
+    }) = root.get("StoredEnchantments")
+    else {
+        anyhow::bail!("missing stored enchantment")
+    };
+    ensure!(
+        root.len() == 1 && element == "compound" && list.len() == 1,
+        "invalid stored enchantment list"
+    );
+    let Nbt::Compound { value: enchantment } = &list[0] else {
+        anyhow::bail!("invalid enchantment tag")
+    };
+    ensure!(
+        enchantment.len() == 2
+            && matches!(enchantment.get("id"), Some(Nbt::Short { .. }))
+            && matches!(enchantment.get("lvl"), Some(Nbt::Short {value}) if value == &level.to_string()),
+        "enchanted book level differs from process"
     );
     Ok(())
 }

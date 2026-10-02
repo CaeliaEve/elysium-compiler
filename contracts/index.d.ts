@@ -318,6 +318,13 @@ export type OutputRole = "result" | "return";
  */
 export type Process =
   | {
+      cost: number;
+      itemsPerLevel: number;
+      kind: "enchanter";
+      level: number;
+      maxLevel: number;
+    }
+  | {
       bottom?: string | null;
       kind: "inscriber";
       mode: InscriberMode;
@@ -591,7 +598,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 20;
+  revision: 21;
   scope: string;
   source: string;
 }
@@ -1593,7 +1600,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 20;
+  revision: 21;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1605,7 +1612,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 21;
+  revision: 22;
   scope: Scope;
 }
 /**
