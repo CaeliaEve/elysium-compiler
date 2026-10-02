@@ -146,6 +146,9 @@ export type Consumption =
       kind: "allocated";
     }
   | {
+      kind: "reserve";
+    }
+  | {
       kind: "wear";
     }
   | {
@@ -273,6 +276,11 @@ export type Edit =
  */
 export type Quantity =
   | {
+      kind: "grinding";
+      nominal: string;
+      threshold: string;
+    }
+  | {
       kind: "sharedRoll";
       nominal: string;
       threshold: string;
@@ -331,6 +339,16 @@ export type OutputRole = "result" | "return";
  * via the `definition` "Process".
  */
 export type Process =
+  | {
+      balls: GrindingBall[];
+      blocked: MatchCase[];
+      bonus: boolean;
+      earlier: GrindingRequirement[];
+      energy: number;
+      kind: "sag";
+      oreBlocked: MatchCase[];
+      slot: number;
+    }
   | {
       energy: number;
       kind: "alloy";
@@ -628,7 +646,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 24;
+  revision: 25;
   scope: string;
   source: string;
 }
@@ -1303,6 +1321,25 @@ export interface Stack {
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "GrindingBall".
+ */
+export interface GrindingBall {
+  chance: string;
+  choices: MatchCase[];
+  duration: number;
+  grinding: string;
+  power: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "GrindingRequirement".
+ */
+export interface GrindingRequirement {
+  amount: string;
+  choices: MatchCase[];
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "VatConsumption".
  */
 export interface VatConsumption {
@@ -1639,7 +1676,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 24;
+  revision: 25;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1651,7 +1688,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 25;
+  revision: 26;
   scope: Scope;
 }
 /**

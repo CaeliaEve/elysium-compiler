@@ -8,6 +8,21 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 mod tests {
     #[test]
+    fn sag_preserves_optional_stock_and_shared_grinding() {
+        let value = serde_json::json!({"kind":"sag","energy":1000,"slot":-1,"bonus":true,"earlier":[],"balls":[{"choices":[],"grinding":"2.5","chance":"2.0","power":"0.5","duration":10000}],"blocked":[],"oreBlocked":[]});
+        let process: super::Process = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(process).unwrap(), value);
+        assert!(serde_json::from_value::<super::Consumption>(
+            serde_json::json!({"kind":"reserve"})
+        )
+        .is_ok());
+        assert!(serde_json::from_value::<super::Quantity>(
+            serde_json::json!({"kind":"grinding","nominal":"2","threshold":"0.0"})
+        )
+        .is_ok());
+    }
+
+    #[test]
     fn splice_retains_tool_wear_separately_from_allocated_ingredients() {
         let value = serde_json::json!({"kind":"splice","energy":2000,"slots":[5,4,3,2,1,0]});
         let process: super::Process = serde_json::from_value(value.clone()).unwrap();
@@ -114,6 +129,17 @@ pub enum InscriberMode {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// Native SAG task and grinding-ball lifecycle; see docs/grinding.md.
+    Sag {
+        energy: i32,
+        slot: i32,
+        bonus: bool,
+        earlier: Vec<super::GrindingRequirement>,
+        balls: Vec<super::GrindingBall>,
+        blocked: Vec<super::MatchCase>,
+        #[serde(rename = "oreBlocked")]
+        ore_blocked: Vec<super::MatchCase>,
+    },
     /// Registered EnderIO alloy matching and separate consumption traversals.
     Alloy { energy: i32, slots: Vec<i32> },
     /// Six ingredients plus axe/shears slots; native conditional tool wear at completion.
@@ -247,13 +273,22 @@ pub(super) fn validate(
     ensure!(
         matches!(
             recipe.process,
-            Some(Process::Alloy { .. } | Process::Splice { .. })
+            Some(Process::Alloy { .. } | Process::Splice { .. } | Process::Sag { .. })
         ) || !recipe
             .inputs
             .iter()
             .flat_map(|i| &i.choices)
             .any(|c| matches!(c.consume, Consumption::Allocated)),
         "allocated consumption requires a native assembly process"
+    );
+    ensure!(
+        matches!(recipe.process, Some(Process::Sag { .. }))
+            || !recipe
+                .inputs
+                .iter()
+                .flat_map(|i| &i.choices)
+                .any(|c| matches!(c.consume, Consumption::Reserve)),
+        "optional ball stock requires a SAG process"
     );
     ensure!(
         matches!(recipe.process, Some(Process::Splice { .. }))
@@ -293,6 +328,9 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    if matches!(process, Process::Sag { .. }) {
+        return super::grinding::validate(recipe, items);
+    }
     if let Process::Alloy { slots, .. } = process {
         return validate_assembly(recipe, slots, false);
     }

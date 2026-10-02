@@ -9,6 +9,11 @@ use std::collections::BTreeSet;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Quantity {
+    /// SAG shared task draw and correlated completion passes. See docs/grinding.md.
+    Grinding {
+        nominal: String,
+        threshold: String,
+    },
     /// One shared Java nextFloat draw, output when threshold >= draw. See docs/alloy.md.
     #[serde(rename = "sharedRoll")]
     SharedRoll {
@@ -74,6 +79,22 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
         "computed output cannot carry an independent probability"
     );
     match rule {
+        Quantity::Grinding { nominal, threshold } => {
+            let Some(super::Process::Sag { bonus, .. }) = recipe.process else {
+                anyhow::bail!("grinding quantity requires SAG process");
+            };
+            ensure!(output.kind == Kind::Item, "SAG requires item results");
+            let cutoff: f32 = threshold.parse().context("invalid grinding threshold")?;
+            ensure!(
+                cutoff.is_finite() && (0.0..=1.0).contains(&cutoff),
+                "invalid grinding threshold"
+            );
+            let nominal = integer(nominal, 1, i64::from(i32::MAX))?;
+            // A terminating binary32 decrement-by-one loop has fewer than 2^25 passes.
+            // This includes saved ball states unrelated to the current registration table.
+            // UI presents the nominal per pass, not this deliberately loose safety ceiling.
+            Ok((0, nominal * if bonus { 33_554_432 } else { 1 }))
+        }
         Quantity::SharedRoll { nominal, threshold } => {
             ensure!(
                 matches!(

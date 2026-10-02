@@ -294,12 +294,12 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let catalog = Catalog::current(directory.path()).unwrap();
     catalog.verify().unwrap();
     assert_eq!(catalog.manifest.id, first.id);
-    assert_eq!(catalog.manifest.counts["recipes"], 31);
+    assert_eq!(catalog.manifest.counts["recipes"], 32);
     assert_eq!(
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
     );
-    assert_eq!(catalog.manifest.counts["browse"], 68);
+    assert_eq!(catalog.manifest.counts["browse"], 72);
     assert_eq!(catalog.manifest.counts["materials"], 2);
     assert_eq!(catalog.manifest.counts["circuits"], 1);
     assert_eq!(catalog.manifest.counts["species"], 3);
@@ -2078,6 +2078,35 @@ fn native_processes_reject_false_fixed_outputs_and_consumption() {
     let source = Source::open(&fixture()).unwrap();
     let original = Domain::load(&source).unwrap();
     original.validate(&source).unwrap();
+    for (path, replacement) in [
+        ("/process", json!(null)),
+        ("/process/slot", json!(2)),
+        ("/process/balls/0/grinding", json!("Infinity")),
+        ("/process/balls/0/chance", json!("0")),
+        ("/process/balls/0/power", json!("-1")),
+        ("/process/earlier/0/amount", json!("0")),
+        ("/process/oreBlocked/0/id", json!("item_missing")),
+        ("/inputs/1/choices/0/consume/kind", json!("consume")),
+        ("/inputs/1/choices/0/rule/meta", json!(true)),
+        ("/outputs/0/quantity/threshold", json!("NaN")),
+        ("/outputs/0/quantity/nominal", json!("2147483648")),
+        ("/outputs/0/chance/denominator", json!("2")),
+    ] {
+        let mut domain = original.clone();
+        let row = domain
+            .recipes
+            .iter_mut()
+            .find(|r| r.source.handler == "sag")
+            .unwrap();
+        let mut value = serde_json::to_value(&*row).unwrap();
+        *value.pointer_mut(path).unwrap() = replacement;
+        *row = serde_json::from_value(value).unwrap();
+        row.id = recipe_id(row).unwrap();
+        assert!(
+            domain.validate(&source).is_err(),
+            "accepted false SAG semantics at {path}"
+        );
+    }
     for (path, replacement) in [
         ("/process", json!(null)),
         ("/process/kind", json!("alloy")),

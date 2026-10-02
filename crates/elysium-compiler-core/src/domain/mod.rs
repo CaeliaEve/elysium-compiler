@@ -2,6 +2,7 @@
 mod change;
 mod check;
 mod genetics;
+mod grinding;
 mod industry;
 mod magic;
 mod matching;
@@ -11,6 +12,7 @@ mod quantity;
 mod structure;
 pub use change::{Change, Edit, Stack};
 pub use genetics::*;
+pub use grinding::{GrindingBall, GrindingRequirement};
 pub use industry::*;
 pub use magic::*;
 pub use model::*;
@@ -180,6 +182,8 @@ pub enum Consumption {
     Upto,
     /// An ordered native requirement; the process allocates actual machine slots.
     Allocated,
+    /// Optional SAG ball inventory; consumed on loading active ball state, not per task.
+    Reserve,
     /// Splice tools: conditional damageItem(1, fakePlayer) at completion, not fixed durability.
     Wear,
     /// Consume the entire offered stack. `amount` is the minimum/example count.
