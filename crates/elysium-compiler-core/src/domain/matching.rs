@@ -13,6 +13,16 @@ impl Match {
     ) -> Result<()> {
         match self {
             Self::Exact => {}
+            Self::Ae => {
+                ensure!(
+                    compound,
+                    "AE precise matching cannot be nested in priority filters"
+                );
+                ensure!(
+                    ae_nbt(item.nbt.as_ref(), item.nbt.as_ref()),
+                    "AE NaN predicate depends on object identity"
+                );
+            }
             Self::Infusion { template, ores } => {
                 ensure!(
                     compound,
@@ -156,6 +166,9 @@ fn simple(rule: &Match, offered: &Item, anchor: &Item) -> bool {
     }
     match rule {
         Match::Exact => offered.meta == anchor.meta && offered.nbt == anchor.nbt,
+        Match::Ae => {
+            offered.meta == anchor.meta && ae_nbt(offered.nbt.as_ref(), anchor.nbt.as_ref())
+        }
         Match::Wildcard { meta, nbt } => {
             (*meta || offered.meta == anchor.meta) && (*nbt || offered.nbt == anchor.nbt)
         }
@@ -211,11 +224,90 @@ fn simple(rule: &Match, offered: &Item, anchor: &Item) -> bool {
     }
 }
 
+fn ae_nbt(a: Option<&Nbt>, b: Option<&Nbt>) -> bool {
+    let empty = |value: Option<&Nbt>| {
+        value.is_none() || matches!(value, Some(Nbt::Compound {value}) if value.is_empty())
+    };
+    if empty(a) && empty(b) {
+        return true;
+    }
+    match (a, b) {
+        (Some(a), Some(b)) => ae_tag(a, b),
+        _ => false,
+    }
+}
+
+fn ae_tag(a: &Nbt, b: &Nbt) -> bool {
+    match (a, b) {
+        (Nbt::Float { value: a }, Nbt::Float { value: b }) => {
+            match (u32::from_str_radix(a, 16), u32::from_str_radix(b, 16)) {
+                (Ok(a), Ok(b)) => f32::from_bits(a) == f32::from_bits(b),
+                _ => false,
+            }
+        }
+        (Nbt::Double { value: a }, Nbt::Double { value: b }) => {
+            match (u64::from_str_radix(a, 16), u64::from_str_radix(b, 16)) {
+                (Ok(a), Ok(b)) => f64::from_bits(a) == f64::from_bits(b),
+                _ => false,
+            }
+        }
+        (Nbt::List { value: a, .. }, Nbt::List { value: b, .. }) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| ae_tag(a, b))
+        }
+        (Nbt::Compound { value: a }, Nbt::Compound { value: b }) => {
+            a.len() == b.len()
+                && a.iter()
+                    .all(|(key, a)| b.get(key).is_some_and(|b| ae_tag(a, b)))
+        }
+        _ => a == b,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{domain::Domain, identity::item_id, source::Source};
     use serde_json::json;
+
+    #[test]
+    fn ae_precise_preserves_native_nbt_comparison() {
+        let rule: Match = serde_json::from_value(json!({"kind":"ae"})).unwrap();
+        let source = Source::open(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../contracts/fixtures/source"),
+        )
+        .unwrap();
+        let domain = Domain::load(&source).unwrap();
+        let mut a = domain.items[0].clone();
+        a.nbt = None;
+        let mut b = a.clone();
+        b.nbt = serde_json::from_value(json!({"type":"compound","value":{}})).unwrap();
+        assert!(simple(&rule, &a, &b));
+        assert!(!simple(&Match::Exact, &a, &b));
+        assert!(rule
+            .validate_item(&a, &BTreeMap::from([(a.id.as_str(), &a)]), false, false)
+            .is_err());
+        let tags = |bits: &str, element: &str| {
+            serde_json::from_value(json!({"type":"compound","value":{
+            "zero":{"type":"float","value":bits},"list":{"type":"list","element":element,"value":[]}}})).unwrap()
+        };
+        a.nbt = tags("80000000", "string");
+        b.nbt = tags("00000000", "end");
+        assert!(simple(&rule, &a, &b));
+        b.meta = 32767;
+        assert!(!simple(&rule, &a, &b));
+        b.meta = a.meta;
+        b.nbt = tags("3f800000", "end");
+        assert!(!simple(&rule, &a, &b));
+        a.nbt = tags("7fc00000", "end");
+        b.nbt = a.nbt.clone();
+        assert!(!simple(&rule, &a, &b));
+        let items = BTreeMap::from([(a.id.as_str(), &a)]);
+        assert!(
+            rule.validate_item(&a, &items, false, true).is_err(),
+            "NaN cannot model reference-only equality"
+        );
+    }
 
     #[test]
     fn priority_retains_unshadowed_variants_and_strict_nbt() {

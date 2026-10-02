@@ -13,7 +13,7 @@ use std::io::{BufRead, BufReader, Read};
 use std::path::{Component, Path, PathBuf};
 
 pub const SOURCE_FORMAT: &str = "elysium.source";
-pub const SOURCE_REVISION: u32 = 20;
+pub const SOURCE_REVISION: u32 = 21;
 pub const CORE_COLLECTIONS: &[&str] = &[
     "aspects",
     "assets",

@@ -115,6 +115,9 @@ pub struct Remainder {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Match {
     Exact,
+    /// AE2 precise item matching for an ordinary NBT anchor: literal metadata,
+    /// null/empty root equivalence, numeric floats, recursive typed tags. See docs/inscriber.md.
+    Ae,
     /// Pinned TC untagged infusion component. Match template item/meta, or an
     /// offered stack whose FIRST native ore group is in ores. Unlike Ore, mere
     /// membership in a later group is insufficient. Extra offered NBT is allowed.

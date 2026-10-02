@@ -51,6 +51,13 @@ pub enum HarmonyOutcome {
     Failure,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum InscriberMode {
+    Inscribe,
+    Press,
+}
+
 /// Native shared process, not independent probabilities on individual outputs.
 /// See docs/harmony.md for state, energy, rounding and correlated yield rules.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -61,6 +68,15 @@ pub enum HarmonyOutcome {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// AE2 registered recipe, after the name-press guard and earlier registry
+    /// rows. top absent has a native empty-slot predicate; see docs/inscriber.md.
+    Inscriber {
+        mode: InscriberMode,
+        top: Option<String>,
+        bottom: Option<String>,
+        #[serde(rename = "namePress")]
+        name_press: Option<String>,
+    },
     /// Vanilla map extension. Input eligibility depends on world MapData (scale < 4).
     /// The output is a pre-onCreated sample; the world allocates the final map ID.
     /// Missing data may be initialized server-side. See docs/maps.md.
@@ -136,6 +152,15 @@ pub(super) fn validate(
     items: &BTreeMap<&str, &super::Item>,
     aspects: &[super::Aspect],
 ) -> Result<()> {
+    ensure!(
+        !recipe
+            .inputs
+            .iter()
+            .flat_map(|i| &i.choices)
+            .any(|c| matches!(c.rule, Match::Ae))
+            || matches!(recipe.process, Some(Process::Inscriber { .. })),
+        "AE precise inputs require an inscriber process"
+    );
     let Some(process) = &recipe.process else {
         ensure!(
             !recipe.inputs.iter().any(|i| i
@@ -147,6 +172,22 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    if let Process::Inscriber {
+        mode,
+        top,
+        bottom,
+        name_press,
+    } = process
+    {
+        return validate_inscriber(
+            recipe,
+            *mode,
+            top.as_deref(),
+            bottom.as_deref(),
+            name_press.as_deref(),
+            items,
+        );
+    }
     if matches!(process, Process::MapScaling {}) {
         return validate_map(recipe, items);
     }
@@ -269,6 +310,86 @@ pub(super) fn validate(
     ensure!(
         failures == 1 && successes > 0,
         "harmony requires normal outputs and exactly one failure output"
+    );
+    Ok(())
+}
+
+fn validate_inscriber(
+    recipe: &Recipe,
+    mode: InscriberMode,
+    top: Option<&str>,
+    bottom: Option<&str>,
+    name_press: Option<&str>,
+    items: &BTreeMap<&str, &super::Item>,
+) -> Result<()> {
+    ensure!(
+        recipe.duration.is_none()
+            && recipe.energy.is_none()
+            && recipe.grid.is_none()
+            && recipe.magic.is_none(),
+        "inscriber cannot have fixed timing/energy or crafting semantics"
+    );
+    for id in [top, bottom, name_press].into_iter().flatten() {
+        let item = items.get(id).context("missing inscriber process item")?;
+        Match::Ae.validate_item(item, items, false, true)?;
+    }
+    if let (Some(top), Some(name)) = (top, name_press) {
+        let same = |id: &str| {
+            items[id].registry == items[name].registry && items[id].meta == items[name].meta
+        };
+        ensure!(
+            !same(top) || bottom.is_some_and(|id| !same(id)),
+            "inscriber row is preempted by name presses"
+        );
+    }
+    ensure!(
+        recipe.inputs.len()
+            == 1 + usize::from(top.is_some()) + usize::from(top.is_some() && bottom.is_some()),
+        "invalid inscriber input count"
+    );
+    for (slot, anchor) in [(0, top), (1, bottom.filter(|_| top.is_some())), (2, None)] {
+        if slot != 2 && anchor.is_none() {
+            continue;
+        }
+        let input = recipe
+            .inputs
+            .iter()
+            .find(|i| i.kind == Kind::Item && i.slot == slot)
+            .context("inscriber input missing")?;
+        ensure!(
+            !input.choices.is_empty() && (slot == 2 || input.choices.len() == 1),
+            "invalid inscriber alternatives"
+        );
+        for c in &input.choices {
+            ensure!(
+                c.amount == "1"
+                    && c.returns.is_empty()
+                    && matches!(c.rule, Match::Ae)
+                    && if slot == 2 || mode == InscriberMode::Press {
+                        matches!(c.consume, Consumption::Consume)
+                    } else {
+                        matches!(c.consume, Consumption::Keep)
+                    },
+                "invalid inscriber consumption or matching"
+            );
+            ensure!(
+                anchor.is_none_or(|id| id == c.id),
+                "inscriber plate does not match process"
+            );
+        }
+    }
+    ensure!(recipe.outputs.len() == 1, "inscriber requires one output");
+    let output = &recipe.outputs[0];
+    ensure!(
+        output.slot == 0
+            && output.kind == Kind::Item
+            && output.quantity.is_none()
+            && output.change.is_none()
+            && output.amount.is_some()
+            && matches!(output.role, OutputRole::Result)
+            && output.chance.numerator == "1"
+            && output.chance.denominator == "1",
+        "invalid inscriber result"
     );
     Ok(())
 }

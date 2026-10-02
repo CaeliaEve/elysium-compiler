@@ -161,6 +161,9 @@ export type Match =
       kind: "exact";
     }
   | {
+      kind: "ae";
+    }
+  | {
       kind: "infusion";
       ores: string[];
       template: string;
@@ -315,6 +318,13 @@ export type OutputRole = "result" | "return";
  */
 export type Process =
   | {
+      bottom?: string | null;
+      kind: "inscriber";
+      mode: InscriberMode;
+      namePress?: string | null;
+      top?: string | null;
+    }
+  | {
       kind: "mapScaling";
     }
   | {
@@ -336,6 +346,11 @@ export type Process =
       startEu: string;
       ticks: string;
     };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "InscriberMode".
+ */
+export type InscriberMode = "inscribe" | "press";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "HarmonyMode".
@@ -576,7 +591,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 19;
+  revision: 20;
   scope: string;
   source: string;
 }
@@ -1578,7 +1593,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 19;
+  revision: 20;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1590,7 +1605,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 20;
+  revision: 21;
   scope: Scope;
 }
 /**
