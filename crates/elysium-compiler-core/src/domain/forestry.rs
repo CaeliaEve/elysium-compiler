@@ -78,7 +78,79 @@ pub struct SqueezerProgram {
     pub dynamic: Vec<String>,
 }
 
+/// Stable positions in one content-addressed native registry snapshot.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
+pub enum SqueezerSelector {
+    Ordinary { index: u32 },
+    Container { container: u32, filled: u32 },
+}
+
 impl SqueezerProgram {
+    /// Resolve a cursor entry after whole-context validation at the import boundary.
+    /// Validate the selected recipe without rescanning the global rules per row.
+    pub fn entry(&self, selector: &SqueezerSelector) -> Result<SqueezerRecipe> {
+        let recipe = match selector {
+            SqueezerSelector::Ordinary { index } => self
+                .ordinary
+                .get(*index as usize)
+                .ok_or_else(|| anyhow::anyhow!("Squeezer ordinary selector is out of range"))?
+                .clone(),
+            SqueezerSelector::Container { container, filled } => {
+                let fixed = self.filled.get(*filled as usize).ok_or_else(|| {
+                    anyhow::anyhow!("Squeezer fixed-fluid selector is out of range")
+                })?;
+                ensure!(
+                    !self.dynamic.contains(&fixed.filled.registry),
+                    "Squeezer selector requires an unmodeled Java callback"
+                );
+                let (index, recipe) = self.fixed_recipe(&fixed.filled, fixed).ok_or_else(|| {
+                    anyhow::anyhow!("Squeezer fixed-fluid selector has no native recipe")
+                })?;
+                ensure!(
+                    index == *container as usize,
+                    "Squeezer selector bypasses first matching container rule"
+                );
+                recipe
+            }
+        };
+        recipe.validate()?;
+        Ok(recipe)
+    }
+
+    fn fixed_recipe(
+        &self,
+        stack: &ForestryStack,
+        filled: &FilledContainer,
+    ) -> Option<(usize, SqueezerRecipe)> {
+        // FluidHelper returns the original container for a zero drain;
+        // negative capacity cannot be drained through the fixed registry.
+        let empty = if filled.fluid.amount == 0 {
+            stack
+        } else if filled.fluid.amount > 0 {
+            &filled.empty
+        } else {
+            return None;
+        };
+        let (index, container) = self
+            .containers
+            .iter()
+            .enumerate()
+            .find(|(_, c)| c.key.matches(empty))?;
+        let mut demand = stack.clone();
+        demand.amount = 1;
+        Some((
+            index,
+            SqueezerRecipe {
+                time: container.time,
+                requirements: vec![Some(demand)],
+                fluid: Some(filled.fluid.clone()),
+                remnant: container.remnant.clone(),
+                chance: container.chance.clone(),
+            },
+        ))
+    }
+
     pub fn select(
         &self,
         stock: &[Option<ForestryStack>],
@@ -103,25 +175,8 @@ impl SqueezerProgram {
                 stack.registry
             );
             if let Some(filled) = self.filled.iter().find(|c| c.filled.same_type(stack)) {
-                // FluidHelper returns the original container for a zero drain;
-                // negative capacity cannot be drained through the fixed registry.
-                let empty = if filled.fluid.amount == 0 {
-                    stack
-                } else if filled.fluid.amount > 0 {
-                    &filled.empty
-                } else {
-                    continue;
-                };
-                if let Some(container) = self.containers.iter().find(|c| c.key.matches(empty)) {
-                    let mut demand = stack.clone();
-                    demand.amount = 1;
-                    return Ok(Some(SqueezerRecipe {
-                        time: container.time,
-                        requirements: vec![Some(demand)],
-                        fluid: Some(filled.fluid.clone()),
-                        remnant: container.remnant.clone(),
-                        chance: container.chance.clone(),
-                    }));
+                if let Some((_, recipe)) = self.fixed_recipe(stack, filled) {
+                    return Ok(Some(recipe));
                 }
             }
         }
@@ -451,6 +506,81 @@ mod tests {
                 case.name
             );
         }
+    }
+    #[test]
+    fn cursor_selectors_resolve_exact_native_entries() {
+        #[derive(Deserialize)]
+        struct Entry {
+            selector: SqueezerSelector,
+            recipe: SqueezerRecipe,
+        }
+        #[derive(Deserialize)]
+        struct Observations {
+            program: SqueezerProgram,
+            entries: Vec<Entry>,
+        }
+        let observations: Observations = serde_json::from_str(include_str!(
+            "../../../../contracts/fixtures/forestry-entry-observations.json"
+        ))
+        .unwrap();
+        for entry in &observations.entries {
+            assert_eq!(
+                observations.program.entry(&entry.selector).unwrap(),
+                entry.recipe
+            );
+        }
+        assert!(observations
+            .program
+            .entry(&SqueezerSelector::Ordinary { index: u32::MAX })
+            .is_err());
+        let fixed = observations
+            .entries
+            .iter()
+            .find_map(|entry| match entry.selector {
+                SqueezerSelector::Container { container, filled } => Some((container, filled)),
+                _ => None,
+            })
+            .unwrap();
+        assert!(observations
+            .program
+            .entry(&SqueezerSelector::Container {
+                container: u32::MAX,
+                filled: fixed.1
+            })
+            .is_err());
+        assert!(observations
+            .program
+            .entry(&SqueezerSelector::Container {
+                container: fixed.0,
+                filled: u32::MAX
+            })
+            .is_err());
+        let mut changed = observations.program.clone();
+        changed
+            .containers
+            .insert(0, changed.containers[fixed.0 as usize].clone());
+        assert!(
+            changed
+                .entry(&SqueezerSelector::Container {
+                    container: fixed.0 + 1,
+                    filled: fixed.1
+                })
+                .is_err(),
+            "Selector bypassed native first-key precedence"
+        );
+        let mut callback = observations.program.clone();
+        callback
+            .dynamic
+            .push(callback.filled[fixed.1 as usize].filled.registry.clone());
+        assert!(
+            callback
+                .entry(&SqueezerSelector::Container {
+                    container: fixed.0,
+                    filled: fixed.1
+                })
+                .is_err(),
+            "Selector turned a callback into a fixed recipe"
+        );
     }
     #[test]
     fn exported_snapshot_is_owned_and_does_not_flatten_java_callbacks() {

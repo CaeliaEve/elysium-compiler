@@ -117,8 +117,15 @@ fixtures are not a live dataset or evidence of full registry coverage.
 
 ## Remaining integration
 
-1. Add the recipe cursor and owned native cached projection, including container
-   variants. Ordinary and container rules must both be represented.
+1. Connect the owned `SqueezerEntries` cursor to production recipe capture.
+   It now enumerates ordinary rules and registered fixed-container variants,
+   copies each returned recipe, and constructs the native cached layout through
+   the ordinary-recipe constructor. The container constructor, which enumerates
+   arbitrary item callbacks, is not used. Six fixture entries compare to native
+   lookup results; signed/zero fields and null input holes are retained.
+   Compiler `SqueezerSelector` resolves the same positions and refuses a fixed
+   container that bypasses the first matching native map key or is dynamic.
+   These internal selectors are not yet a source recipe process or handler route.
 2. Define and validate the source process without duplicating the entire global
    fluid registry in every recipe. Keep physical allocation, retained-state and
    fresh-selection requirements explicit.
