@@ -1,4 +1,4 @@
-# Forestry squeezer: native rule foundation
+# Forestry factories: native rule foundation
 
 This is an implementation checkpoint, not a supported-handler or live-acceptance
 claim. `domain::forestry` replays owned Forestry 4.10.17 inventory and selection
@@ -8,10 +8,11 @@ recipe process yet. Source revision 32 and catalog revision 31 remain unchanged.
 
 ## Verified behavior
 
-The existing optional Forestry native runner records 26 stock observations and
-15 selection observations. Three compiler tests replay those observations and
-validate a context produced by the production snapshot code. Expected results
-come from the pinned native methods, not the Rust implementation.
+The optional native runners record 26 stock, 15 selection, 19 squeezer work,
+16 powered-machine and 22 still observations. Six compiler tests replay these
+observations and validate a production rule snapshot. Expected results come
+from the pinned native methods, not the Rust implementation. These small
+runners take seconds and do not launch Minecraft or perform an export.
 
 - Condensation skips nonpositive original stacks, sums identical item/meta/tag
   stacks with Java integer overflow, and does not merge different ore variants.
@@ -45,6 +46,73 @@ not modeled. The retention predicate is exercised through the actual native
 `containsSets` method and the branch read from `TileSqueezer.checkRecipe`; no
 world, tile tick, player inventory or live game is invoked.
 
+## Squeezer work and powered arithmetic
+
+`forestry::work::observe_work` checks a selected recipe against the physical
+stock, product tank and remnant slot, then applies native completion helpers.
+The 10,000 mB tank must fit the entire output. A zero output can pass even with
+an incompatible full tank. Remnant-space preflight applies even at zero or NaN
+probability. Empty slots accept an oversized remnant; occupied slots require
+the native stackability, stack limit and tag equality. Probability is rolled
+only after successful input removal and only for a non-null remnant.
+
+The native runner calls `TileSqueezer.hasWork`, `InventorySqueezer` and
+`StandardTank` methods. It does **not** call `TileSqueezer.workCycle`, which
+would resolve a player from a world. The completion observation uses that
+method's native inventory/tank helper sequence with an explicit Random seed.
+
+`observe_power` describes one Squeezer `EnergyManager` call, not a game clock:
+
+- Work steps: `Math.round((float) time / speed)`.
+- RF: signed int `time * 200`, difficulty scaling via `Math.round`, followed by
+  power scaling via `Math.round`.
+- Storage capacity: `Math.round(5000f * difficulty)`.
+- Per-step consumption: `(int) ceil((float) energy / (float) steps)`.
+- Native subtraction and CoFH capacity-clamp order are retained, including
+  overflow. All multipliers retain raw binary32 bits.
+
+`TilePowered` checks every five game ticks. It only calls the energy manager
+when its work counter is below the required steps, and resets the counter after
+successful completion. Zero/negative-step direct energy observations are not
+claims that the scheduler would consume that energy. Speed upgrade setters and
+recipe selection can reset the counter; container packaging is separate.
+
+The existing NESQL Still/Centrifuge rows now leave fixed `duration` unset and
+provide `forestry:workSteps`, `forestry:stepTicks` and `forestry:energyRF` as
+metadata. The RF value is the signed native parameter before difficulty, not
+EU/t or a guaranteed complete-cycle charge.
+
+## Still input reservation and truncated output
+
+`forestry::still::observe` runs the owned equivalent of native `hasWork`, then
+`workCycle` if ready. The independent native runner calls those two actual
+methods on an unticked tile. It observes:
+
+- The buffered liquid takes priority over the resource tank for selection.
+  A still-valid retained recipe wins; fresh lookup follows observed HashSet
+  order and matches one input unit with native fluid/tag equality.
+- Without a buffer, `hasWork` reserves `cycles * input.amount` immediately,
+  **even when the output tank is blocked**. This occurs before the power gate.
+  A blocked attempt keeps its buffer; completion clears it.
+- Output preflight checks one unit, while completion fills the full batch and
+  ignores the amount that did not fit. With 3 cycles, 10 mB input/unit, 3 mB
+  output/unit and only 5 mB free space, the native tile consumes 30 mB, produces
+  5 mB (not 9 mB), reports success and clears the buffer.
+- Zero/negative quantities, signed multiplication overflow and the tank's
+  copied filter are represented by the model rather than converted to positive
+  quantities. A zero output can complete without storing any fluid.
+
+NESQL's existing positive-batch projection now uses the already-versioned
+`potential` quantity with `stat: "forestry:stillTankSpace"`, preserving the
+nominal batch and a 0..nominal conservative bound. Its native UI projection
+still shows the nominal batch. This fixes the false fixed-output claim without
+changing Source/Catalog versions or the web layout.
+
+This is **not** a completed Still process integration. Its source recipe still
+needs explicit selection/reservation context; signed/zero batch handling and
+the Centrifuge pending-product lifecycle remain open. The new model and native
+fixtures are not a live dataset or evidence of full registry coverage.
+
 ## Remaining integration
 
 1. Add the recipe cursor and owned native cached projection, including container
@@ -52,15 +120,15 @@ world, tile tick, player inventory or live game is invoked.
 2. Define and validate the source process without duplicating the entire global
    fluid registry in every recipe. Keep physical allocation, retained-state and
    fresh-selection requirements explicit.
-3. Complete the native work-cycle boundary: fluid tank preflight, remnant-space
-   preflight even at zero probability, energy/time integer arithmetic and
-   upgrade semantics. Container packaging is a separate operation.
+3. Connect the verified work/tank/energy model to a versioned process, preserving
+   scheduler/reset semantics. Complete Still and Centrifuge process integration.
+   Container packaging is a separate operation.
 4. Preserve native UI coordinates, fluid tank, remnant slot and animated
    progress; connect only data descriptions to the existing web design.
 5. Run focused adapter/contract/browser checks, then count the handler as locally
    implemented. Full live registry coverage remains a later unified export gate.
 
-The three frozen files under `contracts/fixtures/forestry-*.json` are native
+The frozen files under `contracts/fixtures/forestry-*.json` are native
 observations, not a GTNH source dataset. HashSet/map order is captured per native
 run rather than assumed deterministic across JVM starts. Re-running the native
 runner writes only `NESQL++/build/native-tests/`; it does not silently refresh the

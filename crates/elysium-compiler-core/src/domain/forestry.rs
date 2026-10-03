@@ -1,4 +1,6 @@
 //! Forestry 4.10.17 factory inventory semantics on independently owned stack values.
+pub mod still;
+pub mod work;
 use crate::identity::Nbt;
 use anyhow::{ensure, Result};
 use serde::{Deserialize, Serialize};
