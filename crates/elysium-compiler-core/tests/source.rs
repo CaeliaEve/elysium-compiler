@@ -158,6 +158,14 @@ fn java_source_is_verified_without_losing_identity_or_large_quantities() {
                 assert!(recipe["duration"].is_null() && recipe["energy"].is_null());
                 return Ok(());
             }
+            if recipe["process"]["kind"] == "ic2Blast" {
+                assert_eq!(
+                    recipe["inputs"][0]["choices"][0]["consume"]["kind"],
+                    "staged"
+                );
+                assert_eq!(recipe["outputs"][1]["quantity"]["stat"], "ic2:slagSpace");
+                return Ok(());
+            }
             if recipe["process"]["kind"] == "buildcraftRefinery" {
                 assert_eq!(recipe["process"]["energy"], 30);
                 assert_eq!(recipe["process"]["delay"], "5");

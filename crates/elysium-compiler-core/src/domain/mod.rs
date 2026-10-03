@@ -121,6 +121,10 @@ pub struct Remainder {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Match {
     Exact,
+    /// Require absent or empty root NBT. `meta: true` ignores metadata.
+    Untagged {
+        meta: bool,
+    },
     /// BuildCraft StackHelper: either-side wildcard skips metadata and NBT;
     /// otherwise native subtype and typed-tag comparison. See docs/buildcraft.md.
     Buildcraft {
@@ -193,6 +197,8 @@ pub struct MatchCase {
 pub enum Consumption {
     Consume,
     Keep,
+    /// IC2 blast: amount is the stock gate; its process consumes a unit at each stage.
+    Staged,
     /// Vat: presence of one item is sufficient; remove min(amount, available) at start.
     Upto,
     /// An ordered native requirement; the process allocates actual machine slots.

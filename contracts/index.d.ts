@@ -140,6 +140,9 @@ export type Consumption =
       kind: "keep";
     }
   | {
+      kind: "staged";
+    }
+  | {
       kind: "upto";
     }
   | {
@@ -171,6 +174,10 @@ export type Consumption =
 export type Match =
   | {
       kind: "exact";
+    }
+  | {
+      kind: "untagged";
+      meta: boolean;
     }
   | {
       kind: "buildcraft";
@@ -356,6 +363,10 @@ export type OutputRole = "result" | "return";
  * via the `definition` "Process".
  */
 export type Process =
+  | {
+      heat: number;
+      kind: "ic2Blast";
+    }
   | {
       capacity: number;
       delay: string;
@@ -694,7 +705,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 29;
+  revision: 30;
   scope: string;
   source: string;
 }
@@ -1760,7 +1771,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 29;
+  revision: 30;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1772,7 +1783,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 30;
+  revision: 31;
   scope: Scope;
 }
 /**

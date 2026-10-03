@@ -8,6 +8,44 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 mod tests {
     #[test]
+    fn blast_requires_staged_count_gates_and_conditional_slag() {
+        use crate::domain::Recipe;
+        use serde_json::json;
+        let choice = |id, amount, rule, returns| json!({"id":id,"amount":amount,"rule":rule,"consume":{"kind":"staged"},"returns":returns});
+        let mut value = json!({"id":"recipe_test","source":{"owner":"IC2","handler":"native","key":"blast"},"category":"category_test","order":0,
+            "duration":null,"energy":null,"grid":null,"magic":null,"view":null,"properties":{},"process":{"kind":"ic2Blast","heat":50000},
+            "inputs":[{"kind":"item","slot":0,"choices":[choice("item_iron","4",json!({"kind":"wildcard","meta":false,"nbt":true}),json!([]))]},
+                {"kind":"item","slot":1,"choices":[choice("item_air","1",json!({"kind":"untagged","meta":true}),json!([{"kind":"item","id":"item_cell","amount":"1"}]))]}],
+            "outputs":[{"kind":"item","slot":0,"id":"item_steel","amount":"2","quantity":null,"change":null,"role":"result","chance":{"numerator":"1","denominator":"1"}},
+                {"kind":"item","slot":1,"id":"item_slag","amount":null,"quantity":{"kind":"potential","stat":"ic2:slagSpace","nominal":"3"},"change":null,"role":"result","chance":{"numerator":"1","denominator":"1"}}]});
+        let check = |v: serde_json::Value| {
+            let recipe: Recipe = serde_json::from_value(v)?;
+            super::validate(&recipe, &Default::default(), &Default::default(), &[])
+        };
+        check(value.clone()).unwrap();
+        for (path, bad) in [
+            ("/process", serde_json::Value::Null),
+            ("/duration", json!("6000")),
+            ("/energy", json!("40")),
+            ("/inputs/0/choices/0/consume", json!({"kind":"consume"})),
+            ("/inputs/1/choices/0/amount", json!("6")),
+            (
+                "/inputs/1/choices/0/rule",
+                json!({"kind":"wildcard","meta":false,"nbt":true}),
+            ),
+            ("/inputs/1/choices/0/returns", json!([])),
+            ("/outputs/1/amount", json!("3")),
+            ("/outputs/1/quantity/stat", json!("random_chance")),
+        ] {
+            let mut bad_value = value.clone();
+            *bad_value.pointer_mut(path).unwrap() = bad;
+            assert!(check(bad_value).is_err(), "{path}");
+        }
+        value["process"]["heat"] = json!(-1);
+        value["outputs"].as_array_mut().unwrap().pop();
+        check(value).unwrap();
+    }
+    #[test]
     fn refinery_preserves_preflight_requirements_and_stale_fill_permissions() {
         use crate::{
             domain::{Domain, Recipe},
@@ -231,6 +269,9 @@ pub enum InscriberMode {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// IC2 heat/air checkpoints, persistent progress and native output-space behavior.
+    #[serde(rename = "ic2Blast")]
+    Ic2Blast { heat: i32 },
     /// BuildCraft's cached refinery selection, retry timer and sequential tank drain.
     #[serde(rename = "buildcraftRefinery")]
     BuildcraftRefinery {
@@ -420,6 +461,15 @@ pub(super) fn validate(
     aspects: &[super::Aspect],
 ) -> Result<()> {
     ensure!(
+        matches!(recipe.process, Some(Process::Ic2Blast { .. }))
+            || !recipe
+                .inputs
+                .iter()
+                .flat_map(|i| &i.choices)
+                .any(|c| matches!(c.consume, Consumption::Staged)),
+        "staged consumption requires the IC2 blast process"
+    );
+    ensure!(
         matches!(recipe.process, Some(Process::Soul { .. }))
             || !recipe
                 .inputs
@@ -501,6 +551,9 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    if matches!(process, Process::Ic2Blast { .. }) {
+        return validate_blast(recipe);
+    }
     if let Process::BuildcraftRefinery {
         energy,
         delay,
@@ -974,6 +1027,95 @@ fn validate_enchanter(
             && matches!(enchantment.get("lvl"), Some(Nbt::Short {value}) if value == &level.to_string()),
         "enchanted book level differs from process"
     );
+    Ok(())
+}
+
+fn validate_blast(recipe: &Recipe) -> Result<()> {
+    ensure!(
+        recipe.duration.is_none()
+            && recipe.energy.is_none()
+            && recipe.grid.is_none()
+            && recipe.magic.is_none()
+            && recipe.inputs.len() == 2
+            && (1..=2).contains(&recipe.outputs.len()),
+        "invalid IC2 blast shape or invented fixed time/energy"
+    );
+    for (slot, input) in recipe.inputs.iter().enumerate() {
+        ensure!(
+            input.kind == Kind::Item && input.slot == slot as u32 && !input.choices.is_empty(),
+            "invalid blast input slot"
+        );
+        for c in &input.choices {
+            integer(&c.amount, 1, i32::MAX.into())?;
+            ensure!(
+                matches!(c.consume, Consumption::Staged),
+                "blast input must retain stage consumption"
+            );
+            if slot == 0 {
+                ensure!(
+                    matches!(c.rule, Match::Wildcard { nbt: true, .. })
+                        && c.returns.is_empty()
+                        && c.amount == input.choices[0].amount,
+                    "invalid blast main-input gate"
+                );
+            } else {
+                ensure!(
+                    input.choices.len() == 1
+                        && c.amount == "1"
+                        && matches!(c.rule, Match::Untagged { .. })
+                        && c.returns.len() == 1
+                        && c.returns[0].kind == Kind::Item,
+                    "invalid blast air checkpoint"
+                );
+                integer(&c.returns[0].amount, 1, i32::MAX.into())?;
+            }
+        }
+    }
+    for (slot, output) in recipe.outputs.iter().enumerate() {
+        ensure!(
+            output.kind == Kind::Item
+                && output.slot == slot as u32
+                && output.change.is_none()
+                && matches!(output.role, OutputRole::Result)
+                && output.chance.numerator == "1"
+                && output.chance.denominator == "1",
+            "invalid blast product"
+        );
+        if slot == 0 {
+            ensure!(
+                output.quantity.is_none(),
+                "blast main result is fixed at completion"
+            );
+            integer(
+                output
+                    .amount
+                    .as_deref()
+                    .context("missing blast main result")?,
+                1,
+                i32::MAX.into(),
+            )?;
+        } else {
+            let Some(Quantity::Potential {
+                stat,
+                nominal,
+                sample,
+                condition,
+                parameters,
+            }) = &output.quantity
+            else {
+                anyhow::bail!("slag requires native storage-dependent quantity")
+            };
+            ensure!(
+                output.amount.is_none()
+                    && stat == "ic2:slagSpace"
+                    && sample.is_none()
+                    && condition.is_none()
+                    && parameters.is_none(),
+                "invalid blast slag-space rule"
+            );
+            integer(nominal, 1, i32::MAX.into())?;
+        }
+    }
     Ok(())
 }
 

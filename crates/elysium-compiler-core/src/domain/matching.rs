@@ -13,6 +13,11 @@ impl Match {
     ) -> Result<()> {
         match self {
             Self::Exact => {}
+            Self::Untagged { .. } => ensure!(
+                item.nbt.is_none()
+                    || matches!(&item.nbt, Some(Nbt::Compound {value}) if value.is_empty()),
+                "untagged predicate has a nonempty anchor"
+            ),
             Self::Buildcraft { wildcard, .. } => {
                 ensure!(
                     compound,
@@ -191,6 +196,11 @@ fn simple(rule: &Match, offered: &Item, anchor: &Item) -> bool {
     }
     match rule {
         Match::Exact => offered.meta == anchor.meta && offered.nbt == anchor.nbt,
+        Match::Untagged { meta } => {
+            (*meta || offered.meta == anchor.meta)
+                && (offered.nbt.is_none()
+                    || matches!(&offered.nbt, Some(Nbt::Compound {value}) if value.is_empty()))
+        }
         Match::Buildcraft { wildcard, subtypes } => {
             *wildcard
                 || matches!(offered.meta, -1 | 32767)
@@ -452,6 +462,30 @@ mod tests {
         let items = BTreeMap::from([(anchor.id.as_str(), anchor)]);
         assert!(!rule.indexes_example(anchor, &items));
         let mut offered = anchor.clone();
+        let air: Match = serde_json::from_value(json!({"kind":"untagged","meta":true})).unwrap();
+        assert!(simple(&air, &offered, anchor));
+        offered.meta = 7;
+        offered.nbt = Some(Nbt::Compound {
+            value: BTreeMap::new(),
+        });
+        assert!(
+            simple(&air, &offered, anchor),
+            "empty root and non-subtype metadata must be accepted"
+        );
+        assert!(!simple(
+            &serde_json::from_value(json!({"kind":"untagged","meta":false})).unwrap(),
+            &offered,
+            anchor
+        ));
+        offered.nbt = Some(Nbt::Compound {
+            value: BTreeMap::from([("owner".into(), Nbt::Int { value: "0".into() })]),
+        });
+        assert!(
+            !simple(&air, &offered, anchor),
+            "nonempty NBT must not match an untagged air cell"
+        );
+        assert!(air.validate_item(&offered, &items, false, true).is_err());
+        offered = anchor.clone();
         offered.meta = 1;
         assert!(rule.indexes_example(&offered, &items));
         offered.meta = 0;
