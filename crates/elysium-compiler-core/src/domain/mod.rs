@@ -1,6 +1,7 @@
 //! Shared game facts. Source and catalog use these meanings without compatibility aliases.
 mod change;
 mod check;
+pub mod forestry;
 mod genetics;
 mod grinding;
 mod industry;
