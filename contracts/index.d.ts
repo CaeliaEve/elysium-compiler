@@ -173,6 +173,11 @@ export type Match =
       kind: "exact";
     }
   | {
+      kind: "buildcraft";
+      subtypes: boolean;
+      wildcard: boolean;
+    }
+  | {
       filter: SoulFilter;
       kind: "soul";
     }
@@ -351,6 +356,10 @@ export type OutputRole = "result" | "return";
  * via the `definition` "Process".
  */
 export type Process =
+  | {
+      energy: number;
+      kind: "buildcraftAssembly";
+    }
   | {
       earlier: CraftingSelector[];
       kind: "rolling";
@@ -673,7 +682,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 27;
+  revision: 28;
   scope: string;
   source: string;
 }
@@ -1739,7 +1748,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 27;
+  revision: 28;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1751,7 +1760,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 28;
+  revision: 29;
   scope: Scope;
 }
 /**

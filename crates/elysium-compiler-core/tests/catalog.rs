@@ -294,7 +294,7 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let catalog = Catalog::current(directory.path()).unwrap();
     catalog.verify().unwrap();
     assert_eq!(catalog.manifest.id, first.id);
-    assert_eq!(catalog.manifest.counts["recipes"], 36);
+    assert_eq!(catalog.manifest.counts["recipes"], 37);
     assert_eq!(
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
@@ -683,6 +683,7 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
                     Some(
                         elysium_compiler_core::domain::Process::Harmony { .. }
                             | elysium_compiler_core::domain::Process::Rolling { .. }
+                            | elysium_compiler_core::domain::Process::BuildcraftAssembly { .. }
                     )
                 )
             })

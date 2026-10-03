@@ -8,6 +8,53 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 mod tests {
     #[test]
+    fn buildcraft_requires_ordered_allocation_and_fixed_result() {
+        use crate::{
+            domain::{Domain, Recipe},
+            source::Source,
+        };
+        use serde_json::json;
+        let source = Source::open(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../contracts/fixtures/source"),
+        )
+        .unwrap();
+        let domain = Domain::load(&source).unwrap();
+        let mut value = serde_json::to_value(&domain.recipes[0]).unwrap();
+        for key in ["duration", "energy", "grid", "magic"] {
+            value[key] = serde_json::Value::Null;
+        }
+        value["process"] = json!({"kind":"buildcraftAssembly","energy":-7});
+        let c = json!({"id":domain.items[0].id,"amount":"3","rule":{"kind":"buildcraft","wildcard":false,"subtypes":true},"consume":{"kind":"allocated"},"returns":[]});
+        value["inputs"] = json!([{"kind":"item","slot":0,"choices":[c.clone(),c]}]);
+        value["outputs"] = json!([{"kind":"item","slot":0,"id":domain.items[1].id,"amount":"2","quantity":null,"change":null,"role":"result","chance":{"numerator":"1","denominator":"1"}}]);
+        let check = |v: serde_json::Value| {
+            let recipe: Recipe = serde_json::from_value(v)?;
+            super::validate(&recipe, &Default::default(), &Default::default(), &[])
+        };
+        check(value.clone()).unwrap();
+        for (key, bad) in [
+            ("duration", json!("1")),
+            ("energy", json!("7")),
+            ("process", serde_json::Value::Null),
+        ] {
+            let mut altered = value.clone();
+            altered[key] = bad;
+            assert!(check(altered).is_err());
+        }
+        let mut bad = value.clone();
+        bad["inputs"][0]["choices"][1]["amount"] = json!("1");
+        assert!(check(bad).is_err());
+        let mut bad = value.clone();
+        bad["inputs"][0]["choices"][0]["consume"] = json!({"kind":"consume"});
+        assert!(check(bad).is_err());
+        let mut bad = value.clone();
+        bad["outputs"][0]["chance"]["denominator"] = json!("2");
+        assert!(check(bad).is_err());
+        value["inputs"] = json!([]);
+        check(value).unwrap();
+    }
+    #[test]
     fn sag_preserves_optional_stock_and_shared_grinding() {
         let value = serde_json::json!({"kind":"sag","energy":1000,"slot":-1,"bonus":true,"earlier":[],"balls":[{"choices":[],"grinding":"2.5","chance":"2.0","power":"0.5","duration":10000}],"blocked":[],"oreBlocked":[]});
         let process: super::Process = serde_json::from_value(value.clone()).unwrap();
@@ -129,6 +176,9 @@ pub enum InscriberMode {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// Selected BuildCraft assembly plan; ordered greedy allocation and signed RF budget.
+    #[serde(rename = "buildcraftAssembly")]
+    BuildcraftAssembly { energy: i32 },
     /// Railcraft shared ordered crafting registry and native reserve/power gates.
     Rolling {
         powered: bool,
@@ -315,9 +365,23 @@ pub(super) fn validate(
         "soul predicate requires a Soul Binder process"
     );
     ensure!(
+        matches!(recipe.process, Some(Process::BuildcraftAssembly { .. }))
+            || !recipe
+                .inputs
+                .iter()
+                .flat_map(|i| &i.choices)
+                .any(|c| matches!(c.rule, Match::Buildcraft { .. })),
+        "BuildCraft predicate requires its native machine process"
+    );
+    ensure!(
         matches!(
             recipe.process,
-            Some(Process::Alloy { .. } | Process::Splice { .. } | Process::Sag { .. })
+            Some(
+                Process::Alloy { .. }
+                    | Process::Splice { .. }
+                    | Process::Sag { .. }
+                    | Process::BuildcraftAssembly { .. }
+            )
         ) || !recipe
             .inputs
             .iter()
@@ -372,6 +436,9 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    if matches!(process, Process::BuildcraftAssembly { .. }) {
+        return validate_buildcraft(recipe);
+    }
     if let Process::Rolling { earlier, .. } = process {
         return super::rolling::validate(recipe, earlier, items);
     }
@@ -832,6 +899,52 @@ fn validate_enchanter(
             && matches!(enchantment.get("lvl"), Some(Nbt::Short {value}) if value == &level.to_string()),
         "enchanted book level differs from process"
     );
+    Ok(())
+}
+
+fn validate_buildcraft(recipe: &Recipe) -> Result<()> {
+    ensure!(
+        recipe.magic.is_none()
+            && recipe.grid.is_none()
+            && recipe.duration.is_none()
+            && recipe.energy.is_none()
+            && recipe.inputs.len() <= 4096
+            && recipe.outputs.len() == 1,
+        "invalid BuildCraft assembly shape"
+    );
+    let mut count = 0;
+    for (slot, input) in recipe.inputs.iter().enumerate() {
+        ensure!(
+            input.kind == Kind::Item && input.slot == slot as u32 && !input.choices.is_empty(),
+            "invalid BuildCraft ordered requirement"
+        );
+        let amount = &input.choices[0].amount;
+        integer(amount, 1, i32::MAX.into())?;
+        count += input.choices.len();
+        ensure!(count <= 65536, "BuildCraft alternative budget exceeded");
+        for choice in &input.choices {
+            ensure!(
+                &choice.amount == amount
+                    && matches!(choice.consume, Consumption::Allocated)
+                    && choice.returns.is_empty()
+                    && matches!(choice.rule, Match::Buildcraft { .. }),
+                "BuildCraft group shares one allocated amount and native predicate without returns"
+            );
+        }
+    }
+    let output = &recipe.outputs[0];
+    ensure!(
+        output.kind == Kind::Item
+            && output.slot == 0
+            && output.amount.is_some()
+            && output.quantity.is_none()
+            && output.change.is_none()
+            && matches!(output.role, OutputRole::Result)
+            && output.chance.numerator == "1"
+            && output.chance.denominator == "1",
+        "BuildCraft result must be fixed"
+    );
+    integer(output.amount.as_deref().unwrap(), 1, i32::MAX.into())?;
     Ok(())
 }
 

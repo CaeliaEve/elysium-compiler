@@ -147,6 +147,17 @@ fn java_source_is_verified_without_losing_identity_or_large_quantities() {
                 assert_eq!(recipe["outputs"][0]["change"]["action"]["kind"], "runic");
                 return Ok(());
             }
+            if recipe["process"]["kind"] == "buildcraftAssembly" {
+                assert_eq!(recipe["process"]["energy"], 700);
+                assert_eq!(recipe["inputs"][0]["choices"][0]["amount"], "3");
+                assert_eq!(recipe["inputs"][0]["choices"][1]["rule"]["wildcard"], true);
+                assert_eq!(
+                    recipe["inputs"][1]["choices"][0]["consume"]["kind"],
+                    "allocated"
+                );
+                assert!(recipe["duration"].is_null() && recipe["energy"].is_null());
+                return Ok(());
+            }
             if recipe["process"]["kind"] == "harmony" {
                 assert_eq!(
                     recipe["outputs"][0]["quantity"]["nominal"],

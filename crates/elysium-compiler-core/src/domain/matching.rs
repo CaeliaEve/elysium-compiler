@@ -13,6 +13,20 @@ impl Match {
     ) -> Result<()> {
         match self {
             Self::Exact => {}
+            Self::Buildcraft { wildcard, .. } => {
+                ensure!(
+                    compound,
+                    "BuildCraft predicate cannot be nested in priority filters"
+                );
+                ensure!(
+                    *wildcard
+                        || item
+                            .nbt
+                            .as_ref()
+                            .is_none_or(|tag| native_tag(tag, tag, true)),
+                    "BuildCraft NaN predicate depends on object identity"
+                );
+            }
             Self::Soul { filter } => {
                 ensure!(
                     compound,
@@ -177,6 +191,16 @@ fn simple(rule: &Match, offered: &Item, anchor: &Item) -> bool {
     }
     match rule {
         Match::Exact => offered.meta == anchor.meta && offered.nbt == anchor.nbt,
+        Match::Buildcraft { wildcard, subtypes } => {
+            *wildcard
+                || matches!(offered.meta, -1 | 32767)
+                || ((!subtypes || offered.meta == anchor.meta)
+                    && match (&offered.nbt, &anchor.nbt) {
+                        (None, None) => true,
+                        (Some(a), Some(b)) => native_tag(a, b, true),
+                        _ => false,
+                    })
+        }
         Match::Ae => {
             offered.meta == anchor.meta && ae_nbt(offered.nbt.as_ref(), anchor.nbt.as_ref())
         }
@@ -250,6 +274,10 @@ fn ae_nbt(a: Option<&Nbt>, b: Option<&Nbt>) -> bool {
 }
 
 fn ae_tag(a: &Nbt, b: &Nbt) -> bool {
+    native_tag(a, b, false)
+}
+
+fn native_tag(a: &Nbt, b: &Nbt, list_type: bool) -> bool {
     match (a, b) {
         (Nbt::Float { value: a }, Nbt::Float { value: b }) => {
             match (u32::from_str_radix(a, 16), u32::from_str_radix(b, 16)) {
@@ -263,13 +291,24 @@ fn ae_tag(a: &Nbt, b: &Nbt) -> bool {
                 _ => false,
             }
         }
-        (Nbt::List { value: a, .. }, Nbt::List { value: b, .. }) => {
-            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| ae_tag(a, b))
+        (
+            Nbt::List {
+                value: a,
+                element: at,
+            },
+            Nbt::List {
+                value: b,
+                element: bt,
+            },
+        ) => {
+            (!list_type || at == bt)
+                && a.len() == b.len()
+                && a.iter().zip(b).all(|(a, b)| native_tag(a, b, list_type))
         }
         (Nbt::Compound { value: a }, Nbt::Compound { value: b }) => {
             a.len() == b.len()
                 && a.iter()
-                    .all(|(key, a)| b.get(key).is_some_and(|b| ae_tag(a, b)))
+                    .all(|(key, a)| b.get(key).is_some_and(|b| native_tag(a, b, list_type)))
         }
         _ => a == b,
     }
@@ -280,6 +319,77 @@ mod tests {
     use super::*;
     use crate::{domain::Domain, identity::item_id, source::Source};
     use serde_json::json;
+
+    #[test]
+    fn buildcraft_wildcard_shortcuts_preserve_native_nbt() {
+        let rule: Match =
+            serde_json::from_value(json!({"kind":"buildcraft","wildcard":false,"subtypes":true}))
+                .unwrap();
+        let source = Source::open(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../contracts/fixtures/source"),
+        )
+        .unwrap();
+        let domain = Domain::load(&source).unwrap();
+        let mut anchor = domain.items[0].clone();
+        anchor.meta = 0;
+        anchor.nbt = None;
+        let mut offered = anchor.clone();
+        offered.nbt = serde_json::from_value(json!({"type":"compound","value":{}})).unwrap();
+        assert!(
+            !simple(&rule, &offered, &anchor),
+            "native BuildCraft distinguishes absent and empty NBT"
+        );
+        offered.meta = 32767;
+        assert!(
+            simple(&rule, &offered, &anchor),
+            "offered wildcard skips NBT"
+        );
+        offered.registry = "different:item".into();
+        assert!(
+            !simple(&rule, &offered, &anchor),
+            "wildcard must retain item identity"
+        );
+        offered = anchor.clone();
+        offered.meta = 1;
+        assert!(!simple(&rule, &offered, &anchor));
+        let broad: Match =
+            serde_json::from_value(json!({"kind":"buildcraft","wildcard":true,"subtypes":true}))
+                .unwrap();
+        assert!(simple(&broad, &offered, &anchor));
+        let plain: Match =
+            serde_json::from_value(json!({"kind":"buildcraft","wildcard":false,"subtypes":false}))
+                .unwrap();
+        assert!(simple(&plain, &offered, &anchor));
+        let tag = |bits: &str| {
+            serde_json::from_value(
+                json!({"type":"compound","value":{"x":{"type":"float","value":bits}}}),
+            )
+            .unwrap()
+        };
+        anchor.nbt = tag("80000000");
+        offered.meta = 0;
+        offered.nbt = tag("00000000");
+        assert!(
+            simple(&rule, &offered, &anchor),
+            "native signed zeros compare numerically"
+        );
+        let list = |element: &str| {
+            serde_json::from_value(json!({"type":"compound","value":{"list":{"type":"list","element":element,"value":[]}}})).unwrap()
+        };
+        anchor.nbt = list("end");
+        offered.nbt = list("string");
+        assert!(
+            !simple(&rule, &offered, &anchor),
+            "native empty lists retain element type"
+        );
+        anchor.nbt = tag("7fc00000");
+        assert!(
+            rule.validate_item(&anchor, &BTreeMap::new(), false, true)
+                .is_err(),
+            "NaN predicates depend on native reference identity"
+        );
+    }
 
     #[test]
     fn ae_precise_preserves_native_nbt_comparison() {

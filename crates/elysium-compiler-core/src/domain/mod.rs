@@ -121,6 +121,12 @@ pub struct Remainder {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Match {
     Exact,
+    /// BuildCraft StackHelper: either-side wildcard skips metadata and NBT;
+    /// otherwise native subtype and typed-tag comparison. See docs/buildcraft.md.
+    Buildcraft {
+        wildcard: bool,
+        subtypes: bool,
+    },
     /// Native ItemSoulVessel extraction, including null and non-string root ids.
     /// Canonical display samples do not restrict the admitted input domain.
     Soul {
