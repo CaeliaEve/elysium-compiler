@@ -9,6 +9,7 @@ mod matching;
 mod model;
 mod process;
 mod quantity;
+mod rolling;
 mod soul;
 mod structure;
 pub use change::{Change, Edit, Stack};
@@ -19,6 +20,7 @@ pub use magic::*;
 pub use model::*;
 pub use process::{HarmonyMode, HarmonyOutcome, Process, VatConsumption};
 pub use quantity::{quantity_bounds, Quantity};
+pub use rolling::CraftingSelector;
 pub use soul::{SoulFilter, SoulSelector};
 pub use structure::*;
 

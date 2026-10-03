@@ -352,6 +352,11 @@ export type OutputRole = "result" | "return";
  */
 export type Process =
   | {
+      earlier: CraftingSelector[];
+      kind: "rolling";
+      powered: boolean;
+    }
+  | {
       capacity: number;
       drains: boolean;
       earlier: SoulSelector[];
@@ -668,7 +673,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 26;
+  revision: 27;
   scope: string;
   source: string;
 }
@@ -1360,6 +1365,16 @@ export interface Stack {
   id: string;
 }
 /**
+ * Ordered requirements. None grid means native greedy shapeless matching in offered row-major cell order; a grid permits translations and its mirror flag.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "CraftingSelector".
+ */
+export interface CraftingSelector {
+  grid?: Grid | null;
+  inputs: MatchCase[][];
+}
+/**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "SoulSelector".
  */
@@ -1724,7 +1739,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 26;
+  revision: 27;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1736,7 +1751,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 27;
+  revision: 28;
   scope: Scope;
 }
 /**

@@ -129,6 +129,11 @@ pub enum InscriberMode {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// Railcraft shared ordered crafting registry and native reserve/power gates.
+    Rolling {
+        powered: bool,
+        earlier: Vec<super::CraftingSelector>,
+    },
     /// Native two-slot Soul Binder selection, XP debit and last-vessel completion.
     Soul {
         energy: i32,
@@ -209,6 +214,12 @@ pub enum Process {
 
 #[cfg(test)]
 mod soul_contract_test {
+    #[test]
+    fn rolling_retains_cross_category_selectors() {
+        let value = serde_json::json!({"kind":"rolling","powered":false,"earlier":[{"grid":{"width":2,"height":1,"cells":[0,null],"mirror":true},"inputs":[[{"id":"template","rule":{"kind":"wildcard","meta":true,"nbt":true}}]]}]});
+        let process: super::Process = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(process).unwrap(), value);
+    }
     #[test]
     fn soul_preserves_raw_experience_and_native_predicate() {
         let rule: super::Match = serde_json::from_value(serde_json::json!({"kind":"soul","filter":{"vessel":"vial","names":[null,"Forbidden"],"exclude":true}})).unwrap();
@@ -361,6 +372,9 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    if let Process::Rolling { earlier, .. } = process {
+        return super::rolling::validate(recipe, earlier, items);
+    }
     if matches!(process, Process::Sag { .. }) {
         return super::grinding::validate(recipe, items);
     }
