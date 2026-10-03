@@ -13,7 +13,7 @@ impl Match {
     ) -> Result<()> {
         match self {
             Self::Exact => {}
-            Self::Integration => ensure!(
+            Self::Integration | Self::Forestry => ensure!(
                 compound,
                 "integration cannot be nested in an independent predicate"
             ),
@@ -265,6 +265,7 @@ fn simple(rule: &Match, offered: &Item, anchor: &Item) -> bool {
             }
         }
         Match::Integration
+        | Match::Forestry
         | Match::Ore { .. }
         | Match::Soul { .. }
         | Match::Member { .. }

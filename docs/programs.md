@@ -1,10 +1,11 @@
 # Shared machine rules
 
-Compiler/contracts 0.33.0 read Source revision 33 and publish Catalog revision
-32. Both formats require a `programs` collection/table, which can be empty.
+Compiler/contracts 0.34.0 read Source revision 34 and publish Catalog revision
+33. Both formats require a `programs` collection/table, which can be empty.
 An optional category `program` references a shared content-addressed context.
-The initial context is Forestry Squeezer rules. It does not register a recipe
-adapter, execute native callbacks, or change the existing recipe UI.
+The initial context is Forestry Squeezer rules. NESQL 0.37.0 registers ordinary
+and Forge fixed-container recipe projections. Dynamic item callbacks remain
+explicit unsupported entries; no full runtime coverage is claimed.
 
 The whole ID hashes `{kind: "forestrySqueezer", rules}`. Each row contains
 `id`, `program`, `offset` and `data: {kind, rows}`. The four section kinds are
@@ -27,6 +28,29 @@ loads only intersecting partitions through its existing verified cache. The
 same reader serves HTTP and offline-worker queries. It returns chunks, not
 executable scripts or a simulated machine result.
 
-A future recipe process must bind the program ID and native rule selector into
-recipe identity and agree with its category reference. The transport fixture
-does not prove this unfinished process or full Squeezer registry coverage.
+Each Squeezer recipe carries `process: {kind: "forestrySqueezer", program,
+selector, time, chance}`. Selectors are `{kind: "ordinary", index}` or
+`{kind: "container", container, filled}`. Both the program and selector enter
+recipe identity. Validation resolves the selector, checks first-key precedence,
+and requires agreement with the category program, native work steps and exact
+discrete `Random.nextFloat() < threshold` probability.
+
+Inputs retain native signed i32 counts and use `rule: {kind: "forestry"}` with
+allocated consumption. This predicate is meaningful only in the shared process;
+it is not an independent item predicate and cannot be nested in one. Display
+examples retain registry/metadata/typed NBT. Null requirements remain holes in
+the shared rule and keep their original slot indices in the projection.
+
+Outputs use `quantity: {kind: "squeezer", nominal}` with signed i32 parameters,
+no fixed amount and no independent roll. Fluid bounds are `[0, max(nominal, 0)]`;
+remnant bounds include zero and the signed nominal count, except a zero native
+probability gives `[0, 0]`. Zero/NaN native chance still has remnant-space
+preflight checks. Conditional stock removal, possible partial consumption,
+fluid-tank space, remnant allocation and power cadence remain shared semantics,
+not fixed ticks or EU/t. A recipe cannot attach a grid, magic cost or fixed
+duration/energy to this process.
+
+Native helper observations and production adapter rows cover ordinary/fixed
+selectors, signed/zero/null fields, registry drift and rejected altered rows.
+Dynamic `IFluidContainerItem` behavior, real full registry coverage and game
+visual capture require further work and unified live validation.

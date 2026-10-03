@@ -184,6 +184,32 @@ fn java_source_is_verified_without_losing_identity_or_large_quantities() {
                 assert!(recipe["duration"].is_null() && recipe["energy"].is_null());
                 return Ok(());
             }
+            if recipe["process"]["kind"] == "forestrySqueezer" {
+                assert!(recipe["process"]["program"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with("program_"));
+                assert_eq!(
+                    recipe["process"]["selector"],
+                    json!({"kind":"ordinary","index":0})
+                );
+                assert_eq!(recipe["process"]["time"], 3);
+                assert_eq!(
+                    recipe["inputs"][0]["choices"][0]["rule"]["kind"],
+                    "forestry"
+                );
+                assert_eq!(
+                    recipe["inputs"][0]["choices"][0]["consume"]["kind"],
+                    "allocated"
+                );
+                assert_eq!(
+                    recipe["outputs"][0]["quantity"],
+                    json!({"kind":"squeezer","nominal":"100"})
+                );
+                assert!(recipe["outputs"][0]["amount"].is_null());
+                assert!(recipe["duration"].is_null() && recipe["energy"].is_null());
+                return Ok(());
+            }
             if recipe["process"]["kind"] == "harmony" {
                 assert_eq!(
                     recipe["outputs"][0]["quantity"]["nominal"],

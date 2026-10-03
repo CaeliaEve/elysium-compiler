@@ -343,6 +343,7 @@ impl Domain {
             }
             let mut inputs = BTreeSet::new();
             process::validate(recipe, &fluid_records, &items, &self.aspects)?;
+            forestry::recipes::validate(recipe, &programs, category, &items, &fluid_records)?;
             for input in &recipe.inputs {
                 ensure!(
                     input.slot <= 65535 && inputs.insert((input.kind, input.slot)),
@@ -370,7 +371,11 @@ impl Domain {
                         );
                     }
                     reference(input.kind, &choice.id)?;
-                    integer(&choice.amount, 1, i64::MAX)?;
+                    if matches!(choice.rule, Match::Forestry) {
+                        integer(&choice.amount, i64::from(i32::MIN), i64::from(i32::MAX))?;
+                    } else {
+                        integer(&choice.amount, 1, i64::MAX)?;
+                    }
                     ensure!(
                         choices.insert(serde_json::to_string(choice)?),
                         "duplicate input alternative: {}",

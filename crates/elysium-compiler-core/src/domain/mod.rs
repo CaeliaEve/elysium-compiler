@@ -126,6 +126,8 @@ pub enum Match {
     Exact,
     /// Example of a multi-slot integration rule, not an independent item predicate.
     Integration,
+    /// Native Forestry shared-stock requirement; the linked machine process owns matching.
+    Forestry,
     /// Require absent or empty root NBT. `meta: true` ignores metadata.
     Untagged {
         meta: bool,

@@ -1,4 +1,5 @@
 //! Forestry 4.10.17 factory inventory semantics on independently owned stack values.
+pub mod recipes;
 pub mod still;
 pub mod work;
 use crate::identity::Nbt;
@@ -450,6 +451,22 @@ fn remove_stack(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_squeezer_rows_keep_shared_process_and_conditional_quantities() {
+        let observed: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../contracts/fixtures/squeezer-adapter-records.json"
+        ))
+        .unwrap();
+        let rows: Vec<super::super::Recipe> =
+            serde_json::from_value(observed["recipes"].clone()).unwrap();
+        assert_eq!(rows.len(), 6);
+        for row in rows {
+            assert_eq!(
+                serde_json::to_value(&row).unwrap()["process"]["program"],
+                observed["programId"]
+            );
+        }
+    }
     use super::*;
     #[derive(Deserialize)]
     struct Case {

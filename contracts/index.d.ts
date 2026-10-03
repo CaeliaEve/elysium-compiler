@@ -217,6 +217,9 @@ export type Match =
       kind: "integration";
     }
   | {
+      kind: "forestry";
+    }
+  | {
       kind: "untagged";
       meta: boolean;
     }
@@ -340,6 +343,10 @@ export type Edit =
  */
 export type Quantity =
   | {
+      kind: "squeezer";
+      nominal: string;
+    }
+  | {
       kind: "soul";
       nominal: string;
     }
@@ -407,6 +414,13 @@ export type OutputRole = "result" | "return";
  * via the `definition` "Process".
  */
 export type Process =
+  | {
+      chance: Chance;
+      kind: "forestrySqueezer";
+      program: string;
+      selector: SqueezerSelector;
+      time: number;
+    }
   | {
       kind: "buildcraftIntegration";
       rule: IntegrationRule;
@@ -507,6 +521,22 @@ export type Process =
       rocketTier: number;
       startEu: string;
       ticks: string;
+    };
+/**
+ * Stable positions in one content-addressed native registry snapshot.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SqueezerSelector".
+ */
+export type SqueezerSelector =
+  | {
+      index: number;
+      kind: "ordinary";
+    }
+  | {
+      container: number;
+      filled: number;
+      kind: "container";
     };
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -794,7 +824,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 32;
+  revision: 33;
   scope: string;
   source: string;
 }
@@ -1949,7 +1979,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 32;
+  revision: 33;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1961,7 +1991,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 33;
+  revision: 34;
   scope: Scope;
 }
 /**

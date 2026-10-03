@@ -19,6 +19,12 @@ fn shared_native_programs_require_complete_category_references_and_catalog_trans
     ))
     .unwrap();
     let mut value = serde_json::to_value(original).unwrap();
+    // This case replaces the context to test chunk transport independently;
+    // recipe-to-program binding is exercised by the Squeezer contract test.
+    value["recipes"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|row| row["process"]["kind"] != "forestrySqueezer");
     for category in value["categories"].as_array_mut().unwrap() {
         category.as_object_mut().unwrap().remove("program");
     }
@@ -336,7 +342,7 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let catalog = Catalog::current(directory.path()).unwrap();
     catalog.verify().unwrap();
     assert_eq!(catalog.manifest.id, first.id);
-    assert_eq!(catalog.manifest.counts["recipes"], 40);
+    assert_eq!(catalog.manifest.counts["recipes"], 41);
     assert_eq!(
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
@@ -756,7 +762,20 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
             .find(|links| links.id == water)
             .unwrap()
             .recipes,
-        [recipe_id]
+        [
+            recipe_id,
+            Domain::load(&Source::open(&fixture()).unwrap())
+                .unwrap()
+                .recipes
+                .iter()
+                .find(|row| matches!(
+                    row.process,
+                    Some(elysium_compiler_core::domain::Process::ForestrySqueezer { .. })
+                ))
+                .unwrap()
+                .id
+                .clone()
+        ]
     );
     assert!(fs::read_dir(directory.path().join("catalogs"))
         .unwrap()

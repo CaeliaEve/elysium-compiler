@@ -269,6 +269,14 @@ pub enum InscriberMode {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// Native shared stock/selection, conditional output and powered work steps.
+    #[serde(rename = "forestrySqueezer")]
+    ForestrySqueezer {
+        program: String,
+        selector: super::forestry::SqueezerSelector,
+        time: i32,
+        chance: super::Chance,
+    },
     /// Retained native recipe selection, periodic preflight and ordered NBT transformation.
     #[serde(rename = "buildcraftIntegration")]
     BuildcraftIntegration {
@@ -466,6 +474,15 @@ pub(super) fn validate(
     aspects: &[super::Aspect],
 ) -> Result<()> {
     ensure!(
+        matches!(recipe.process, Some(Process::ForestrySqueezer { .. }))
+            || !recipe
+                .inputs
+                .iter()
+                .flat_map(|i| &i.choices)
+                .any(|c| matches!(c.rule, Match::Forestry)),
+        "Forestry requirements need their shared machine process"
+    );
+    ensure!(
         matches!(recipe.process, Some(Process::BuildcraftIntegration { .. }))
             || !recipe
                 .inputs
@@ -511,6 +528,7 @@ pub(super) fn validate(
                     | Process::BuildcraftAssembly { .. }
                     | Process::BuildcraftRefinery { .. }
                     | Process::BuildcraftIntegration { .. }
+                    | Process::ForestrySqueezer { .. }
             )
         ) || !recipe
             .inputs
@@ -566,6 +584,17 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    if matches!(process, Process::ForestrySqueezer { .. }) {
+        ensure!(
+            recipe.duration.is_none()
+                && recipe.energy.is_none()
+                && recipe.grid.is_none()
+                && recipe.magic.is_none(),
+            "Squeezer cannot declare fixed duration, EU/t or crafting semantics"
+        );
+        // Cross-check against the already-reconstructed program in Domain::validate.
+        return Ok(());
+    }
     if let Process::BuildcraftIntegration { rule } = process {
         return super::integration::validate_recipe(recipe, rule);
     }

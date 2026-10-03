@@ -9,6 +9,10 @@ use std::collections::BTreeSet;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Quantity {
+    /// Native signed output parameter; the shared Squeezer process determines actual completion.
+    Squeezer {
+        nominal: String,
+    },
     /// Both fixed Soul Binder outputs share the last-vessel completion gate.
     Soul {
         nominal: String,
@@ -83,6 +87,29 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
         "computed output cannot carry an independent probability"
     );
     match rule {
+        Quantity::Squeezer { nominal } => {
+            ensure!(
+                matches!(
+                    recipe.process,
+                    Some(super::Process::ForestrySqueezer { .. })
+                ),
+                "Squeezer quantity lacks its shared process"
+            );
+            let amount = integer(nominal, i64::from(i32::MIN), i64::from(i32::MAX))?;
+            if output.kind == Kind::Item
+                && matches!(&recipe.process, Some(super::Process::ForestrySqueezer { chance, .. }) if chance.numerator == "0")
+            {
+                return Ok((0, 0));
+            }
+            Ok((
+                if output.kind == Kind::Item {
+                    amount.min(0)
+                } else {
+                    0
+                },
+                amount.max(0),
+            ))
+        }
         Quantity::Soul { nominal } => {
             ensure!(
                 matches!(
