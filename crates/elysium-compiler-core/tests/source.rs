@@ -210,6 +210,12 @@ fn java_source_is_verified_without_losing_identity_or_large_quantities() {
                 assert!(recipe["duration"].is_null() && recipe["energy"].is_null());
                 return Ok(());
             }
+            if recipe["process"]["kind"] == "unstableCasting" {
+                assert_eq!(recipe["duration"], "80");
+                assert!(recipe["outputs"][0]["change"].is_null());
+                assert!(recipe["energy"].is_null() && recipe["magic"].is_null());
+                return Ok(());
+            }
             if recipe["process"]["kind"] == "harmony" {
                 assert_eq!(
                     recipe["outputs"][0]["quantity"]["nominal"],

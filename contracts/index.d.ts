@@ -433,8 +433,18 @@ export type Process =
       rule: IntegrationRule;
     }
   | {
+      /**
+       * Per input slot and choice: container left in that input slot when consuming a single item. Stacks >1 with a container are not consumed. Air choice returns still describe the separate air-output slot.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      containers: [(Stack | null)[], (Stack | null)[]];
       heat: number;
       kind: "ic2Blast";
+    }
+  | {
+      kind: "unstableCasting";
     }
   | {
       capacity: number;
@@ -831,7 +841,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 34;
+  revision: 35;
   scope: string;
   source: string;
 }
@@ -1994,7 +2004,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 34;
+  revision: 35;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -2006,7 +2016,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 35;
+  revision: 36;
   scope: Scope;
 }
 /**

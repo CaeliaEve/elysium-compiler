@@ -13,7 +13,7 @@ mod tests {
         use serde_json::json;
         let choice = |id, amount, rule, returns| json!({"id":id,"amount":amount,"rule":rule,"consume":{"kind":"staged"},"returns":returns});
         let mut value = json!({"id":"recipe_test","source":{"owner":"IC2","handler":"native","key":"blast"},"category":"category_test","order":0,
-            "duration":null,"energy":null,"grid":null,"magic":null,"view":null,"properties":{},"process":{"kind":"ic2Blast","heat":50000},
+            "duration":null,"energy":null,"grid":null,"magic":null,"view":null,"properties":{},"process":{"kind":"ic2Blast","heat":50000,"containers":[[null],[null]]},
             "inputs":[{"kind":"item","slot":0,"choices":[choice("item_iron","4",json!({"kind":"wildcard","meta":false,"nbt":true}),json!([]))]},
                 {"kind":"item","slot":1,"choices":[choice("item_air","1",json!({"kind":"untagged","meta":true}),json!([{"kind":"item","id":"item_cell","amount":"1"}]))]}],
             "outputs":[{"kind":"item","slot":0,"id":"item_steel","amount":"2","quantity":null,"change":null,"role":"result","chance":{"numerator":"1","denominator":"1"}},
@@ -36,6 +36,12 @@ mod tests {
             ("/inputs/1/choices/0/returns", json!([])),
             ("/outputs/1/amount", json!("3")),
             ("/outputs/1/quantity/stat", json!("random_chance")),
+            ("/process/containers", json!([[], [null]])),
+            ("/process/containers", json!([[null], [null, null]])),
+            (
+                "/process/containers/0/0",
+                json!({"id":"item_missing","amount":"1"}),
+            ),
         ] {
             let mut bad_value = value.clone();
             *bad_value.pointer_mut(path).unwrap() = bad;
@@ -44,6 +50,30 @@ mod tests {
         value["process"]["heat"] = json!(-1);
         value["outputs"].as_array_mut().unwrap().pop();
         check(value).unwrap();
+    }
+    #[test]
+    fn unstable_casting_preserves_runtime_output_semantics() {
+        use crate::domain::Recipe;
+        use serde_json::json;
+        let recipe = json!({"id":"recipe_test","source":{"owner":"TConstruct","handler":"tconstruct.plugins.nei.RecipeHandlerCastingTable","key":"casting"},
+            "category":"category_test","order":0,"duration":"80","energy":null,"grid":null,"magic":null,"view":null,"properties":{},
+            "process":{"kind":"unstableCasting"},"inputs":[{"kind":"fluid","slot":0,"choices":[{"id":"fluid_metal","amount":"144","rule":{"kind":"exact"},"consume":{"kind":"consume"},"returns":[]}]}],
+            "outputs":[{"kind":"item","slot":0,"id":"item_part","amount":"1","quantity":null,"change":null,"role":"result","chance":{"numerator":"1","denominator":"1"}}]});
+        let check = |value| -> anyhow::Result<()> {
+            let recipe: Recipe = serde_json::from_value(value)?;
+            super::validate(&recipe, &Default::default(), &Default::default(), &[])
+        };
+        check(recipe.clone()).unwrap();
+        for (path, bad) in [
+            ("/source/handler", json!("other")),
+            ("/duration", json!(null)),
+            ("/energy", json!("32")),
+            ("/outputs/0/chance/numerator", json!("0")),
+        ] {
+            let mut value = recipe.clone();
+            *value.pointer_mut(path).unwrap() = bad;
+            assert!(check(value).is_err(), "{path}");
+        }
     }
     #[test]
     fn refinery_preserves_preflight_requirements_and_stale_fill_permissions() {
@@ -284,7 +314,17 @@ pub enum Process {
     },
     /// IC2 heat/air checkpoints, persistent progress and native output-space behavior.
     #[serde(rename = "ic2Blast")]
-    Ic2Blast { heat: i32 },
+    Ic2Blast {
+        heat: i32,
+        /// Per input slot and choice: container left in that input slot when
+        /// consuming a single item. Stacks >1 with a container are not consumed.
+        /// Air choice returns still describe the separate air-output slot.
+        containers: [Vec<Option<super::Stack>>; 2],
+    },
+    /// Output prototype receives ExtraUtilities 1.2.12's conditional world-clock
+    /// tags at completion, not at export time. See docs/casting.md.
+    #[serde(rename = "unstableCasting")]
+    UnstableCasting {},
     /// BuildCraft's cached refinery selection, retry timer and sequential tank drain.
     #[serde(rename = "buildcraftRefinery")]
     BuildcraftRefinery {
@@ -598,8 +638,53 @@ pub(super) fn validate(
     if let Process::BuildcraftIntegration { rule } = process {
         return super::integration::validate_recipe(recipe, rule);
     }
-    if matches!(process, Process::Ic2Blast { .. }) {
-        return validate_blast(recipe);
+    if let Process::Ic2Blast { containers, .. } = process {
+        return validate_blast(recipe, containers, items);
+    }
+    if matches!(process, Process::UnstableCasting {}) {
+        ensure!(
+            recipe.source.handler == "tconstruct.plugins.nei.RecipeHandlerCastingTable"
+                && recipe.energy.is_none()
+                && recipe.grid.is_none()
+                && recipe.magic.is_none()
+                && recipe.outputs.len() == 1
+                && (1..=2).contains(&recipe.inputs.len()),
+            "invalid unstable casting shape"
+        );
+        integer(
+            recipe
+                .duration
+                .as_deref()
+                .context("missing casting cooling time")?,
+            1,
+            i32::MAX.into(),
+        )?;
+        ensure!(
+            recipe
+                .inputs
+                .iter()
+                .filter(|i| i.kind == Kind::Fluid)
+                .count()
+                == 1,
+            "unstable casting requires one fluid input"
+        );
+        let output = &recipe.outputs[0];
+        ensure!(
+            output.kind == Kind::Item
+                && output.slot == 0
+                && output.change.is_none()
+                && output.quantity.is_none()
+                && matches!(output.role, OutputRole::Result)
+                && output.chance.numerator == "1"
+                && output.chance.denominator == "1",
+            "invalid unstable casting output prototype"
+        );
+        integer(
+            output.amount.as_deref().context("missing casting amount")?,
+            1,
+            i32::MAX.into(),
+        )?;
+        return Ok(());
     }
     if let Process::BuildcraftRefinery {
         energy,
@@ -1077,7 +1162,11 @@ fn validate_enchanter(
     Ok(())
 }
 
-fn validate_blast(recipe: &Recipe) -> Result<()> {
+fn validate_blast(
+    recipe: &Recipe,
+    containers: &[Vec<Option<super::Stack>>; 2],
+    items: &BTreeMap<&str, &super::Item>,
+) -> Result<()> {
     ensure!(
         recipe.duration.is_none()
             && recipe.energy.is_none()
@@ -1088,6 +1177,17 @@ fn validate_blast(recipe: &Recipe) -> Result<()> {
         "invalid IC2 blast shape or invented fixed time/energy"
     );
     for (slot, input) in recipe.inputs.iter().enumerate() {
+        ensure!(
+            containers[slot].len() == input.choices.len(),
+            "blast container choices are misaligned"
+        );
+        for container in containers[slot].iter().flatten() {
+            ensure!(
+                items.contains_key(container.id.as_str()),
+                "blast container references an unknown item"
+            );
+            integer(&container.amount, 1, i32::MAX.into())?;
+        }
         ensure!(
             input.kind == Kind::Item && input.slot == slot as u32 && !input.choices.is_empty(),
             "invalid blast input slot"
