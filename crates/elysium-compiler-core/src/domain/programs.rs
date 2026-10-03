@@ -1,5 +1,7 @@
 //! Shared, bounded machine rule chunks. Whole-program identity retains native order.
-use super::forestry::{FilledContainer, SqueezerContainer, SqueezerProgram, SqueezerRecipe};
+use super::forestry::{
+    FilledContainer, SqueezerCallback, SqueezerContainer, SqueezerProgram, SqueezerRecipe,
+};
 use anyhow::{ensure, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -35,7 +37,7 @@ pub enum ProgramData {
     SqueezerRecipes(Vec<SqueezerRecipe>),
     SqueezerContainers(Vec<SqueezerContainer>),
     SqueezerFluids(Vec<FilledContainer>),
-    SqueezerCallbacks(Vec<String>),
+    SqueezerCallbacks(Vec<SqueezerCallback>),
 }
 
 impl ProgramData {

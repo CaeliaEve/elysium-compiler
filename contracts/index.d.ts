@@ -147,7 +147,7 @@ export type ProgramData =
     }
   | {
       kind: "squeezerCallbacks";
-      rows: string[];
+      rows: SqueezerCallback[];
     };
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -166,6 +166,13 @@ export type ContainerKey =
       kind: "ore";
       members: ForestryStack[];
     };
+/**
+ * Forge/IC2 here prove no matching container key; they are not general drain models.
+ *
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "CallbackKind".
+ */
+export type CallbackKind = "unsupported" | "noFluid" | "forge" | "ic2";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Consumption".
@@ -824,7 +831,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 33;
+  revision: 34;
   scope: string;
   source: string;
 }
@@ -1381,6 +1388,14 @@ export interface FilledContainer {
   empty: ForestryStack;
   filled: ForestryStack;
   fluid: ForestryFluid;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SqueezerCallback".
+ */
+export interface SqueezerCallback {
+  kind: CallbackKind;
+  registry: string;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1979,7 +1994,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 33;
+  revision: 34;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1991,7 +2006,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 34;
+  revision: 35;
   scope: Scope;
 }
 /**

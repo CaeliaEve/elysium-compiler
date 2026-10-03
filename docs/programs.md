@@ -1,17 +1,29 @@
 # Shared machine rules
 
-Compiler/contracts 0.34.0 read Source revision 34 and publish Catalog revision
-33. Both formats require a `programs` collection/table, which can be empty.
+Compiler/contracts 0.35.0 read Source revision 35 and publish Catalog revision
+34. Both formats require a `programs` collection/table, which can be empty.
 An optional category `program` references a shared content-addressed context.
-The initial context is Forestry Squeezer rules. NESQL 0.37.0 registers ordinary
+The initial context is Forestry Squeezer rules. NESQL 0.38.0 registers ordinary
 and Forge fixed-container recipe projections. Dynamic item callbacks remain
-explicit unsupported entries; no full runtime coverage is claimed.
+explicit unsupported entries unless a native callback proof applies; no full
+runtime coverage is claimed.
 
 The whole ID hashes `{kind: "forestrySqueezer", rules}`. Each row contains
 `id`, `program`, `offset` and `data: {kind, rows}`. The four section kinds are
 `squeezerRecipes`, `squeezerContainers`, `squeezerFluids` and
 `squeezerCallbacks`, retaining native ordinary/container/fixed-fluid/callback
 registry order respectively. Every section has a chunk, even when empty.
+Callback rows are `{registry, kind}`, with `kind` equal to `unsupported`,
+`noFluid`, `forge` or `ic2`. Old string rows are rejected by Source 35/Catalog 34.
+`forge` and `ic2` prove absence of matching container keys; they do not model
+general draining. Validation checks disjointness against stack, item and ore
+keys, rejects duplicate callback registries and rejects any dynamic registry
+also declared as a fixed fluid container. `noFluid` always returns null.
+Fresh selection clones stock, searches containers in physical slot order,
+creates an empty NBT root for IC2 reads if absent, then matches ordinary rules
+against that observed stock. Already-valid retained recipes bypass all reads.
+Unknown callbacks still fail explicitly. Native observations compare both
+selected recipe and modified offered stock; no game callbacks run in Compiler.
 Chunks contain at most 128 rows and must fit the 1 MiB Source record limit.
 NESQL splits at 900,000 payload bytes. The reconstructed context is limited
 to 16 MiB (32 MiB including transport overhead).

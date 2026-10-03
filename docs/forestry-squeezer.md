@@ -3,10 +3,11 @@
 This is an implementation checkpoint, not a supported-handler or live-acceptance
 claim. `domain::forestry` replays owned Forestry 4.10.17 inventory and selection
 values. NESQL's `SqueezerRules` snapshots the exact native recipe classes and
-detects registry drift. Source revision 33 and catalog revision 32 now carry
+detects registry drift. Source revision 35 and catalog revision 34 carry
 shared rule chunks through a category's optional `program` reference; see
-[shared programs](programs.md). This is transport support, not a production
-Squeezer recipe cursor or process. No live acceptance is implied.
+[shared programs](programs.md). Ordinary/fixed-container production cursors and
+their process are connected. Dynamic-container coverage remains partial; no
+live acceptance is implied.
 
 ## Verified behavior
 
@@ -38,10 +39,13 @@ runners take seconds and do not launch Minecraft or perform an export.
 - Forge fixed-container lookup ignores offered NBT; the selected recipe still
   copies that NBT into its one-item demand. The native fixed fluid amount and
   tags are retained. Remnant probability preserves raw IEEE-754 bits.
-- A registered `IFluidContainerItem` is marked dynamic and omitted from the
-  fixed-container table. Selection refuses to simulate that callback unless an
-  already-valid retained recipe short-circuits container lookup first. Snapshot
-  tests use a throwing callback to ensure it never executes during extraction.
+- A registered `IFluidContainerItem` is omitted from the fixed-container table.
+  Audited null readers and Forge/IC2 callbacks with disjoint container keys have
+  explicit descriptors. IC2 reads create an empty compound on untagged original
+  stock before fresh ordinary lookup; retained recipes bypass that effect.
+  Unknown callbacks still fail. Snapshot tests use throwing read/drain overrides
+  to ensure no callback executes during extraction. The seven callback observations
+  use the original Forge, IC2 and EnderStorage methods on owned fixture stacks.
 
 All input stack values are independent copies. Shared Java object graphs are
 not modeled. The retention predicate is exercised through the actual native

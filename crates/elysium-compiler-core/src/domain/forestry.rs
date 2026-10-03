@@ -68,15 +68,37 @@ pub struct FilledContainer {
     pub fluid: ForestryFluid,
 }
 
-/// Snapshot in native iteration order. This model is for registered fixed
-/// containers; callers must reject IFluidContainerItem overrides at extraction.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SqueezerCallback {
+    pub registry: String,
+    pub kind: CallbackKind,
+}
+
+/// Forge/IC2 here prove no matching container key; they are not general drain models.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum CallbackKind {
+    Unsupported,
+    NoFluid,
+    Forge,
+    Ic2,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SqueezerSelection {
+    pub selected: Option<SqueezerRecipe>,
+    pub stock: Vec<Option<ForestryStack>>,
+}
+
+/// Snapshot in native iteration order, with explicit callback effects or unsupported boundaries.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SqueezerProgram {
     pub ordinary: Vec<SqueezerRecipe>,
     pub containers: Vec<SqueezerContainer>,
     pub filled: Vec<FilledContainer>,
-    pub dynamic: Vec<String>,
+    pub dynamic: Vec<SqueezerCallback>,
 }
 
 /// Stable positions in one content-addressed native registry snapshot.
@@ -102,7 +124,10 @@ impl SqueezerProgram {
                     anyhow::anyhow!("Squeezer fixed-fluid selector is out of range")
                 })?;
                 ensure!(
-                    !self.dynamic.contains(&fixed.filled.registry),
+                    !self
+                        .dynamic
+                        .iter()
+                        .any(|c| c.registry == fixed.filled.registry),
                     "Squeezer selector requires an unmodeled Java callback"
                 );
                 let (index, recipe) = self.fixed_recipe(&fixed.filled, fixed).ok_or_else(|| {
@@ -157,6 +182,15 @@ impl SqueezerProgram {
         stock: &[Option<ForestryStack>],
         retained: Option<&SqueezerRecipe>,
     ) -> Result<Option<SqueezerRecipe>> {
+        Ok(self.select_observed(stock, retained)?.selected)
+    }
+
+    /// IC2 reads can mutate the offered original even when no container recipe matches.
+    pub fn select_observed(
+        &self,
+        stock: &[Option<ForestryStack>],
+        retained: Option<&SqueezerRecipe>,
+    ) -> Result<SqueezerSelection> {
         self.validate()?;
         ensure!(stock.len() <= 9, "Squeezer exceeds nine input slots");
         for stack in stock.iter().flatten() {
@@ -165,27 +199,47 @@ impl SqueezerProgram {
         if let Some(current) = retained {
             current.validate()?;
             if contains_sets(&current.requirements, stock, true) > 0 {
-                return Ok(Some(current.clone()));
+                return Ok(SqueezerSelection {
+                    selected: Some(current.clone()),
+                    stock: stock.to_vec(),
+                });
             }
         }
         // Containers are searched by physical input slot before any ordinary rule.
-        for stack in stock.iter().flatten() {
-            ensure!(
-                !self.dynamic.contains(&stack.registry),
-                "Squeezer container requires an unmodeled Java callback: {}",
-                stack.registry
-            );
+        let mut observed = stock.to_vec();
+        for stack in observed.iter_mut().flatten() {
+            if let Some(callback) = self.dynamic.iter().find(|c| c.registry == stack.registry) {
+                ensure!(
+                    callback.kind != CallbackKind::Unsupported,
+                    "Squeezer container requires an unmodeled Java callback: {}",
+                    stack.registry
+                );
+                if callback.kind == CallbackKind::Ic2 && stack.nbt.is_none() {
+                    stack.nbt = Some(Nbt::Compound {
+                        value: Default::default(),
+                    });
+                }
+                // Dynamic dispatch never falls through to the fixed Forge registry.
+                continue;
+            }
             if let Some(filled) = self.filled.iter().find(|c| c.filled.same_type(stack)) {
                 if let Some((_, recipe)) = self.fixed_recipe(stack, filled) {
-                    return Ok(Some(recipe));
+                    return Ok(SqueezerSelection {
+                        selected: Some(recipe),
+                        stock: observed,
+                    });
                 }
             }
         }
-        Ok(self
+        let selected = self
             .ordinary
             .iter()
-            .find(|r| contains_sets(&r.requirements, stock, false) > 0)
-            .cloned())
+            .find(|r| contains_sets(&r.requirements, &observed, false) > 0)
+            .cloned();
+        Ok(SqueezerSelection {
+            selected,
+            stock: observed,
+        })
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -196,12 +250,10 @@ impl SqueezerProgram {
                 && self.dynamic.len() <= 65536,
             "Squeezer registry exceeds budget"
         );
-        for registry in &self.dynamic {
-            registry_name(registry)?;
-        }
         for recipe in &self.ordinary {
             recipe.validate()?;
         }
+        let mut container_registries = std::collections::BTreeSet::new();
         for container in &self.containers {
             chance(&container.chance)?;
             if let Some(remnant) = &container.remnant {
@@ -209,14 +261,35 @@ impl SqueezerProgram {
             }
             container.empty.validate()?;
             match &container.key {
-                ContainerKey::Stack { stack } => stack.validate()?,
-                ContainerKey::Item { registry } => registry_name(registry)?,
+                ContainerKey::Stack { stack } => {
+                    stack.validate()?;
+                    container_registries.insert(&stack.registry);
+                }
+                ContainerKey::Item { registry } => {
+                    registry_name(registry)?;
+                    container_registries.insert(registry);
+                }
                 ContainerKey::Ore { members } => {
                     ensure!(members.len() <= 65536, "Squeezer ore key exceeds budget");
                     for stack in members {
                         stack.validate()?;
+                        container_registries.insert(&stack.registry);
                     }
                 }
+            }
+        }
+        let mut callbacks = std::collections::BTreeSet::new();
+        for callback in &self.dynamic {
+            registry_name(&callback.registry)?;
+            ensure!(
+                callbacks.insert(&callback.registry),
+                "Duplicate squeezer callback registry"
+            );
+            if matches!(callback.kind, CallbackKind::Forge | CallbackKind::Ic2) {
+                ensure!(
+                    !container_registries.contains(&callback.registry),
+                    "Squeezer callback proof conflicts with a container key"
+                );
             }
         }
         let mut keys = std::collections::BTreeSet::new();
@@ -224,6 +297,10 @@ impl SqueezerProgram {
             container.filled.validate()?;
             container.empty.validate()?;
             container.fluid.validate()?;
+            ensure!(
+                !callbacks.contains(&container.filled.registry),
+                "Dynamic squeezer item declared as a fixed container"
+            );
             ensure!(
                 keys.insert((&container.filled.registry, container.filled.meta)),
                 "Duplicate fixed fluid container key"
@@ -496,6 +573,112 @@ mod tests {
         }
     }
     #[test]
+    fn squeezer_replays_native_callback_read_effects() {
+        #[derive(Deserialize)]
+        struct Case {
+            name: String,
+            program: SqueezerProgram,
+            before: Vec<Option<ForestryStack>>,
+            after: Vec<Option<ForestryStack>>,
+            retained: Option<SqueezerRecipe>,
+            selected: Option<SqueezerRecipe>,
+        }
+        let cases: Vec<Case> = serde_json::from_str(include_str!(
+            "../../../../contracts/fixtures/forestry-callback-observations.json"
+        ))
+        .unwrap();
+        for case in cases {
+            let observed = case
+                .program
+                .select_observed(&case.before, case.retained.as_ref())
+                .unwrap();
+            assert_eq!(observed.selected, case.selected, "{} selection", case.name);
+            assert_eq!(observed.stock, case.after, "{} offered stock", case.name);
+            assert_eq!(
+                case.program
+                    .select(&case.before, case.retained.as_ref())
+                    .unwrap(),
+                case.selected
+            );
+        }
+    }
+    #[test]
+    fn callback_proofs_require_disjoint_keys_and_unique_dynamic_dispatch() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../contracts/fixtures/forestry-callback-observations.json"
+        ))
+        .unwrap();
+        let program: SqueezerProgram = serde_json::from_value(cases[0]["program"].clone()).unwrap();
+        for kind in [CallbackKind::Forge, CallbackKind::Ic2] {
+            let registry = program
+                .dynamic
+                .iter()
+                .find(|c| c.kind == kind)
+                .unwrap()
+                .registry
+                .clone();
+            let empty = ForestryStack {
+                registry: registry.clone(),
+                meta: 0,
+                amount: 1,
+                nbt: None,
+                ores: vec![],
+            };
+            for key in [
+                ContainerKey::Item { registry },
+                ContainerKey::Stack {
+                    stack: empty.clone(),
+                },
+                ContainerKey::Ore {
+                    members: vec![empty.clone()],
+                },
+            ] {
+                let mut changed = program.clone();
+                changed.containers.push(SqueezerContainer {
+                    key,
+                    empty: empty.clone(),
+                    time: 1,
+                    remnant: None,
+                    chance: "00000000".into(),
+                });
+                assert!(changed
+                    .validate()
+                    .unwrap_err()
+                    .to_string()
+                    .contains("proof conflicts"));
+            }
+        }
+        let mut duplicate = program.clone();
+        duplicate.dynamic.push(duplicate.dynamic[0].clone());
+        assert!(duplicate
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("Duplicate"));
+        let registry = program
+            .dynamic
+            .iter()
+            .find(|c| c.kind == CallbackKind::Unsupported)
+            .unwrap()
+            .registry
+            .clone();
+        let stack = ForestryStack {
+            registry,
+            meta: 0,
+            amount: 1,
+            nbt: None,
+            ores: vec![],
+        };
+        assert!(program
+            .select(&[Some(stack)], None)
+            .unwrap_err()
+            .to_string()
+            .contains("unmodeled Java callback"));
+        let mut legacy = cases[0]["program"].clone();
+        legacy["dynamic"] = serde_json::json!(["fixture:legacy_callback"]);
+        assert!(serde_json::from_value::<SqueezerProgram>(legacy).is_err());
+    }
+    #[test]
     fn squeezer_replays_native_priority_retention_and_fixed_containers() {
         #[derive(Deserialize)]
         struct SelectionCase {
@@ -586,9 +769,10 @@ mod tests {
             "Selector bypassed native first-key precedence"
         );
         let mut callback = observations.program.clone();
-        callback
-            .dynamic
-            .push(callback.filled[fixed.1 as usize].filled.registry.clone());
+        callback.dynamic.push(SqueezerCallback {
+            registry: callback.filled[fixed.1 as usize].filled.registry.clone(),
+            kind: CallbackKind::Unsupported,
+        });
         assert!(
             callback
                 .entry(&SqueezerSelector::Container {
@@ -618,12 +802,18 @@ mod tests {
             .unwrap();
         assert_eq!(selected.fluid.unwrap().amount, 1000);
         assert_eq!(selected.requirements[0].as_ref().unwrap().amount, 1);
-        program.dynamic.push(filled.registry.clone());
+        program.dynamic.push(SqueezerCallback {
+            registry: filled.registry.clone(),
+            kind: CallbackKind::Unsupported,
+        });
         assert!(
             program.select(&[Some(filled.clone())], None).is_err(),
             "dynamic callbacks were evaluated as fixed containers"
         );
         // A retained valid recipe is checked before dispatch to container callbacks.
+        program
+            .filled
+            .retain(|c| c.filled.registry != filled.registry);
         let retained = SqueezerRecipe {
             time: 1,
             requirements: vec![Some(filled.clone())],
