@@ -582,7 +582,7 @@ fn genome(value: &Nbt) -> Result<()> {
 
 /// NBTPrimitive conversions in Minecraft 1.7.10, including Java narrowing and
 /// MathHelper.floor_* at the signed-int boundary. Float/double values are IEEE bits.
-fn number(tag: Option<&Nbt>) -> Result<i32> {
+pub(super) fn number(tag: Option<&Nbt>) -> Result<i32> {
     Ok(match tag {
         Some(
             Nbt::Byte { value } | Nbt::Short { value } | Nbt::Int { value } | Nbt::Long { value },

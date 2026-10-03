@@ -4,6 +4,7 @@ mod check;
 mod genetics;
 mod grinding;
 mod industry;
+pub mod integration;
 mod magic;
 mod matching;
 mod model;

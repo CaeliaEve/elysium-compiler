@@ -287,7 +287,7 @@ fn ae_tag(a: &Nbt, b: &Nbt) -> bool {
     native_tag(a, b, false)
 }
 
-fn native_tag(a: &Nbt, b: &Nbt, list_type: bool) -> bool {
+pub(super) fn native_tag(a: &Nbt, b: &Nbt, list_type: bool) -> bool {
     match (a, b) {
         (Nbt::Float { value: a }, Nbt::Float { value: b }) => {
             match (u32::from_str_radix(a, 16), u32::from_str_radix(b, 16)) {
