@@ -8,6 +8,61 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 mod tests {
     #[test]
+    fn refinery_preserves_preflight_requirements_and_stale_fill_permissions() {
+        use crate::{
+            domain::{Domain, Recipe},
+            source::Source,
+        };
+        use serde_json::json;
+        let source = Source::open(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../contracts/fixtures/source"),
+        )
+        .unwrap();
+        let domain = Domain::load(&source).unwrap();
+        let fluids: std::collections::BTreeMap<_, _> =
+            domain.fluids.iter().map(|f| (f.id.as_str(), f)).collect();
+        let water = domain
+            .fluids
+            .iter()
+            .find(|f| f.registry == "water" && f.nbt.is_none())
+            .unwrap();
+        let honey = domain
+            .fluids
+            .iter()
+            .find(|f| f.registry == "honey" && f.nbt.is_none())
+            .unwrap();
+        let mut value = serde_json::to_value(&domain.recipes[0]).unwrap();
+        for k in ["duration", "energy", "grid", "magic"] {
+            value[k] = serde_json::Value::Null;
+        }
+        let requirement = json!({"kind":"fluid","slot":0,"choices":[{"id":water.id,"amount":"700","rule":{"kind":"exact"},"consume":{"kind":"allocated"},"returns":[]}]});
+        value["inputs"] = json!([requirement.clone(), requirement]);
+        value["inputs"][1]["slot"] = json!(1);
+        value["outputs"] = json!([{"kind":"fluid","slot":0,"id":honey.id,"amount":"50","quantity":null,"change":null,"role":"result","chance":{"numerator":"1","denominator":"1"}}]);
+        value["process"] = json!({"kind":"buildcraftRefinery","energy":30,"delay":"5","capacity":4000,"earlier":[[{"id":water.id,"amount":"200"}]],"filling":[[honey.id,water.id],[water.id]]});
+        let check = |v: serde_json::Value| {
+            let recipe: Recipe = serde_json::from_value(v)?;
+            super::validate(&recipe, &fluids, &Default::default(), &[])
+        };
+        check(value.clone()).unwrap();
+        for (path, bad) in [
+            ("/process/energy", json!(0)),
+            ("/process/delay", json!("9223372036854775808")),
+            ("/process/capacity", json!(0)),
+            ("/process/filling/0/0", json!("fluid_missing")),
+            ("/inputs/1/choices/0/consume", json!({"kind":"consume"})),
+            ("/outputs/0/amount", json!("0")),
+            ("/duration", json!("5")),
+        ] {
+            let mut bad_value = value.clone();
+            *bad_value.pointer_mut(path).unwrap() = bad;
+            assert!(check(bad_value).is_err(), "{path}");
+        }
+        value["process"]["delay"] = json!("-2147483648");
+        check(value).unwrap();
+    }
+    #[test]
     fn buildcraft_requires_ordered_allocation_and_fixed_result() {
         use crate::{
             domain::{Domain, Recipe},
@@ -176,6 +231,15 @@ pub enum InscriberMode {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// BuildCraft's cached refinery selection, retry timer and sequential tank drain.
+    #[serde(rename = "buildcraftRefinery")]
+    BuildcraftRefinery {
+        energy: i32,
+        delay: String,
+        capacity: i32,
+        earlier: Vec<Vec<super::Stack>>,
+        filling: [Vec<String>; 2],
+    },
     /// Selected BuildCraft assembly plan; ordered greedy allocation and signed RF budget.
     #[serde(rename = "buildcraftAssembly")]
     BuildcraftAssembly { energy: i32 },
@@ -381,6 +445,7 @@ pub(super) fn validate(
                     | Process::Splice { .. }
                     | Process::Sag { .. }
                     | Process::BuildcraftAssembly { .. }
+                    | Process::BuildcraftRefinery { .. }
             )
         ) || !recipe
             .inputs
@@ -436,6 +501,16 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    if let Process::BuildcraftRefinery {
+        energy,
+        delay,
+        capacity,
+        earlier,
+        filling,
+    } = process
+    {
+        return validate_refining(recipe, *energy, delay, *capacity, earlier, filling, fluids);
+    }
     if matches!(process, Process::BuildcraftAssembly { .. }) {
         return validate_buildcraft(recipe);
     }
@@ -899,6 +974,101 @@ fn validate_enchanter(
             && matches!(enchantment.get("lvl"), Some(Nbt::Short {value}) if value == &level.to_string()),
         "enchanted book level differs from process"
     );
+    Ok(())
+}
+
+fn validate_refining(
+    recipe: &Recipe,
+    energy: i32,
+    delay: &str,
+    capacity: i32,
+    earlier: &[Vec<super::Stack>],
+    filling: &[Vec<String>; 2],
+    fluids: &BTreeMap<&str, &Fluid>,
+) -> Result<()> {
+    ensure!(
+        energy > 0 && capacity > 0,
+        "refinery cannot execute a nonpositive energy gate"
+    );
+    integer(delay, i64::MIN, i64::MAX)?;
+    ensure!(
+        recipe.magic.is_none()
+            && recipe.grid.is_none()
+            && recipe.duration.is_none()
+            && recipe.energy.is_none()
+            && !recipe.inputs.is_empty()
+            && recipe.inputs.len() <= 4096
+            && recipe.outputs.len() == 1
+            && earlier.len() <= 4096,
+        "invalid BuildCraft refinery shape"
+    );
+    let fluid = |id: &str| -> Result<()> {
+        ensure!(
+            fluids
+                .get(id)
+                .context("missing refinery fluid")?
+                .nbt
+                .is_none(),
+            "tagged refinery predicates require native NBT comparison"
+        );
+        Ok(())
+    };
+    for (slot, input) in recipe.inputs.iter().enumerate() {
+        ensure!(
+            input.kind == Kind::Fluid && input.slot == slot as u32 && input.choices.len() == 1,
+            "invalid refinery ordered requirement"
+        );
+        let c = &input.choices[0];
+        fluid(&c.id)?;
+        integer(&c.amount, 1, i32::MAX.into())?;
+        ensure!(
+            matches!(c.rule, Match::Exact)
+                && matches!(c.consume, Consumption::Allocated)
+                && c.returns.is_empty(),
+            "refinery requires native sequential fluid withdrawal"
+        );
+    }
+    let output = &recipe.outputs[0];
+    fluid(&output.id)?;
+    ensure!(
+        output.kind == Kind::Fluid
+            && output.slot == 0
+            && output.quantity.is_none()
+            && output.change.is_none()
+            && matches!(output.role, OutputRole::Result)
+            && output.chance.numerator == "1"
+            && output.chance.denominator == "1",
+        "invalid refinery output"
+    );
+    integer(
+        output
+            .amount
+            .as_deref()
+            .context("missing refinery result amount")?,
+        1,
+        i32::MAX.into(),
+    )?;
+    let mut count = 0;
+    for prior in earlier {
+        ensure!(
+            !prior.is_empty() && prior.len() <= 4096,
+            "invalid refinery preview selector"
+        );
+        count += prior.len();
+        ensure!(count <= 65536, "refinery priority budget exceeded");
+        for required in prior {
+            fluid(&required.id)?;
+            integer(&required.amount, 1, i32::MAX.into())?;
+        }
+    }
+    for list in filling {
+        ensure!(list.len() <= 65536, "refinery filling budget exceeded");
+        let mut seen = std::collections::BTreeSet::new();
+        for id in list {
+            fluid(id)?;
+            ensure!(seen.insert(id), "duplicate refinery filling predicate");
+        }
+    }
     Ok(())
 }
 

@@ -357,6 +357,18 @@ export type OutputRole = "result" | "return";
  */
 export type Process =
   | {
+      capacity: number;
+      delay: string;
+      earlier: Stack[][];
+      energy: number;
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      filling: [string[], string[]];
+      kind: "buildcraftRefinery";
+    }
+  | {
       energy: number;
       kind: "buildcraftAssembly";
     }
@@ -682,7 +694,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 28;
+  revision: 29;
   scope: string;
   source: string;
 }
@@ -1748,7 +1760,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 28;
+  revision: 29;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1760,7 +1772,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 29;
+  revision: 30;
   scope: Scope;
 }
 /**
