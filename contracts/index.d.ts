@@ -130,6 +130,44 @@ export type Unit =
   "count" | "tick" | "eu" | "eu_per_tick" | "mb" | "kelvin" | "pascal" | "rpm" | "mana" | "lp" | "vis" | "percent";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "ProgramData".
+ */
+export type ProgramData =
+  | {
+      kind: "squeezerRecipes";
+      rows: SqueezerRecipe[];
+    }
+  | {
+      kind: "squeezerContainers";
+      rows: SqueezerContainer[];
+    }
+  | {
+      kind: "squeezerFluids";
+      rows: FilledContainer[];
+    }
+  | {
+      kind: "squeezerCallbacks";
+      rows: string[];
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "ContainerKey".
+ */
+export type ContainerKey =
+  | {
+      kind: "stack";
+      stack: ForestryStack;
+    }
+  | {
+      kind: "item";
+      registry: string;
+    }
+  | {
+      kind: "ore";
+      members: ForestryStack[];
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "Consumption".
  */
 export type Consumption =
@@ -683,6 +721,10 @@ export type Table =
       records: Mutation[];
     }
   | {
+      kind: "programs";
+      records: ProgramChunk[];
+    }
+  | {
       kind: "recipes";
       records: Recipe[];
     }
@@ -752,7 +794,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 31;
+  revision: 32;
   scope: string;
   source: string;
 }
@@ -787,6 +829,7 @@ export interface Domain {
   materials: Material[];
   models: Model[];
   mutations: Mutation[];
+  programs: ProgramChunk[];
   recipes: Recipe[];
   research: Research[];
   shapes: Shape[];
@@ -947,6 +990,7 @@ export interface Category {
   machines: Reference[];
   name: string;
   order: number;
+  program?: string | null;
   source: Origin;
   view?: string | null;
 }
@@ -1243,6 +1287,70 @@ export interface Gene {
    * An API-provided scalar or vector. Providers with executable behavior have no invented value.
    */
   value?: PropertyValue | null;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "ProgramChunk".
+ */
+export interface ProgramChunk {
+  data: ProgramData;
+  id: string;
+  offset: number;
+  program: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SqueezerRecipe".
+ */
+export interface SqueezerRecipe {
+  /**
+   * Raw IEEE-754 float bits. NaN must not turn into a guaranteed remnant.
+   */
+  chance: string;
+  fluid?: ForestryFluid | null;
+  remnant?: ForestryStack | null;
+  requirements: (ForestryStack | null)[];
+  time: number;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "ForestryFluid".
+ */
+export interface ForestryFluid {
+  amount: number;
+  nbt?: Nbt | null;
+  registry: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "ForestryStack".
+ */
+export interface ForestryStack {
+  amount: number;
+  meta: number;
+  nbt?: Nbt | null;
+  ores: string[];
+  registry: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "SqueezerContainer".
+ */
+export interface SqueezerContainer {
+  chance: string;
+  empty: ForestryStack;
+  key: ContainerKey;
+  remnant?: ForestryStack | null;
+  time: number;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "FilledContainer".
+ */
+export interface FilledContainer {
+  empty: ForestryStack;
+  filled: ForestryStack;
+  fluid: ForestryFluid;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1841,7 +1949,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 31;
+  revision: 32;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1853,7 +1961,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 32;
+  revision: 33;
   scope: Scope;
 }
 /**

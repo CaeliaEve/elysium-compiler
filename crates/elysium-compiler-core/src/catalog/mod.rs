@@ -15,7 +15,7 @@ use std::path::Path;
 pub use store::{Catalog, File, Manifest, Pointer, Publication};
 
 pub const FORMAT: &str = "elysium.catalog";
-pub const REVISION: u32 = 31;
+pub const REVISION: u32 = 32;
 pub const FILE_LIMIT: usize = 16 * 1024 * 1024;
 pub const IMAGE_LIMIT: usize = 80 * 1024 * 1024;
 pub const TABLE_ROWS: usize = 4096;
@@ -145,6 +145,7 @@ tables! {
     Materials(Material) => "materials",
     Models(Model) => "models",
     Mutations(Mutation) => "mutations",
+    Programs(programs::ProgramChunk) => "programs",
     Recipes(Recipe) => "recipes",
     Research(Research) => "research",
     Shapes(Shape) => "shapes",
@@ -191,6 +192,7 @@ pub fn compile(input: &Path, output: &Path) -> Result<Publication> {
     write!("fluids", &domain.fluids, Fluids);
     write!("recipes", &domain.recipes, Recipes);
     write!("categories", &domain.categories, Categories);
+    write!("programs", &domain.programs, Programs);
     write!("groups", &domain.groups, Groups);
     write!("views", &domain.views, Views);
     write!("tracks", &domain.tracks, Tracks);

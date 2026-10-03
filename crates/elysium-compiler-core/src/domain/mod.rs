@@ -10,6 +10,7 @@ mod magic;
 mod matching;
 mod model;
 mod process;
+pub mod programs;
 mod quantity;
 mod rolling;
 mod soul;
@@ -370,6 +371,8 @@ pub struct Category {
     pub icon: Option<Reference>,
     pub machines: Vec<Reference>,
     pub view: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program: Option<String>,
     pub order: u32,
 }
 
@@ -544,6 +547,7 @@ pub struct Text {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Domain {
+    pub programs: Vec<programs::ProgramChunk>,
     pub items: Vec<Item>,
     pub fluids: Vec<Fluid>,
     pub recipes: Vec<Recipe>,
@@ -572,6 +576,7 @@ impl Domain {
         ensure!(source.manifest.scope.collections.iter().map(String::as_str).eq(CORE_COLLECTIONS.iter().copied()),
             "a catalog requires all domain collections; unsupported extensions or partial collections cannot be published");
         let result = Self {
+            programs: read(source, "programs")?,
             items: read(source, "items")?,
             fluids: read(source, "fluids")?,
             recipes: read(source, "recipes")?,

@@ -3,9 +3,10 @@ pub mod still;
 pub mod work;
 use crate::identity::Nbt;
 use anyhow::{ensure, Result};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ForestryStack {
     pub registry: String,
@@ -15,7 +16,7 @@ pub struct ForestryStack {
     pub ores: Vec<String>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct StockObservation {
     pub direct: i32,
     pub ore: i32,
@@ -23,7 +24,7 @@ pub struct StockObservation {
     pub remaining: Vec<Option<ForestryStack>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ForestryFluid {
     pub registry: String,
@@ -31,7 +32,7 @@ pub struct ForestryFluid {
     pub nbt: Option<Nbt>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SqueezerRecipe {
     pub time: i32,
@@ -42,14 +43,14 @@ pub struct SqueezerRecipe {
     pub chance: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum ContainerKey {
     Stack { stack: ForestryStack },
     Item { registry: String },
     Ore { members: Vec<ForestryStack> },
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SqueezerContainer {
     pub key: ContainerKey,
@@ -58,7 +59,7 @@ pub struct SqueezerContainer {
     pub remnant: Option<ForestryStack>,
     pub chance: String,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FilledContainer {
     pub filled: ForestryStack,
@@ -68,7 +69,7 @@ pub struct FilledContainer {
 
 /// Snapshot in native iteration order. This model is for registered fixed
 /// containers; callers must reject IFluidContainerItem overrides at extraction.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SqueezerProgram {
     pub ordinary: Vec<SqueezerRecipe>,

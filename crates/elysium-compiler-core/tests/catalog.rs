@@ -10,6 +10,48 @@ fn fixture() -> PathBuf {
 }
 
 #[test]
+fn shared_native_programs_require_complete_category_references_and_catalog_transport() {
+    use serde_json::{json, Value};
+    let source = Source::open(&fixture()).unwrap();
+    let original = Domain::load(&source).unwrap();
+    let chunks: Value = serde_json::from_str(include_str!(
+        "../../../contracts/fixtures/forestry-program-chunks.json"
+    ))
+    .unwrap();
+    let mut value = serde_json::to_value(original).unwrap();
+    for category in value["categories"].as_array_mut().unwrap() {
+        category.as_object_mut().unwrap().remove("program");
+    }
+    value["programs"] = chunks.clone();
+    value["categories"][0]["program"] = chunks[0]["program"].clone();
+    let domain: Domain = serde_json::from_value(value.clone()).unwrap();
+    domain.validate(&source).unwrap();
+    let table: Table = serde_json::from_value(json!({"kind":"programs","records":chunks})).unwrap();
+    let bytes = rmp_serde::to_vec_named(&table).unwrap();
+    assert_eq!(
+        serde_json::to_value(rmp_serde::from_slice::<Table>(&bytes).unwrap()).unwrap(),
+        serde_json::to_value(table).unwrap()
+    );
+    let mut missing = value.clone();
+    missing["programs"] = json!([]);
+    assert!(serde_json::from_value::<Domain>(missing)
+        .unwrap()
+        .validate(&source)
+        .is_err());
+    value["categories"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("program");
+    assert!(
+        serde_json::from_value::<Domain>(value)
+            .unwrap()
+            .validate(&source)
+            .is_err(),
+        "Unreferenced shared rules were accepted"
+    );
+}
+
+#[test]
 fn prior_matches_are_bounded_references_not_positive_alternatives() {
     use elysium_compiler_core::domain::{Kind, Match};
     use serde_json::json;

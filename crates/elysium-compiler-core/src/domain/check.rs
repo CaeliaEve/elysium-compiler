@@ -5,6 +5,21 @@ use std::collections::{BTreeMap, BTreeSet};
 
 impl Domain {
     pub fn validate(&self, source: &Source) -> Result<()> {
+        let programs = programs::reconstruct(&self.programs)?;
+        let mut referenced_programs = BTreeSet::new();
+        for category in &self.categories {
+            if let Some(id) = &category.program {
+                ensure!(
+                    programs.contains_key(id),
+                    "Category refers to a missing shared program: {id}"
+                );
+                referenced_programs.insert(id);
+            }
+        }
+        ensure!(
+            referenced_programs.len() == programs.len(),
+            "Unreferenced shared machine program"
+        );
         let items: BTreeMap<_, _> = self
             .items
             .iter()

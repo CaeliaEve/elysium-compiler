@@ -3,8 +3,10 @@
 This is an implementation checkpoint, not a supported-handler or live-acceptance
 claim. `domain::forestry` replays owned Forestry 4.10.17 inventory and selection
 values. NESQL's `SqueezerRules` snapshots the exact native recipe classes and
-detects registry drift. Neither component is connected to a released source
-recipe process yet. Source revision 32 and catalog revision 31 remain unchanged.
+detects registry drift. Source revision 33 and catalog revision 32 now carry
+shared rule chunks through a category's optional `program` reference; see
+[shared programs](programs.md). This is transport support, not a production
+Squeezer recipe cursor or process. No live acceptance is implied.
 
 ## Verified behavior
 
@@ -106,7 +108,7 @@ NESQL's existing positive-batch projection now uses the already-versioned
 `potential` quantity with `stat: "forestry:stillTankSpace"`, preserving the
 nominal batch and a 0..nominal conservative bound. Its native UI projection
 still shows the nominal batch. This fixes the false fixed-output claim without
-changing Source/Catalog versions or the web layout.
+changing the web layout.
 
 This is **not** a completed Still process integration. Its source recipe still
 needs explicit selection/reservation context; signed/zero batch handling and
