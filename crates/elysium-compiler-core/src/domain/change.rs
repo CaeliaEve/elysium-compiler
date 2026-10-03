@@ -15,6 +15,8 @@ pub struct Stack {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Edit {
+    /// Output of the process's ordered integration rule and a correlated input tuple.
+    Integration,
     /// Fresh broken spawner: base registry, meta=0, count=1, only mobType string.
     /// The string is native getMobTypeFromStack(input0), not the full entity NBT.
     Soul { base: String },
@@ -71,6 +73,10 @@ pub struct Change {
     pub action: Edit,
     /// One native result per input choice, in matching order; excluded from recipe identity.
     pub samples: Vec<Stack>,
+    /// One choice index (or an empty optional slot) per recipe input, per sample.
+    /// Only integration uses tuples. Excluded from recipe identity with samples.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bindings: Option<Vec<Vec<Option<u32>>>>,
 }
 
 pub(super) fn validate(
@@ -81,6 +87,13 @@ pub(super) fn validate(
     let Some(change) = &output.change else {
         return Ok(());
     };
+    if matches!(change.action, Edit::Integration) {
+        return super::integration::validate_change(recipe, output, items);
+    }
+    ensure!(
+        change.bindings.is_none(),
+        "correlated bindings require an integration output"
+    );
     ensure!(
         output.kind == Kind::Item,
         "only item outputs can change NBT"
@@ -95,6 +108,7 @@ pub(super) fn validate(
         "output change samples omit input choices"
     );
     match &change.action {
+        Edit::Integration => unreachable!("integration is validated as a tuple"),
         Edit::Soul { base } => {
             ensure!(
                 matches!(
@@ -295,6 +309,7 @@ fn apply(
     items: &BTreeMap<&str, &Item>,
 ) -> Result<Stack> {
     let (registry, meta, count, nbt) = match action {
+        Edit::Integration => bail!("integration cannot be evaluated from a single input"),
         Edit::Soul { base } => {
             let template = items.get(base.as_str()).context("missing spawner base")?;
             let Some(Match::Soul { filter }) = recipe

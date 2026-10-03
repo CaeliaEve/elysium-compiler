@@ -294,12 +294,12 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let catalog = Catalog::current(directory.path()).unwrap();
     catalog.verify().unwrap();
     assert_eq!(catalog.manifest.id, first.id);
-    assert_eq!(catalog.manifest.counts["recipes"], 39);
+    assert_eq!(catalog.manifest.counts["recipes"], 40);
     assert_eq!(
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
     );
-    assert_eq!(catalog.manifest.counts["browse"], 80);
+    assert_eq!(catalog.manifest.counts["browse"], 88);
     assert_eq!(catalog.manifest.counts["materials"], 2);
     assert_eq!(catalog.manifest.counts["circuits"], 1);
     assert_eq!(catalog.manifest.counts["species"], 3);
@@ -1867,6 +1867,7 @@ fn test_edit_append_wand_augmentations() {
 
     // Case 1: Input has existing augmentations -> appends to existing list
     let change = Change {
+        bindings: None,
         input: 0,
         action: append_potency.clone(),
         samples: vec![Stack {
@@ -1964,6 +1965,7 @@ fn test_edit_append_wand_augmentations() {
         },
     };
     let change_empty = Change {
+        bindings: None,
         input: 0,
         action: append_to_empty,
         samples: vec![Stack {

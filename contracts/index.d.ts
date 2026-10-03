@@ -176,6 +176,9 @@ export type Match =
       kind: "exact";
     }
   | {
+      kind: "integration";
+    }
+  | {
       kind: "untagged";
       meta: boolean;
     }
@@ -237,6 +240,9 @@ export type MagicKind = "arcane" | "crucible" | "infusion";
  * via the `definition` "Edit".
  */
 export type Edit =
+  | {
+      kind: "integration";
+    }
   | {
       base: string;
       kind: "soul";
@@ -364,6 +370,10 @@ export type OutputRole = "result" | "return";
  */
 export type Process =
   | {
+      kind: "buildcraftIntegration";
+      rule: IntegrationRule;
+    }
+  | {
       heat: number;
       kind: "ic2Blast";
     }
@@ -459,6 +469,43 @@ export type Process =
       rocketTier: number;
       startEu: string;
       ticks: string;
+    };
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "IntegrationRule".
+ */
+export type IntegrationRule =
+  | {
+      energy: number;
+      expansions: GateExpansion[];
+      kind: "gate";
+      maximum: number;
+      primary: string[];
+      red: Chip;
+    }
+  | {
+      blocks: {
+        [k: string]: string;
+      };
+      energy: number;
+      facade: string;
+      kind: "facade";
+      maximum: number;
+      plug: string;
+      primary: string[];
+      wire: string;
+      wires: string[];
+    }
+  | {
+      boards: {
+        [k: string]: string;
+      };
+      empty: string;
+      energy: number;
+      kind: "robot";
+      maximum: number;
+      primary: string[];
+      robot: string;
     };
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -705,7 +752,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 30;
+  revision: 31;
   scope: string;
   source: string;
 }
@@ -1382,6 +1429,10 @@ export interface Output {
  */
 export interface Change {
   action: Edit;
+  /**
+   * One choice index (or an empty optional slot) per recipe input, per sample. Only integration uses tuples. Excluded from recipe identity with samples.
+   */
+  bindings?: (number | null)[][] | null;
   input: number;
   /**
    * One native result per input choice, in matching order; excluded from recipe identity.
@@ -1395,6 +1446,25 @@ export interface Change {
 export interface Stack {
   amount: string;
   id: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "GateExpansion".
+ */
+export interface GateExpansion {
+  chip: Chip;
+  id: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "Chip".
+ */
+export interface Chip {
+  amount: number;
+  meta: number;
+  nbt?: Nbt | null;
+  registry: string;
+  subtypes: boolean;
 }
 /**
  * Ordered requirements. None grid means native greedy shapeless matching in offered row-major cell order; a grid permits translations and its mirror flag.
@@ -1771,7 +1841,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 30;
+  revision: 31;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -1783,7 +1853,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 31;
+  revision: 32;
   scope: Scope;
 }
 /**

@@ -1,12 +1,13 @@
-//! BuildCraft integration's owned native sample semantics. The machine process and
-//! correlated recipe presentation will bind this model; samples are not its input domain.
+//! BuildCraft integration's owned native sample semantics and correlated recipe validation.
+//! Display observations are examples, not an enumeration of the full input domain.
 use super::{change::number, matching::native_tag};
 use crate::identity::Nbt;
 use anyhow::{bail, ensure, Context, Result};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct IntegrationStack {
     pub registry: String,
@@ -14,7 +15,7 @@ pub struct IntegrationStack {
     pub amount: i32,
     pub nbt: Option<Nbt>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Chip {
     pub registry: String,
@@ -23,13 +24,13 @@ pub struct Chip {
     pub subtypes: bool,
     pub nbt: Option<Nbt>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GateExpansion {
     pub id: String,
     pub chip: Chip,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum IntegrationRule {
     Gate {
@@ -58,7 +59,7 @@ pub enum IntegrationRule {
         boards: BTreeMap<String, String>,
     },
 }
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct IntegrationObservation {
     pub input: IntegrationStack,
@@ -76,6 +77,14 @@ impl IntegrationRule {
         preview: bool,
     ) -> Result<IntegrationObservation> {
         self.validate()?;
+        self.observe_validated(input, expansions, preview)
+    }
+    fn observe_validated(
+        &self,
+        input: &IntegrationStack,
+        expansions: &[Option<IntegrationStack>],
+        preview: bool,
+    ) -> Result<IntegrationObservation> {
         ensure!(
             expansions.len() <= 8,
             "integration exceeds eight expansion slots"
@@ -245,6 +254,160 @@ impl IntegrationRule {
         }
         Ok(())
     }
+}
+pub(super) fn validate_recipe(recipe: &super::Recipe, rule: &IntegrationRule) -> Result<()> {
+    use super::{Consumption, Edit, Kind, Match, OutputRole};
+    rule.validate()?;
+    ensure!(
+        recipe.duration.is_none()
+            && recipe.energy.is_none()
+            && recipe.grid.is_none()
+            && recipe.magic.is_none(),
+        "integration has a native energy gate, not fixed duration or EU"
+    );
+    ensure!(
+        (2..=9).contains(&recipe.inputs.len())
+            && recipe.inputs[0].slot == 0
+            && recipe.inputs.windows(2).all(|p| p[0].slot < p[1].slot),
+        "integration inputs must use ordered native slots"
+    );
+    for input in &recipe.inputs {
+        ensure!(
+            input.kind == Kind::Item
+                && input.slot <= 8
+                && !input.choices.is_empty()
+                && input.choices.len() <= 65536,
+            "invalid integration input slot"
+        );
+        for choice in &input.choices {
+            ensure!(
+                choice.amount == "1"
+                    && matches!(choice.consume, Consumption::Allocated)
+                    && matches!(choice.rule, Match::Integration)
+                    && choice.returns.is_empty(),
+                "integration choices are one-item examples governed by the shared process"
+            );
+        }
+    }
+    ensure!(
+        recipe.outputs.len() == 1,
+        "integration requires one transformed output"
+    );
+    let output = &recipe.outputs[0];
+    ensure!(
+        output.kind == Kind::Item
+            && output.slot == 0
+            && matches!(output.role, OutputRole::Result)
+            && output.quantity.is_none()
+            && output.chance.numerator == "1"
+            && output.chance.denominator == "1",
+        "invalid integration output"
+    );
+    let change = output
+        .change
+        .as_ref()
+        .context("integration needs a transformed result")?;
+    ensure!(
+        change.input == 0
+            && matches!(change.action, Edit::Integration)
+            && change.bindings.is_some(),
+        "integration needs correlated input bindings"
+    );
+    Ok(())
+}
+
+pub(super) fn validate_change(
+    recipe: &super::Recipe,
+    output: &super::Output,
+    items: &BTreeMap<&str, &super::Item>,
+) -> Result<()> {
+    use super::Process;
+    let Some(Process::BuildcraftIntegration { rule }) = &recipe.process else {
+        bail!("integration output requires its native process")
+    };
+    validate_recipe(recipe, rule)?;
+    let change = output
+        .change
+        .as_ref()
+        .context("missing integration output change")?;
+    let bindings = change
+        .bindings
+        .as_ref()
+        .context("missing integration tuples")?;
+    ensure!(
+        !bindings.is_empty() && bindings.len() <= 65536 && bindings.len() == change.samples.len(),
+        "integration tuples differ from output samples"
+    );
+    // Resolve each factual sample once; validate the block map once per rule.
+    let choices = recipe
+        .inputs
+        .iter()
+        .map(|input| {
+            input
+                .choices
+                .iter()
+                .map(|choice| {
+                    let item = items
+                        .get(choice.id.as_str())
+                        .context("missing integration input fact")?;
+                    Ok(IntegrationStack {
+                        registry: item.registry.clone(),
+                        meta: item.meta,
+                        amount: 1,
+                        nbt: item.nbt.clone(),
+                    })
+                })
+                .collect::<Result<Vec<_>>>()
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let mut covered = vec![BTreeSet::new(); recipe.inputs.len()];
+    for (binding, sample) in bindings.iter().zip(&change.samples) {
+        ensure!(
+            binding.len() == recipe.inputs.len() && binding[0].is_some(),
+            "integration tuple must bind the primary and every sample slot"
+        );
+        let mut offered = vec![None; 9];
+        for (index, selection) in binding.iter().enumerate() {
+            if let Some(selection) = selection {
+                let stack = choices[index]
+                    .get(*selection as usize)
+                    .context("integration binding refers to a missing choice")?;
+                covered[index].insert(*selection as usize);
+                offered[recipe.inputs[index].slot as usize] = Some(stack.clone());
+            }
+        }
+        let input = offered[0].as_ref().context("missing integration primary")?;
+        let preview = rule.observe_validated(input, &offered[1..], true)?;
+        let completed = rule.observe_validated(input, &offered[1..], false)?;
+        let expected = completed
+            .output
+            .context("integration tuple has no native output")?;
+        ensure!(
+            preview.output.as_ref() == Some(&expected),
+            "integration preview differs from its completion result"
+        );
+        let id =
+            crate::identity::item_id(&expected.registry, expected.meta, expected.nbt.as_ref())?;
+        ensure!(
+            sample.id == id
+                && sample.amount == expected.amount.to_string()
+                && items.contains_key(sample.id.as_str()),
+            "integration sample differs from the complete input tuple"
+        );
+    }
+    ensure!(
+        covered
+            .iter()
+            .zip(&choices)
+            .all(|(seen, choices)| seen.len() == choices.len()),
+        "integration includes an input choice with no correlated sample"
+    );
+    let first = &change.samples[0];
+    ensure!(
+        output.id == first.id && output.amount.as_deref() == Some(first.amount.as_str()),
+        "default integration output differs from its first tuple"
+    );
+    Ok(())
 }
 impl IntegrationStack {
     fn validate(&self) -> Result<()> {
@@ -597,6 +760,84 @@ mod tests {
         error: Option<String>,
     }
     #[test]
+    fn integration_contract_requires_complete_correlated_tuples() {
+        use crate::{
+            domain::{Domain, Recipe},
+            identity::item_id,
+            source::Source,
+        };
+        use serde_json::json;
+        let source = Source::open(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../contracts/fixtures/source"),
+        )
+        .unwrap();
+        let domain = Domain::load(&source).unwrap();
+        let make = |registry: &str, nbt: serde_json::Value| {
+            let mut item = domain.items[0].clone();
+            item.registry = registry.into();
+            item.meta = 0;
+            item.nbt = serde_json::from_value(nbt).unwrap();
+            item.id = item_id(registry, 0, item.nbt.as_ref()).unwrap();
+            item
+        };
+        let input = make(
+            "fixture:robot",
+            json!({"type":"compound","value":{"energy":{"type":"int","value":"12"}}}),
+        );
+        let red = make(
+            "fixture:board",
+            json!({"type":"compound","value":{"id":{"type":"string","value":"red"}}}),
+        );
+        let blue = make(
+            "fixture:board",
+            json!({"type":"compound","value":{"id":{"type":"string","value":"blue"}}}),
+        );
+        let product = |id: &str| json!({"type":"compound","value":{"energy":{"type":"int","value":"12"},"board":{"type":"compound","value":{"id":{"type":"string","value":id}}}}});
+        let red_product = make("fixture:robot", product("red"));
+        let blue_product = make("fixture:robot", product("blue"));
+        let all = [
+            input.clone(),
+            red.clone(),
+            blue.clone(),
+            red_product.clone(),
+            blue_product.clone(),
+        ];
+        let items = all.iter().map(|i| (i.id.as_str(), i)).collect();
+        let choice = |id: &str| json!({"id":id,"amount":"1","rule":{"kind":"integration"},"consume":{"kind":"allocated"},"returns":[]});
+        let mut value = json!({"id":"recipe_test","source":{"owner":"fixture","handler":"integration","key":"robot"},"category":"category_test","order":0,"duration":null,"energy":null,"grid":null,"magic":null,"view":null,"properties":{},
+            "process":{"kind":"buildcraftIntegration","rule":{"kind":"robot","energy":50000,"maximum":1,"primary":["fixture:robot"],"robot":"fixture:robot","empty":"empty","boards":{"red":"red","blue":"blue"}}},
+            "inputs":[{"kind":"item","slot":0,"choices":[choice(&input.id)]},{"kind":"item","slot":1,"choices":[choice(&red.id),choice(&blue.id)]},{"kind":"item","slot":8,"choices":[choice(&blue.id)]}],
+            "outputs":[{"kind":"item","slot":0,"id":red_product.id,"amount":"1","quantity":null,"role":"result","chance":{"numerator":"1","denominator":"1"},
+                "change":{"input":0,"action":{"kind":"integration"},"bindings":[[0,0,null],[0,1,null],[0,null,0]],"samples":[{"id":red_product.id,"amount":"1"},{"id":blue_product.id,"amount":"1"},{"id":blue_product.id,"amount":"1"}]}}]});
+        let check = |v: serde_json::Value| -> Result<()> {
+            let r: Recipe = serde_json::from_value(v)?;
+            super::super::process::validate(&r, &Default::default(), &items, &[])?;
+            super::super::change::validate(&r, &r.outputs[0], &items)
+        };
+        check(value.clone()).unwrap();
+        for (path, bad) in [
+            ("/outputs/0/change/bindings", json!(null)),
+            ("/outputs/0/change/bindings/0", json!([0, 0])),
+            ("/outputs/0/change/bindings/0/0", json!(null)),
+            ("/outputs/0/change/bindings/0/1", json!(5)),
+            ("/outputs/0/change/samples/1/id", json!(red_product.id)),
+            ("/outputs/0/change/action", json!({"kind":"runic"})),
+            ("/inputs/1/choices/0/rule", json!({"kind":"exact"})),
+            ("/inputs/1/choices/0/consume", json!({"kind":"consume"})),
+            ("/inputs/1/choices/0/amount", json!("3")),
+            ("/duration", json!("16")),
+            ("/energy", json!("50000")),
+            ("/process", json!(null)),
+        ] {
+            let mut bad_value = value.clone();
+            *bad_value.pointer_mut(path).unwrap() = bad;
+            assert!(check(bad_value).is_err(), "{path}");
+        }
+        value["outputs"][0]["change"]["bindings"][0] = json!([0, null, null]);
+        assert!(check(value).is_err());
+    }
+    #[test]
     fn replay_pinned_native_integration_observations() {
         let evidence: Cases = serde_json::from_str(include_str!(
             "../../../../contracts/fixtures/integration-observations.json"
@@ -625,5 +866,41 @@ mod tests {
             checked += 1;
         }
         assert_eq!(checked, 23);
+        // These are actual production-adapter records, including its last partial
+        // facade batch. Recompute their correlated outputs using the same validator
+        // used by source compilation, independently of Java's native craft calls.
+        let records: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../contracts/fixtures/integration-adapter-records.json"
+        ))
+        .unwrap();
+        let source = crate::source::Source::open(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../contracts/fixtures/source"),
+        )
+        .unwrap();
+        let domain = crate::domain::Domain::load(&source).unwrap();
+        let facts: Vec<_> = records["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| {
+                let stack: IntegrationStack = serde_json::from_value(value.clone()).unwrap();
+                let mut item = domain.items[0].clone();
+                item.registry = stack.registry;
+                item.meta = stack.meta;
+                item.nbt = stack.nbt;
+                item.id =
+                    crate::identity::item_id(&item.registry, item.meta, item.nbt.as_ref()).unwrap();
+                item
+            })
+            .collect();
+        let items = facts.iter().map(|item| (item.id.as_str(), item)).collect();
+        let recipes = records["recipes"].as_array().unwrap();
+        assert_eq!(recipes.len(), 4);
+        for value in recipes {
+            let recipe: crate::domain::Recipe = serde_json::from_value(value.clone()).unwrap();
+            super::super::process::validate(&recipe, &Default::default(), &items, &[]).unwrap();
+            super::super::change::validate(&recipe, &recipe.outputs[0], &items).unwrap();
+        }
     }
 }

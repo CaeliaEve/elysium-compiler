@@ -122,6 +122,8 @@ pub struct Remainder {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Match {
     Exact,
+    /// Example of a multi-slot integration rule, not an independent item predicate.
+    Integration,
     /// Require absent or empty root NBT. `meta: true` ignores metadata.
     Untagged {
         meta: bool,
@@ -645,6 +647,10 @@ pub fn recipe_id(recipe: &Recipe) -> Result<String> {
                 .as_object_mut()
                 .expect("change object")
                 .remove("samples");
+            output["change"]
+                .as_object_mut()
+                .expect("change object")
+                .remove("bindings");
         }
     }
     let mut key = json!({

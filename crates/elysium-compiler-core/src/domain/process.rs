@@ -269,6 +269,11 @@ pub enum InscriberMode {
     deny_unknown_fields
 )]
 pub enum Process {
+    /// Retained native recipe selection, periodic preflight and ordered NBT transformation.
+    #[serde(rename = "buildcraftIntegration")]
+    BuildcraftIntegration {
+        rule: super::integration::IntegrationRule,
+    },
     /// IC2 heat/air checkpoints, persistent progress and native output-space behavior.
     #[serde(rename = "ic2Blast")]
     Ic2Blast { heat: i32 },
@@ -461,6 +466,15 @@ pub(super) fn validate(
     aspects: &[super::Aspect],
 ) -> Result<()> {
     ensure!(
+        matches!(recipe.process, Some(Process::BuildcraftIntegration { .. }))
+            || !recipe
+                .inputs
+                .iter()
+                .flat_map(|i| &i.choices)
+                .any(|c| matches!(c.rule, Match::Integration)),
+        "integration predicate requires its machine process"
+    );
+    ensure!(
         matches!(recipe.process, Some(Process::Ic2Blast { .. }))
             || !recipe
                 .inputs
@@ -496,6 +510,7 @@ pub(super) fn validate(
                     | Process::Sag { .. }
                     | Process::BuildcraftAssembly { .. }
                     | Process::BuildcraftRefinery { .. }
+                    | Process::BuildcraftIntegration { .. }
             )
         ) || !recipe
             .inputs
@@ -551,6 +566,9 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    if let Process::BuildcraftIntegration { rule } = process {
+        return super::integration::validate_recipe(recipe, rule);
+    }
     if matches!(process, Process::Ic2Blast { .. }) {
         return validate_blast(recipe);
     }

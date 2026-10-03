@@ -13,6 +13,10 @@ impl Match {
     ) -> Result<()> {
         match self {
             Self::Exact => {}
+            Self::Integration => ensure!(
+                compound,
+                "integration cannot be nested in an independent predicate"
+            ),
             Self::Untagged { .. } => ensure!(
                 item.nbt.is_none()
                     || matches!(&item.nbt, Some(Nbt::Compound {value}) if value.is_empty()),
@@ -260,7 +264,8 @@ fn simple(rule: &Match, offered: &Item, anchor: &Item) -> bool {
                 (actual, expected) => actual == expected,
             }
         }
-        Match::Ore { .. }
+        Match::Integration
+        | Match::Ore { .. }
         | Match::Soul { .. }
         | Match::Member { .. }
         | Match::Except { .. }

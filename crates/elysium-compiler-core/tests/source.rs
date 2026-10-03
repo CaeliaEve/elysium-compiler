@@ -46,6 +46,16 @@ fn java_source_is_verified_without_losing_identity_or_large_quantities() {
         .unwrap();
     source
         .visit("recipes", |recipe| {
+            if recipe["process"]["kind"] == "buildcraftIntegration" {
+                assert_eq!(recipe["process"]["rule"]["kind"], "robot");
+                let change = &recipe["outputs"][0]["change"];
+                assert_eq!(change["bindings"].as_array().unwrap().len(), 5);
+                assert_eq!(change["samples"].as_array().unwrap().len(), 5);
+                assert_eq!(change["bindings"][4], json!([1, null, 0]));
+                assert_eq!(recipe["inputs"][2]["slot"], 8);
+                assert!(recipe["duration"].is_null() && recipe["energy"].is_null());
+                return Ok(());
+            }
             if recipe["process"]["kind"] == "rolling" {
                 assert_eq!(
                     recipe["process"]["earlier"][0]["grid"]["cells"],

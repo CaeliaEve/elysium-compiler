@@ -1,9 +1,10 @@
-# BuildCraft integration: native model
+# BuildCraft integration
 
-This is the native model and its cross-language conformance evidence, **not a completed
-recipe adapter**. No source/catalog revision, current catalog, or frontend UI changes
-are made by this step. The integration-table identity remains pending in the repair
-ledger. Do not include it in implemented-adapter or live-acceptance counts yet.
+NESQL 0.35.0 (source revision 32) binds the three audited native families to
+Compiler/contracts 0.32.0 (catalog revision 31). The production route, correlated
+output validation and unchanged NeoNEI recipe UI are connected. This is local
+implementation evidence; full runtime registry coverage and live export remain
+unverified. No intermediate release candidate or game installation is produced.
 
 ## Evidence and ownership
 
@@ -68,7 +69,7 @@ explicit representation or rejection before entering the value-based contract.
   and unrelated primary NBT are not copied. The missing-board path writes an empty
   board ID at the primary root even during preview; this mutation is also tested.
 
-## Machine process to bind next
+## Machine process
 
 The table has primary slot 0, physical expansion slots 1–8, and output slot 9.
 `getExpansions` omits holes but preserves order. An existing selected recipe remains
@@ -84,15 +85,44 @@ primary by the returned output count and removes zero-count expansion stacks onl
 after successful output. The observation primitive models `craft`, not these world
 updates, and must not be presented as a complete machine simulator.
 
-Remaining work before marking this entrance implemented:
+## Contract and display samples
 
-1. Bind the model to a versioned process/output contract and validate correlated
-   input tuples. A single-primary-axis `Change.samples` array cannot represent it.
-2. Enumerate the three native rule families and bounded display examples using an
-   owned projection. Do not call the exponential gate `generateExampleOutput`, or
-   substitute the NEI one-expansion example for the machine's eight slots.
-3. Bind input choices and outputs to the same observed tuple in the existing UI,
-   retaining native positions/background and optimize styling. Then run one small
-   source/compiler/browser conformance case before the final unified export batch.
+`process.kind = buildcraftIntegration` carries the native `rule` snapshot. Inputs
+use `rule.kind = integration` and `consume.kind = allocated`: their one-item
+choices are examples of a multi-slot rule, not independent wildcard ingredients.
+The sole output uses `change.action.kind = integration`. Each `change.bindings`
+tuple contains one choice index or `null` per `recipe.inputs` column, in ascending
+physical slot order; primary 0 is mandatory, expansion slots are 1–8. `samples`
+and `bindings` have equal lengths and are excluded from recipe identity together.
+The default product is sample zero. Each displayed input choice must be covered.
 
-No interim candidate or live export is authorized by this model-only checkpoint.
+Compilation rebuilds each complete tuple and independently evaluates native-model
+preview and completion, rejecting any output identity/count difference. Empty
+optional slots, later occupied expansion slots and no-work tuples are checked.
+The view selects complete tuples, preserving as many other selected choices as
+possible, with deterministic first-match tie breaking. A single-axis change keeps
+its existing behavior. Empty slots keep their native space and the existing choice
+dialog remains available even for a single alternative.
+
+The adapter checks exact manager/handler/recipe classes and rejects duplicate rule
+families, unknown callbacks or changing registry order. It never calls the native
+exponential gate output generator. It covers all native display primaries and
+expansions using bounded illustrative combinations: gates with each chip plus a
+repeated RED case, facade expansions with each wire plus each primary with a fixed
+expansion, and boards in the first and last expansion slots. Facade combinations
+are linear in facade count for the four wires, not facade-count squared. The full
+rule defines combinations beyond these examples. All native observations and
+cached display stacks are owned copies, and rows contain at most 128 tuples.
+Explicit list, example and one-megabyte record limits reject oversized inputs.
+
+`contracts/fixtures/integration-adapter-records.json` comes from the production
+adapter in the pinned native runner. It includes all three families and the last
+partial facade batch. Rust validates those records with the same process/change
+validator used for compilation. The synthetic Java source fixture separately
+checks the public source → catalog → browser path, including correlated selection
+and empty expansion slots. The existing optimize-homepage browser checks run
+online and offline; styling and effects are unchanged.
+
+These examples are not a proof of every live registration or arbitrary native NBT
+coercion. The remaining project adapters must be finished before the unified live
+export and final acceptance.
