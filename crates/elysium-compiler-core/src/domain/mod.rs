@@ -169,6 +169,14 @@ pub enum Match {
         meta: bool,
         nbt: bool,
     },
+    /// Literal raw metadata independent of the concrete display item. Registry
+    /// and, unless nbt is true, NBT still come from that item. Absent root keys
+    /// are rejected even when their stored value is false or zero.
+    Metadata {
+        value: i32,
+        nbt: bool,
+        absent: Vec<String>,
+    },
     /// Compare only the named root tags with the choice; other tags are allowed.
     /// Presence checks ignore the tag's type and value, including false/zero.
     Tags {

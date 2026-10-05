@@ -87,6 +87,21 @@ impl Match {
             Self::Wildcard { meta, nbt } => {
                 ensure!(*meta || *nbt, "wildcard must ignore metadata or NBT")
             }
+            Self::Metadata { value, nbt, absent } => {
+                ensure!(*value >= 0, "literal metadata must be nonnegative");
+                ensure!(
+                    absent.len() <= 4096
+                        && absent.windows(2).all(|pair| pair[0] < pair[1])
+                        && absent.iter().all(|key| key.len() <= 65535),
+                    "absent tag keys must be bounded, sorted and unique"
+                );
+                ensure!(
+                    *nbt || absent
+                        .iter()
+                        .all(|key| compound_tags(item).is_none_or(|tags| !tags.contains_key(key))),
+                    "literal metadata predicate has conflicting NBT constraints"
+                );
+            }
             Self::WithoutTags { keys } => {
                 ensure!(
                     !keys.is_empty()
@@ -171,6 +186,7 @@ impl Match {
     /// Called only after Domain::validate; other existing rule indexing is unchanged.
     pub(crate) fn indexes_example(&self, item: &Item, items: &BTreeMap<&str, &Item>) -> bool {
         match self {
+            Self::Metadata { .. } => simple(self, item, item),
             Self::Except { base, exclude } => {
                 simple(base, item, item)
                     && !exclude
@@ -220,6 +236,13 @@ fn simple(rule: &Match, offered: &Item, anchor: &Item) -> bool {
         }
         Match::Wildcard { meta, nbt } => {
             (*meta || offered.meta == anchor.meta) && (*nbt || offered.nbt == anchor.nbt)
+        }
+        Match::Metadata { value, nbt, absent } => {
+            offered.meta == *value
+                && (*nbt || offered.nbt == anchor.nbt)
+                && absent
+                    .iter()
+                    .all(|key| compound_tags(offered).is_none_or(|tags| !tags.contains_key(key)))
         }
         Match::Tags {
             meta,
@@ -332,6 +355,70 @@ pub(super) fn native_tag(a: &Nbt, b: &Nbt, list_type: bool) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn literal_metadata_keeps_display_and_priority_independent() {
+        let rule: Match = serde_json::from_value(serde_json::json!({
+            "kind":"metadata", "value":32767, "nbt":false, "absent":["synthetic"]
+        }))
+        .expect("literal metadata predicate must deserialize");
+        let source = Source::open(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../contracts/fixtures/source"),
+        )
+        .unwrap();
+        let domain = Domain::load(&source).unwrap();
+        let anchor = domain
+            .items
+            .iter()
+            .find(|i| i.registry == "minecraft:stone" && i.meta == 0 && i.nbt.is_none())
+            .unwrap();
+        let items = BTreeMap::from([(anchor.id.as_str(), anchor)]);
+        rule.validate_item(anchor, &items, false, true).unwrap();
+        assert!(
+            !rule.indexes_example(anchor, &items),
+            "display-only metadata must not create a false usage link"
+        );
+        let mut offered = anchor.clone();
+        for meta in [0, 3, 7, 32767] {
+            offered.meta = meta;
+            assert_eq!(simple(&rule, &offered, anchor), meta == 32767);
+        }
+        offered.nbt = Some(Nbt::Compound {
+            value: BTreeMap::new(),
+        });
+        assert!(
+            !simple(&rule, &offered, anchor),
+            "empty NBT is not absent NBT"
+        );
+        let ignored: Match = serde_json::from_value(serde_json::json!({
+            "kind":"metadata", "value":32767, "nbt":true, "absent":["synthetic"]
+        }))
+        .unwrap();
+        assert!(simple(&ignored, &offered, anchor));
+        if let Some(Nbt::Compound { value }) = &mut offered.nbt {
+            value.insert("synthetic".into(), Nbt::Byte { value: "0".into() });
+        }
+        assert!(!simple(&ignored, &offered, anchor));
+        for invalid in [
+            serde_json::json!({"kind":"metadata","value":-1,"nbt":true,"absent":[]}),
+            serde_json::json!({"kind":"metadata","value":32767,"nbt":true,"absent":["x","x"]}),
+        ] {
+            assert!(serde_json::from_value::<Match>(invalid)
+                .unwrap()
+                .validate_item(anchor, &items, false, true)
+                .is_err());
+        }
+        let excluded: Match = serde_json::from_value(serde_json::json!({
+            "kind":"except", "base":{"kind":"wildcard","meta":true,"nbt":true},
+            "exclude":[{"id":anchor.id,"rule":rule}]
+        }))
+        .unwrap();
+        excluded.validate_item(anchor, &items, false, true).unwrap();
+        assert!(
+            excluded.indexes_example(anchor, &items),
+            "sentinel exclusion must not shadow the concrete display"
+        );
+    }
     use super::*;
     use crate::{domain::Domain, identity::item_id, source::Source};
     use serde_json::json;

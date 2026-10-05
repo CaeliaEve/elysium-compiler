@@ -264,6 +264,12 @@ export type Match =
     }
   | {
       absent: string[];
+      kind: "metadata";
+      nbt: boolean;
+      value: number;
+    }
+  | {
+      absent: string[];
       keys: string[];
       kind: "tags";
       meta: boolean;
@@ -841,7 +847,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 35;
+  revision: 36;
   scope: string;
   source: string;
 }
@@ -2004,7 +2010,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 35;
+  revision: 36;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -2016,7 +2022,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 36;
+  revision: 37;
   scope: Scope;
 }
 /**

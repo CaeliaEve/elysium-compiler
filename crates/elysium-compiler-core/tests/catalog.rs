@@ -558,7 +558,11 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
                 let recipe = rows.iter().find(|row| row.source.key == "machine").unwrap();
                 recipe_id = recipe.id.clone();
                 assert_eq!(recipe.inputs[0].choices[0].amount, "9007199254740993");
-                assert_eq!(recipe.inputs[0].choices.len(), 3);
+                assert_eq!(recipe.inputs[0].choices.len(), 4);
+                assert_eq!(
+                    serde_json::to_value(&recipe.inputs[0].choices[3].rule).unwrap(),
+                    serde_json::json!({"kind":"metadata","value":32767,"nbt":false,"absent":["synthetic"]})
+                );
                 assert_eq!(recipe.inputs[0].choices[1].amount, "7");
                 assert_eq!(recipe.inputs[0].choices[2].amount, "1");
                 assert_eq!(
