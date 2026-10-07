@@ -37,7 +37,7 @@ pub const CORE_COLLECTIONS: &[&str] = &[
     "tracks",
     "views",
 ];
-const MANIFEST_LIMIT: u64 = 64 * 1024 * 1024;
+pub(crate) const MANIFEST_LIMIT: u64 = 64 * 1024 * 1024;
 const RECORD_LIMIT: u64 = 1024 * 1024;
 const SHARD_LIMIT: u64 = 16 * 1024 * 1024;
 const ASSET_LIMIT: u64 = 64 * 1024 * 1024;

@@ -2,7 +2,7 @@
 use crate::catalog::store::destination;
 use crate::domain::Domain;
 use crate::provenance::Provenance;
-use crate::source::{is_digest, require_plain, Source, SourceFile, SourceManifest};
+use crate::source::{is_digest, require_plain, Source, SourceFile, SourceManifest, MANIFEST_LIMIT};
 use anyhow::{ensure, Context, Result};
 use fs2::FileExt;
 use serde::Deserialize;
@@ -14,7 +14,8 @@ use std::{
     path::Path,
 };
 
-const LIMIT: u64 = 64 * 1024 * 1024;
+// v1 repeats the descriptor list inside source; the Source itself stays <=64 MiB.
+const LIMIT: u64 = 2 * MANIFEST_LIMIT + 1024 * 1024;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -63,6 +64,10 @@ pub fn assemble(input: &Path, expected: &str, output: &Path) -> Result<Value> {
     ensure!(hash(&bytes) == expected, "capture manifest digest mismatch");
     let mut raw: Value = serde_json::from_slice(&bytes)?;
     ensure!(raw["state"] == "complete", "capture is not complete");
+    ensure!(
+        serde_json::to_vec(&raw["source"])?.len() as u64 <= MANIFEST_LIMIT,
+        "source manifest exceeds size limit"
+    );
     let capture: Capture = serde_json::from_value(raw.clone())?;
     raw.as_object_mut()
         .context("invalid capture manifest")?
@@ -85,9 +90,7 @@ pub fn assemble(input: &Path, expected: &str, output: &Path) -> Result<Value> {
         "capture is not a native export"
     );
     ensure!(
-        capture.files.len() <= 100000
-            && serde_json::to_value(&capture.files)?
-                == serde_json::to_value(&capture.source.files)?,
+        serde_json::to_value(&capture.files)? == serde_json::to_value(&capture.source.files)?,
         "capture must contain exactly the declared Source files"
     );
     let mut total = 0_u64;

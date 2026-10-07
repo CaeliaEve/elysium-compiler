@@ -49,9 +49,17 @@ elysium-compiler check --input <new-catalog-root>
 digest, an exact descriptor set, all referenced blobs, matching provenance and
 the ordinary Source domain/identity/reference/pixel checks. Missing files,
 damage, incomplete captures and diagnostic requests fail with a nonzero exit.
-Individual blobs and the manifest are limited to 64 MiB; the file set is limited
-to 100,000 entries and 128 GiB in total. Existing Source collection limits still
-apply.
+From NESQL 0.42.2 and Compiler 0.37.2, there is no separate file-count cap.
+Individual blobs and the Source manifest remain limited to 64 MiB; the capture
+v1 manifest permits 129 MiB because it embeds the descriptors twice (the outer
+`files` plus `source.files`), with 1 MiB of envelope headroom. The embedded Source
+is checked against its own 64 MiB budget before assembly. Native capture also
+counts canonical descriptor bytes as they arrive and refuses a descriptor list
+that cannot fit a Source; sealing checks the exact complete Source size.
+The total data cap remains 128 GiB, with existing Source collection limits.
+This changes capacity policy only: capture revision 1, Source revision 37,
+Catalog revision 36, identities and provenance rules are unchanged. Older
+compilers retain their 100,000-file / 64 MiB capture limits; use the paired release.
 
 Input and output must be disjoint, with no symbolic links, junctions or `..`
 components. The output parent uses an exclusive `.source.lock`. Files are copied

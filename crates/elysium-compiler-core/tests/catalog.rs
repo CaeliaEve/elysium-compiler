@@ -2442,3 +2442,143 @@ fn native_processes_reject_false_fixed_outputs_and_consumption() {
         serde_json::to_value(original.recipes).unwrap()
     );
 }
+
+#[test]
+fn native_signed_fluid_viscosity_survives_validation_and_catalog_transport() {
+    use serde_json::json;
+    let source = Source::open(&fixture()).unwrap();
+    let mut domain = Domain::load(&source).unwrap();
+    assert!(!domain.fluids.is_empty());
+    for gaseous in [true, false] {
+        for viscosity in [-500, i32::MIN, 0, i32::MAX] {
+            domain.fluids[0].gaseous = gaseous;
+            domain.fluids[0].viscosity = viscosity;
+            domain.validate(&source).unwrap();
+            let table: Table =
+                serde_json::from_value(json!({"kind":"fluids","records":domain.fluids})).unwrap();
+            let bytes = rmp_serde::to_vec_named(&table).unwrap();
+            let restored: Table = rmp_serde::from_slice(&bytes).unwrap();
+            assert_eq!(
+                serde_json::to_value(restored).unwrap()["records"][0]["viscosity"],
+                viscosity
+            );
+        }
+    }
+    domain.fluids[0].temperature = -1;
+    assert!(domain.validate(&source).is_err());
+    domain.fluids[0].temperature = 295;
+    domain.fluids[0].luminosity = 16;
+    assert!(domain.validate(&source).is_err());
+}
+
+#[test]
+fn native_signed_item_durability_survives_json_and_catalog_transport() {
+    use serde_json::json;
+    let source = Source::open(&fixture()).unwrap();
+    let mut domain = Domain::load(&source).unwrap();
+    for durability in [i32::MIN, -16, -13, -11, -1, 0, 1234, i32::MAX] {
+        let mut item = serde_json::to_value(&domain.items[0]).unwrap();
+        item["durability"] = json!(durability);
+        domain.items[0] = serde_json::from_value(item).unwrap();
+        domain.validate(&source).unwrap();
+        let bytes = rmp_serde::to_vec_named(&Table::Items(domain.items.clone())).unwrap();
+        let restored: Table = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(
+            serde_json::to_value(restored).unwrap()["records"][0]["durability"],
+            durability
+        );
+    }
+    for invalid in [json!(-2147483649_i64), json!(2147483648_i64), json!(1.5)] {
+        let mut item = serde_json::to_value(&domain.items[0]).unwrap();
+        item["durability"] = invalid;
+        assert!(serde_json::from_value::<elysium_compiler_core::domain::Item>(item).is_err());
+    }
+}
+
+#[test]
+fn native_negative_recipe_duration_is_preserved_without_inventing_execution_time() {
+    let source = Source::open(&fixture()).unwrap();
+    let mut domain = Domain::load(&source).unwrap();
+    let index = domain
+        .recipes
+        .iter()
+        .position(|r| r.source.key == "machine")
+        .unwrap();
+    for duration in [
+        "-2147483569",
+        "-2147483571",
+        "-9223372036854775808",
+        "0",
+        "21",
+        "9223372036854775807",
+    ] {
+        domain.recipes[index].duration = Some(duration.to_owned());
+        domain.recipes[index].id = recipe_id(&domain.recipes[index]).unwrap();
+        domain.validate(&source).unwrap();
+        let bytes = rmp_serde::to_vec_named(&Table::Recipes(domain.recipes.clone())).unwrap();
+        let restored: Table = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(
+            serde_json::to_value(restored).unwrap()["records"][index]["duration"],
+            duration
+        );
+    }
+    for invalid in [
+        "-0",
+        "-01",
+        "1.5",
+        "-9223372036854775809",
+        "9223372036854775808",
+    ] {
+        domain.recipes[index].duration = Some(invalid.to_owned());
+        domain.recipes[index].id = recipe_id(&domain.recipes[index]).unwrap();
+        assert!(domain.validate(&source).is_err(), "accepted {invalid}");
+    }
+}
+
+#[test]
+fn native_nested_class_property_keys_preserve_case_and_dollar_signs() {
+    use elysium_compiler_core::identity::property_key;
+    for key in [
+        "gregtech:metadata/gregtech.api.util.GTRecipeConstants$DecayType/decay-type",
+        "fixture:plain/key",
+    ] {
+        property_key(key).unwrap();
+    }
+    for key in [
+        "bad$key:name",
+        "fixture:",
+        "fixture:bad key",
+        "fixture:key:other",
+        "fixture:key\\other",
+    ] {
+        assert!(property_key(key).is_err(), "accepted {key}");
+    }
+}
+
+#[test]
+fn native_recipe_branches_can_share_order_without_losing_identity() {
+    let source = Source::open(&fixture()).unwrap();
+    let mut domain = Domain::load(&source).unwrap();
+    let mut branch = domain
+        .recipes
+        .iter()
+        .find(|r| r.source.key == "machine")
+        .unwrap()
+        .clone();
+    branch.duration = Some("21".to_owned());
+    branch.id = recipe_id(&branch).unwrap();
+    assert!(!domain.recipes.iter().any(|r| r.id == branch.id));
+    domain.recipes.push(branch.clone());
+    domain.validate(&source).unwrap();
+    let bytes = rmp_serde::to_vec_named(&Table::Recipes(domain.recipes.clone())).unwrap();
+    let Table::Recipes(restored) = rmp_serde::from_slice(&bytes).unwrap() else {
+        panic!()
+    };
+    assert_eq!(
+        restored
+            .iter()
+            .filter(|r| r.category == branch.category && r.order == branch.order)
+            .count(),
+        2
+    );
+}

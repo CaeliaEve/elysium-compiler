@@ -1138,6 +1138,9 @@ export interface Item {
    * Thaumcraft's returned object tags; null means it provided no value, not zero aspects.
    */
   aspects?: AspectAmount[] | null;
+  /**
+   * Raw ItemStack.getMaxDamage() result; negative values retain mod-specific meaning.
+   */
   durability: number;
   icon?: string | null;
   id: string;
@@ -1420,7 +1423,7 @@ export interface SqueezerCallback {
 export interface Recipe {
   category: string;
   /**
-   * Ticks, when the source defines a duration.
+   * Raw native tick value, when defined. Negative values are upstream anomalies, not elapsed time; preserve them and do not infer an effective execution duration.
    */
   duration?: string | null;
   /**
@@ -1431,6 +1434,9 @@ export interface Recipe {
   id: string;
   inputs: Input[];
   magic?: MagicRecipe | null;
+  /**
+   * Native category-local position; branches can tie. Sort tied records by id.
+   */
   order: number;
   outputs: Output[];
   process?: Process | null;

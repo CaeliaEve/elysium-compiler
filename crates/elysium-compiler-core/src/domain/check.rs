@@ -133,7 +133,7 @@ impl Domain {
                 asset(icon)?;
             }
             ensure!(
-                fluid.temperature >= 0 && fluid.viscosity >= 0 && fluid.luminosity <= 15,
+                fluid.temperature >= 0 && fluid.luminosity <= 15,
                 "invalid fluid properties: {}",
                 fluid.id
             );
@@ -293,7 +293,6 @@ impl Domain {
             }
         }
         ensure!(used_tracks == tracks, "unreferenced UI track");
-        let mut recipe_orders = BTreeSet::new();
         for recipe in &self.recipes {
             origin(&recipe.source)?;
             ensure!(
@@ -305,16 +304,11 @@ impl Domain {
                 .get(recipe.category.as_str())
                 .with_context(|| format!("missing category: {}", recipe.category))?;
             ensure!(
-                recipe_orders.insert((&recipe.category, recipe.order)),
-                "duplicate recipe order in {}",
-                recipe.category
-            );
-            ensure!(
                 recipe.inputs.len() <= 4096 && recipe.outputs.len() <= 4096,
                 "recipe has too many slots"
             );
             if let Some(duration) = &recipe.duration {
-                integer(duration, 0, i64::MAX)?;
+                integer(duration, i64::MIN, i64::MAX)?;
             }
             if let Some(energy) = &recipe.energy {
                 integer(energy, i64::MIN, i64::MAX)?;

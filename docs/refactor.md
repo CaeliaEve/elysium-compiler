@@ -130,3 +130,20 @@ The scanner's Forestry NEI outputs are labels without genomes. They are not fixe
 Samples are native serialization fixed points, with explicit genomes and optional mates. NESQL refuses a missing genome, unknown individual implementation, changed genotype during serialization, or an unstable round trip. It does not fill in a default species. The Compiler verifies canonical typed NBT, distinct roots/states, whole-stack consumption, branch costs and each sample identity/count; canonical samples differ only in `IsAnalyzed`. Canonical samples are examples, not a finite list of the allowed genomes or a simulator of arbitrary modded NBT. The analysis operator defines the native runtime semantics, including removal of tags that the native serializer does not write on the first analysis. It does not use the generic tag-patch operator.
 
 One NEI entry can emit both branches. Diagnostic indices and `checkedRecipes` continue to count source NEI entries, while catalog recipe counts include emitted branches. Captured foregrounds use a private recipe copy with the branch's costs, then restore the capture-owned list; shared cached recipes are not changed. Native registry and GL verification remain real-game acceptance steps.
+
+## Compiler 0.37.1: native signed viscosity
+
+Forge 1.7.10 `Fluid.setViscosity(int)` stores a signed integer independently of `setGaseous(boolean)`. Preserve that value exactly, including GT++ ammonia viscosity -500; do not clamp it or infer a gas-only restriction. Source 37 and Catalog 36 already encode viscosity as i32, so this corrects validation without changing the wire schema. Kelvin temperature and luminosity validation remain unchanged.
+
+Compiler/contracts 0.37.3 correct Item.durability to signed i32, matching the raw native ItemStack.getMaxDamage() result. Negative values are preserved, not normalized to zero or labeled universally as infinite durability. Source 37 and Catalog 36 wire shapes and identities are unchanged; this fixes a numeric-domain error in the generated schema. Consumers must use the updated contract to validate affected item tables.
+
+
+## 0.37.4: native recipe duration anomalies
+
+Recipe.duration preserves a canonical signed 64-bit decimal tick value from the source. Negative values denote upstream anomalies, not a valid elapsed time or a prediction of machine execution. Consumers must label them as anomalous, retain the raw tick value, and must not convert them to seconds or clamp them to zero/one. Native execution can depend on machine/overclock context absent from a recipe record. Animation frame durations remain strictly positive and independent.
+
+This corrects interpretation of existing Source 37 / Catalog 36 numeric strings without rewriting recipe identities or Source files. The 16 TGregworks negative-duration records remain upstream defects even when the data compiles. No claim that their native gameplay behavior was fixed is made.
+
+Property key local names preserve `$` from Java nested class names (for example GTRecipeConstants$DecayType). Namespace syntax is unchanged; keys remain case-sensitive and are never rewritten.
+
+Recipe.order is a native category-local position, not a unique key. Harmony modes and scanner branches share their parent position. Stable ordering uses (category order, category id, recipe order, recipe id); distinct branch identities are retained.

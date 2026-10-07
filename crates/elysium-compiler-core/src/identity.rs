@@ -171,7 +171,9 @@ pub fn property_key(value: &str) -> Result<()> {
         !namespace.is_empty()
             && namespace.bytes().all(identifier)
             && !name.is_empty()
-            && name.bytes().all(|byte| identifier(byte) || byte == b'/'),
+            && name
+                .bytes()
+                .all(|byte| identifier(byte) || matches!(byte, b'/' | b'$')),
         "invalid property key: {value}"
     );
     Ok(())

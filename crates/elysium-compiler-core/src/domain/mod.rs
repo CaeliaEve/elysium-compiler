@@ -55,7 +55,8 @@ pub struct Item {
     pub name: String,
     pub tooltip: Vec<String>,
     pub stack_limit: u32,
-    pub durability: u32,
+    /// Raw ItemStack.getMaxDamage() result; negative values retain mod-specific meaning.
+    pub durability: i32,
     pub tools: BTreeMap<String, i32>,
     /// Actual ItemArmor classification; durability alone does not identify armor or tools.
     pub armor: bool,
@@ -358,7 +359,8 @@ pub struct Recipe {
     pub category: String,
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
-    /// Ticks, when the source defines a duration.
+    /// Raw native tick value, when defined. Negative values are upstream anomalies,
+    /// not elapsed time; preserve them and do not infer an effective execution duration.
     pub duration: Option<String>,
     /// Signed EU/t; negative values denote generation.
     pub energy: Option<String>,
@@ -369,6 +371,7 @@ pub struct Recipe {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub process: Option<Process>,
     pub view: Option<String>,
+    /// Native category-local position; branches can tie. Sort tied records by id.
     pub order: u32,
 }
 
