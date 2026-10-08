@@ -10,6 +10,19 @@ use std::collections::{BTreeMap, BTreeSet};
 pub enum SpeciesKind {
     Bee,
     Tree,
+    Butterfly,
+    Flower,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FlowerTraits {
+    /// Native Botany soil symbols, distinct from Forestry air humidity.
+    pub acidity: String,
+    pub moisture: String,
+    /// Native IFlowerType identifier; colors remain separate chromosome values.
+    #[serde(rename = "type")]
+    pub flower_type: u16,
 }
 
 /// A populated chromosome of a registered template, not a player's individual genome.
@@ -59,10 +72,13 @@ pub struct Species {
     pub secret: bool,
     pub blacklisted: bool,
     pub counted: bool,
-    /// Natural bee activity; distinct from the template's nocturnal tolerance chromosome.
+    /// Natural bee or butterfly activity; distinct from nocturnal tolerance chromosomes.
     pub nocturnal: Option<bool>,
+    /// Native bee specialty-condition description; not a live housing eligibility result.
+    pub jubilance: Option<String>,
     /// Whether the tree species supports its default template's fruit family.
     pub fruit_compatible: Option<bool>,
+    pub flower: Option<FlowerTraits>,
     pub members: Vec<Member>,
     pub genes: Vec<Gene>,
     pub products: Vec<Produce>,
@@ -109,6 +125,13 @@ pub(super) fn validate(
         );
         text(&row.name)?;
         text(&row.description)?;
+        if let Some(description) = &row.jubilance {
+            ensure!(
+                row.kind == SpeciesKind::Bee,
+                "jubilance belongs only to bee species"
+            );
+            text(description)?;
+        }
         ensure!(
             row.binomial.len() <= 1024 && row.authority.len() <= 1024,
             "species attribution exceeds its budget"
@@ -116,10 +139,22 @@ pub(super) fn validate(
         symbol(&row.temperature, 64)?;
         symbol(&row.humidity, 64)?;
         ensure!(
-            row.nocturnal.is_some() == (row.kind == SpeciesKind::Bee)
-                && row.fruit_compatible.is_some() == (row.kind == SpeciesKind::Tree),
+            row.nocturnal.is_some()
+                == matches!(row.kind, SpeciesKind::Bee | SpeciesKind::Butterfly)
+                && row.fruit_compatible.is_some() == (row.kind == SpeciesKind::Tree)
+                && row.flower.is_some() == (row.kind == SpeciesKind::Flower),
             "species traits do not match its kind"
         );
+        if let Some(flower) = &row.flower {
+            symbol(&flower.acidity, 64)?;
+            symbol(&flower.moisture, 64)?;
+        }
+        if matches!(row.kind, SpeciesKind::Butterfly | SpeciesKind::Flower) {
+            ensure!(
+                row.products.is_empty() && row.specialties.is_empty(),
+                "butterfly and flower breeding has no bee/tree production lists"
+            );
+        }
         ensure!(
             !row.members.is_empty() && row.members.len() <= 16,
             "invalid species member count"

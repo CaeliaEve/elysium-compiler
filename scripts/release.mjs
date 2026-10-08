@@ -29,6 +29,11 @@ const files = new Map([
   ['docs/blast.md', 'docs/blast.md'],
   ['docs/casting.md', 'docs/casting.md'],
   ['docs/metadata.md', 'docs/metadata.md'],
+  ['docs/qed.md', 'docs/qed.md'],
+  ['docs/galaxyspace.md', 'docs/galaxyspace.md'],
+  ['docs/floating-flowers.md', 'docs/floating-flowers.md'],
+  ['docs/genetics.md', 'docs/genetics.md'],
+  ['docs/ore-groups.md', 'docs/ore-groups.md'],
   ...['schema.json', 'index.cjs', 'index.d.ts', 'package.json'].map(name => [`contracts/${name}`, `contracts/${name}`]),
 ]);
 mkdirSync(dirname(output), { recursive: true });

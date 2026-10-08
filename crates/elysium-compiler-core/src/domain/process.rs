@@ -342,6 +342,24 @@ pub enum Process {
         powered: bool,
         earlier: Vec<super::CraftingSelector>,
     },
+    /// Extra Utilities QED ordered crafting registry. A completed craft drains
+    /// the native default Ender Flux buffer and one item from every occupied cell.
+    Qed {
+        #[serde(rename = "enderFlux")]
+        ender_flux: String,
+        earlier: Vec<super::CraftingSelector>,
+    },
+    /// Ordinary GalaxySpace machine crafting after native repair priority has
+    /// been ruled out. Timing remains dependent on the external power tier.
+    #[serde(rename = "galaxyspace-assembly")]
+    GalaxyspaceAssembly {
+        earlier: Vec<super::CraftingSelector>,
+    },
+    /// Botania's ordinary floating-flower crafting within a 2x2 or 3x3 grid.
+    /// Special inputs bind in increasing physical cell order. Only a missing
+    /// or string `type` on the last special input is in the admitted domain.
+    #[serde(rename = "floatingFlowers")]
+    FloatingFlowers { special: Vec<u32> },
     /// Native two-slot Soul Binder selection, XP debit and last-vessel completion.
     Soul {
         energy: i32,
@@ -440,6 +458,140 @@ mod soul_contract_test {
     }
 }
 
+#[cfg(test)]
+mod qed_contract_test {
+    use super::*;
+    use crate::{domain::Domain, source::Source};
+    use serde_json::{json, Value};
+
+    fn fixture() -> (Domain, Value) {
+        let source = Source::open(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../contracts/fixtures/source"),
+        )
+        .unwrap();
+        let domain = Domain::load(&source).unwrap();
+        let recipe = domain
+            .recipes
+            .iter()
+            .find(|r| matches!(r.process, Some(Process::Rolling { .. })))
+            .unwrap();
+        let mut value = serde_json::to_value(recipe).unwrap();
+        let earlier = value["process"]["earlier"].clone();
+        value["process"] = json!({"kind":"qed","enderFlux":"20000","earlier":earlier});
+        value["source"]["handler"] = json!("com.rwtema.extrautils.nei.EnderConstructorHandler");
+        (domain, value)
+    }
+
+    #[test]
+    fn galaxyspace_preserves_priority_without_inventing_fixed_timing() {
+        let (domain, mut value) = fixture();
+        let earlier = value["process"]["earlier"].clone();
+        value["process"] = json!({"kind":"galaxyspace-assembly","earlier":earlier});
+        value["source"]["handler"] = json!("galaxyspace.core.nei.AssemblyMachineRecipeHandler");
+        let items = domain
+            .items
+            .iter()
+            .map(|item| (item.id.as_str(), item))
+            .collect();
+        for shaped in [true, false] {
+            let mut current = value.clone();
+            if !shaped {
+                current["grid"] = Value::Null;
+            }
+            let recipe: Recipe = serde_json::from_value(current.clone()).unwrap();
+            validate(&recipe, &BTreeMap::new(), &items, &[]).unwrap();
+            assert_eq!(
+                serde_json::to_value(recipe.process).unwrap(),
+                current["process"]
+            );
+            for (pointer, replacement) in [
+                ("/duration", json!("200")),
+                ("/energy", json!("75")),
+                ("/inputs/0/choices/0/amount", json!("2")),
+                ("/inputs/0/choices/0/consume", json!({"kind":"keep"})),
+                ("/process/earlier/0/inputs/0/0/id", json!("missing")),
+                ("/process/earlier/0/grid/cells", json!([0, 0])),
+            ] {
+                let mut wrong = current.clone();
+                *wrong.pointer_mut(pointer).unwrap() = replacement;
+                let recipe: Recipe = serde_json::from_value(wrong).unwrap();
+                assert!(
+                    validate(&recipe, &BTreeMap::new(), &items, &[]).is_err(),
+                    "accepted {pointer}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn qed_retains_ordered_shaped_and_shapeless_selectors() {
+        let (domain, mut value) = fixture();
+        let mut shapeless = value["process"]["earlier"][0].clone();
+        shapeless["grid"] = Value::Null;
+        value["process"]["earlier"]
+            .as_array_mut()
+            .unwrap()
+            .push(shapeless);
+        let recipe: Recipe = serde_json::from_value(value.clone()).unwrap();
+        let items = domain
+            .items
+            .iter()
+            .map(|item| (item.id.as_str(), item))
+            .collect();
+        validate(&recipe, &BTreeMap::new(), &items, &[]).unwrap();
+        assert_eq!(
+            serde_json::to_value(recipe.process).unwrap(),
+            value["process"]
+        );
+        assert_eq!(
+            value["process"]["earlier"][0]["grid"]["cells"],
+            json!([0, null])
+        );
+        assert_eq!(value["process"]["earlier"][0]["grid"]["mirror"], true);
+    }
+
+    #[test]
+    fn qed_rejects_invented_power_consumption_returns_and_invalid_priority_rules() {
+        let (domain, value) = fixture();
+        let items = domain
+            .items
+            .iter()
+            .map(|item| (item.id.as_str(), item))
+            .collect();
+        let base: Recipe = serde_json::from_value(value.clone()).unwrap();
+        validate(&base, &BTreeMap::new(), &items, &[]).unwrap();
+        for (pointer, replacement) in [
+            ("/process/enderFlux", json!("1")),
+            ("/duration", json!("100")),
+            ("/energy", json!("200")),
+            ("/inputs/0/choices/0/amount", json!("2")),
+            ("/inputs/0/choices/0/consume", json!({"kind":"keep"})),
+            ("/inputs/0/choices/0/rule/nbt", json!(false)),
+            ("/process/earlier/0/inputs/0/0/id", json!("missing")),
+            ("/process/earlier/0/grid/cells", json!([0, 0])),
+            ("/grid", Value::Null),
+        ] {
+            let mut wrong = value.clone();
+            *wrong.pointer_mut(pointer).unwrap() = replacement;
+            let recipe: Recipe = serde_json::from_value(wrong).unwrap();
+            assert!(
+                validate(&recipe, &BTreeMap::new(), &items, &[]).is_err(),
+                "accepted {pointer}"
+            );
+        }
+        let mut wrong = base;
+        wrong.inputs[0].choices[0]
+            .returns
+            .push(super::super::Remainder {
+                kind: Kind::Item,
+                id: wrong.outputs[0].id.clone(),
+                amount: "1".into(),
+            });
+        assert!(validate(&wrong, &BTreeMap::new(), &items, &[]).is_err());
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct VatConsumption {
@@ -460,6 +612,13 @@ impl Process {
     }
 
     pub(super) fn validate_parameters(&self) -> Result<()> {
+        if let Self::Qed { ender_flux, .. } = self {
+            ensure!(
+                ender_flux == "20000",
+                "QED requires the native default Ender Flux buffer"
+            );
+            return Ok(());
+        }
         if let Self::Enchanter {
             level,
             max_level,
@@ -700,6 +859,19 @@ pub(super) fn validate(
         return validate_buildcraft(recipe);
     }
     if let Process::Rolling { earlier, .. } = process {
+        return super::rolling::validate(recipe, earlier, items);
+    }
+    if let Process::GalaxyspaceAssembly { earlier } = process {
+        return super::rolling::validate(recipe, earlier, items);
+    }
+    if let Process::FloatingFlowers { special } = process {
+        return super::floating::validate(recipe, special, items);
+    }
+    if let Process::Qed { earlier, .. } = process {
+        ensure!(
+            recipe.grid.is_some(),
+            "QED handler only publishes shaped recipes"
+        );
         return super::rolling::validate(recipe, earlier, items);
     }
     if matches!(process, Process::Sag { .. }) {

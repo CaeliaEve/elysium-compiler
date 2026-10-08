@@ -10,6 +10,134 @@ fn fixture() -> PathBuf {
 }
 
 #[test]
+fn bee_jubilance_description_is_a_validated_localized_reference() {
+    use serde_json::json;
+    let source = Source::open(&fixture()).unwrap();
+    let original = Domain::load(&source).unwrap();
+    let mut value = serde_json::to_value(&original).unwrap();
+    let species = value["species"].as_array_mut().unwrap();
+    let bee = species.iter_mut().find(|row| row["kind"] == "bee").unwrap();
+    let text = bee["description"].clone();
+    bee["jubilance"] = text.clone();
+    let domain: Domain = serde_json::from_value(value.clone()).unwrap();
+    domain.validate(&source).unwrap();
+    let bytes = rmp_serde::to_vec_named(&Table::Species(domain.species)).unwrap();
+    let decoded: Table = rmp_serde::from_slice(&bytes).unwrap();
+    assert!(serde_json::to_value(decoded).unwrap()["records"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|row| row["jubilance"] == text));
+    for (kind, reference) in [
+        ("bee", json!("text_missing")),
+        ("tree", text),
+        ("bee", json!(true)),
+    ] {
+        let mut invalid = value.clone();
+        let row = invalid["species"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|row| row["kind"] == kind)
+            .unwrap();
+        row["jubilance"] = reference;
+        assert!(
+            serde_json::from_value::<Domain>(invalid)
+                .map_err(anyhow::Error::from)
+                .and_then(|domain| domain.validate(&source))
+                .is_err(),
+            "accepted invalid jubilance for {kind}"
+        );
+    }
+}
+
+#[test]
+fn butterfly_and_flower_genetics_remain_distinct_from_bee_production() {
+    use elysium_compiler_core::domain::{origin_id, Origin};
+    use serde_json::{json, Value};
+    let source = Source::open(&fixture()).unwrap();
+    let original = Domain::load(&source).unwrap();
+    let mut value = serde_json::to_value(&original).unwrap();
+    let bee = value["species"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["kind"] == "bee")
+        .unwrap()
+        .clone();
+    for (kind, root) in [("butterfly", "rootButterflies"), ("flower", "rootFlowers")] {
+        let mut row = bee.clone();
+        row["kind"] = json!(kind);
+        row["source"]["handler"] = json!(root);
+        let origin: Origin = serde_json::from_value(row["source"].clone()).unwrap();
+        row["id"] = json!(origin_id("species", &origin).unwrap());
+        row["jubilance"] = Value::Null;
+        row["fruitCompatible"] = Value::Null;
+        row["nocturnal"] = if kind == "butterfly" {
+            json!(true)
+        } else {
+            Value::Null
+        };
+        row["flower"] = if kind == "flower" {
+            json!({"acidity":"neutral","moisture":"normal","type":12})
+        } else {
+            Value::Null
+        };
+        row["products"] = json!([]);
+        row["specialties"] = json!([]);
+        row["members"][0]["form"] = json!(kind);
+        let mut candidate = value.clone();
+        candidate["species"]
+            .as_array_mut()
+            .unwrap()
+            .push(row.clone());
+        let valid: Domain = serde_json::from_value(candidate.clone()).unwrap();
+        valid.validate(&source).unwrap();
+        let table = Table::Species(valid.species);
+        let encoded = rmp_serde::to_vec_named(&table).unwrap();
+        assert_eq!(
+            serde_json::to_value(rmp_serde::from_slice::<Table>(&encoded).unwrap()).unwrap(),
+            serde_json::to_value(table).unwrap()
+        );
+        for (field, invalid) in [
+            ("products", bee["products"].clone()),
+            ("jubilance", bee["description"].clone()),
+            (
+                "nocturnal",
+                if kind == "butterfly" {
+                    Value::Null
+                } else {
+                    json!(true)
+                },
+            ),
+            (
+                "flower",
+                if kind == "flower" {
+                    Value::Null
+                } else {
+                    json!({"acidity":"neutral","moisture":"normal","type":12})
+                },
+            ),
+        ] {
+            let mut broken = candidate.clone();
+            broken["species"]
+                .as_array_mut()
+                .unwrap()
+                .last_mut()
+                .unwrap()[field] = invalid;
+            assert!(
+                serde_json::from_value::<Domain>(broken)
+                    .map_err(anyhow::Error::from)
+                    .and_then(|domain| domain.validate(&source))
+                    .is_err(),
+                "accepted {kind} with invalid {field}"
+            );
+        }
+        value["species"].as_array_mut().unwrap().push(row);
+    }
+}
+
+#[test]
 fn shared_native_programs_require_complete_category_references_and_catalog_transport() {
     use serde_json::{json, Value};
     let source = Source::open(&fixture()).unwrap();
@@ -342,17 +470,19 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
     let catalog = Catalog::current(directory.path()).unwrap();
     catalog.verify().unwrap();
     assert_eq!(catalog.manifest.id, first.id);
-    assert_eq!(catalog.manifest.counts["recipes"], 42);
+    assert_eq!(catalog.manifest.counts["recipes"], 45);
     assert_eq!(
         catalog.manifest.counts["index"],
         catalog.manifest.counts["recipes"]
     );
-    assert_eq!(catalog.manifest.counts["browse"], 88);
+    assert_eq!(catalog.manifest.counts["browse"], 92);
     assert_eq!(catalog.manifest.counts["materials"], 2);
     assert_eq!(catalog.manifest.counts["circuits"], 1);
-    assert_eq!(catalog.manifest.counts["species"], 3);
-    assert_eq!(catalog.manifest.counts["mutations"], 2);
-    assert_eq!(catalog.manifest.counts["topics"], 15);
+    assert_eq!(catalog.manifest.counts["species"], 5);
+    assert_eq!(catalog.manifest.counts["mutations"], 4);
+    assert_eq!(catalog.manifest.counts["topics"], 20);
+    assert_eq!(catalog.manifest.counts["ore-groups"], 3);
+    assert_eq!(catalog.manifest.counts["ore-members"], 4);
     assert_eq!(catalog.manifest.counts["aspects"], 6);
     assert_eq!(catalog.manifest.counts["research"], 2);
     assert_eq!(catalog.manifest.counts["structures"], 1);
@@ -516,6 +646,8 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
                 assert!(rows.iter().any(|row| row.terms.contains("dianlu")));
                 assert!(rows.iter().any(|row| row.terms.contains("mifeng")));
                 assert!(rows.iter().any(|row| row.terms.contains("shumu")));
+                assert!(rows.iter().any(|row| row.terms.contains("hudie")));
+                assert!(rows.iter().any(|row| row.terms.contains("huahui")));
                 assert!(rows.iter().any(|row| row.terms.contains("duofangkuai")));
             }
             Table::Species(rows) => {
@@ -533,6 +665,18 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
                 assert!(tree.products[0].chance.is_none());
                 assert!(tree.blacklisted);
                 assert_eq!(tree.fruit_compatible, Some(false));
+                let butterfly = rows
+                    .iter()
+                    .find(|row| row.kind == SpeciesKind::Butterfly)
+                    .unwrap();
+                assert_eq!(butterfly.nocturnal, Some(true));
+                assert!(butterfly.products.is_empty() && butterfly.specialties.is_empty());
+                let flower = rows
+                    .iter()
+                    .find(|row| row.kind == SpeciesKind::Flower)
+                    .unwrap();
+                assert_eq!(flower.flower.as_ref().unwrap().flower_type, 12);
+                assert!(flower.products.is_empty() && flower.specialties.is_empty());
             }
             Table::Mutations(rows) => {
                 assert!(rows
@@ -542,9 +686,9 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
                 assert_eq!(rows[0].genes[0].allele, "fixture.fast");
             }
             Table::Lineage(rows) => {
-                assert_eq!(rows.len(), 3);
-                assert_eq!(rows.iter().map(|row| row.origins.len()).sum::<usize>(), 2);
-                assert_eq!(rows.iter().map(|row| row.crosses.len()).sum::<usize>(), 3);
+                assert_eq!(rows.len(), 5);
+                assert_eq!(rows.iter().map(|row| row.origins.len()).sum::<usize>(), 4);
+                assert_eq!(rows.iter().map(|row| row.crosses.len()).sum::<usize>(), 5);
             }
             Table::Index(rows) => {
                 let machine = rows
@@ -735,6 +879,8 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
                     Some(
                         elysium_compiler_core::domain::Process::Harmony { .. }
                             | elysium_compiler_core::domain::Process::Rolling { .. }
+                            | elysium_compiler_core::domain::Process::Qed { .. }
+                            | elysium_compiler_core::domain::Process::GalaxyspaceAssembly { .. }
                             | elysium_compiler_core::domain::Process::BuildcraftAssembly { .. }
                             | elysium_compiler_core::domain::Process::Ic2Blast { .. }
                     )
@@ -758,7 +904,7 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
             .unwrap()
             .topics
             .len(),
-        8
+        10
     );
     assert_eq!(
         links

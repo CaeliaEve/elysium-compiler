@@ -15,7 +15,7 @@ use std::path::Path;
 pub use store::{Catalog, File, Manifest, Pointer, Publication};
 
 pub const FORMAT: &str = "elysium.catalog";
-pub const REVISION: u32 = 36;
+pub const REVISION: u32 = 37;
 pub const FILE_LIMIT: usize = 16 * 1024 * 1024;
 pub const IMAGE_LIMIT: usize = 80 * 1024 * 1024;
 pub const TABLE_ROWS: usize = 4096;
@@ -52,6 +52,9 @@ pub enum TopicKind {
     Circuit,
     Bee,
     Tree,
+    Butterfly,
+    Flower,
+    Ore,
     Structure,
     Aspect,
     Research,
@@ -145,6 +148,8 @@ tables! {
     Materials(Material) => "materials",
     Models(Model) => "models",
     Mutations(Mutation) => "mutations",
+    OreGroups(OreGroup) => "ore-groups",
+    OreMembers(OreMember) => "ore-members",
     Programs(programs::ProgramChunk) => "programs",
     Recipes(Recipe) => "recipes",
     Research(Research) => "research",
@@ -242,6 +247,8 @@ pub fn compile(input: &Path, output: &Path) -> Result<Publication> {
     write!("circuits", &domain.circuits, Circuits);
     write!("species", &domain.species, Species);
     write!("mutations", &domain.mutations, Mutations);
+    write!("ore-groups", &domain.ore_groups, OreGroups);
+    write!("ore-members", &domain.ore_members, OreMembers);
     write!("structures", &domain.structures, Structures);
     write!("blocks", &domain.blocks, Blocks);
     write!("models", &domain.models, Models);
@@ -261,6 +268,31 @@ fn topics(domain: &Domain) -> Vec<Topic> {
         .map(|row| (&row.id, &row.text))
         .collect();
     let mut rows = Vec::new();
+    let mut ore_icons: BTreeMap<&str, (u32, &String)> = BTreeMap::new();
+    for member in &domain.ore_members {
+        if let Some(display) = &member.display {
+            let icon = ore_icons
+                .entry(member.group.as_str())
+                .or_insert((member.index, display));
+            if member.index < icon.0 {
+                *icon = (member.index, display);
+            }
+        }
+    }
+    for group in &domain.ore_groups {
+        rows.push(Topic {
+            id: group.id.clone(),
+            kind: TopicKind::Ore,
+            terms: terms(&group.name, &group.source.key, &[], &[]),
+            name: group.name.clone(),
+            icon: ore_icons.get(group.id.as_str()).map(|(_, id)| Reference {
+                kind: Kind::Item,
+                id: (*id).clone(),
+            }),
+            image: None,
+            order: group.order,
+        });
+    }
     for material in &domain.materials {
         let name = strings[&material.name].clone();
         rows.push(Topic {
@@ -300,6 +332,8 @@ fn topics(domain: &Domain) -> Vec<Topic> {
             kind: match species.kind {
                 SpeciesKind::Bee => TopicKind::Bee,
                 SpeciesKind::Tree => TopicKind::Tree,
+                SpeciesKind::Butterfly => TopicKind::Butterfly,
+                SpeciesKind::Flower => TopicKind::Flower,
             },
             terms: terms(
                 &name,
@@ -644,6 +678,39 @@ fn links(domain: &Domain, items: &BTreeMap<&str, &Item>) -> Vec<Links> {
                 .topics
                 .push(species.id.clone());
         }
+    }
+    let ore_groups: BTreeMap<_, _> = domain
+        .ore_groups
+        .iter()
+        .map(|group| (group.name.as_str(), &group.id))
+        .collect();
+    let mut ore_examples: BTreeMap<&str, std::collections::BTreeSet<&String>> = BTreeMap::new();
+    for member in &domain.ore_members {
+        if let Some(display) = &member.display {
+            ore_examples
+                .entry(display)
+                .or_default()
+                .insert(&member.group);
+        }
+    }
+    for item in &domain.items {
+        let mut ids: std::collections::BTreeSet<_> = item
+            .tags
+            .iter()
+            .filter_map(|name| ore_groups.get(name.as_str()).copied())
+            .collect();
+        ids.extend(
+            ore_examples
+                .get(item.id.as_str())
+                .into_iter()
+                .flatten()
+                .copied(),
+        );
+        links
+            .get_mut(item.id.as_str())
+            .expect("validated item")
+            .topics
+            .extend(ids.into_iter().cloned());
     }
     for entry in links.values_mut() {
         entry.topics.sort();

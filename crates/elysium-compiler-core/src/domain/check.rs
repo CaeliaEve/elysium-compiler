@@ -61,6 +61,7 @@ impl Domain {
         };
         industry::validate(self, &text, &reference)?;
         genetics::validate(self, &text, &reference)?;
+        ores::validate(self)?;
         magic::validate(self, &text, &reference, &asset)?;
         model::validate(self, &asset)?;
         structure::validate(

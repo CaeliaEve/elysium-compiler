@@ -1,5 +1,18 @@
 # Capture recovery
 
+The current paired contract is NESQL 0.43.0 / Compiler 0.38.0, Source revision
+38 and Catalog revision 37. The completed archive envelope remains revision 1.
+NESQL also writes separate same-session Handler checkpoints. Those journals
+are **not** Compiler inputs: the producer must validate native data again and
+finish a new ordinary Source before compilation. `assemble` still rejects all
+`writing` capture archives, including ones with some completed Handler units.
+The original failed job and archive are preserved by a producer-side retry.
+For selected Magic recipes, the producer checkpoint seed also includes the
+complete registered research dependency closure. Same-session recovery takes
+a fresh native snapshot and checks research prerequisites, knowledge and
+triggers before replay is accepted. This does not enable full-domain or
+cross-build recovery, and does not make a checkpoint a valid Source.
+
 Compiler 0.14.3 also accepts NESQL 0.15.4's explicit `scope: recipes` exports.
 That scope must match the environment, name explicit handlers and a world, and
 remain a `selection` Source. Runtime comparison excludes this request field;

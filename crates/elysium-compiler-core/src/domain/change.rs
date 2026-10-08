@@ -20,6 +20,12 @@ pub enum Edit {
     /// Fresh broken spawner: base registry, meta=0, count=1, only mobType string.
     /// The string is native getMobTypeFromStack(input0), not the full entity NBT.
     Soul { base: String },
+    /// Fresh floating special flower, meta=0/count=1, with only a string `type`.
+    /// Base supplies only the registry from a renderable example; all its tags are discarded.
+    /// Missing `type` becomes an empty string; non-string values are outside
+    /// the paired process's explicit input domain, never silently coerced.
+    #[serde(rename = "floatingFlower")]
+    FloatingFlower { base: String },
     /// Copy the offered map and tags, set count=1 and map_is_scaling byte=1.
     /// This is the result before ItemMap.onCreated allocates the final world ID.
     #[serde(rename = "mapScaling")]
@@ -109,6 +115,19 @@ pub(super) fn validate(
     );
     match &change.action {
         Edit::Integration => unreachable!("integration is validated as a tuple"),
+        Edit::FloatingFlower { base } => {
+            let Some(super::Process::FloatingFlowers { special }) = &recipe.process else {
+                bail!("floating flower change requires its ordered process");
+            };
+            super::floating::validate(recipe, special, items)?;
+            let template = items
+                .get(base.as_str())
+                .context("missing floating flower base")?;
+            ensure!(
+                template.meta == 0,
+                "floating flower base must have metadata zero"
+            );
+        }
         Edit::Soul { base } => {
             ensure!(
                 matches!(
@@ -310,6 +329,24 @@ fn apply(
 ) -> Result<Stack> {
     let (registry, meta, count, nbt) = match action {
         Edit::Integration => bail!("integration cannot be evaluated from a single input"),
+        Edit::FloatingFlower { base } => {
+            let template = items
+                .get(base.as_str())
+                .context("missing floating flower base")?;
+            let value = match compound(&input.nbt)?.and_then(|tags| tags.get("type")) {
+                None => String::new(),
+                Some(Nbt::String { value }) => value.clone(),
+                Some(_) => bail!("non-string flower type is outside the declared input domain"),
+            };
+            (
+                &template.registry,
+                0,
+                "1",
+                Some(Nbt::Compound {
+                    value: BTreeMap::from([("type".into(), Nbt::String { value })]),
+                }),
+            )
+        }
         Edit::Soul { base } => {
             let template = items.get(base.as_str()).context("missing spawner base")?;
             let Some(Match::Soul { filter }) = recipe

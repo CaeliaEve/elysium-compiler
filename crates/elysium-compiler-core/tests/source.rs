@@ -46,6 +46,36 @@ fn java_source_is_verified_without_losing_identity_or_large_quantities() {
         .unwrap();
     source
         .visit("recipes", |recipe| {
+            if recipe["process"]["kind"] == "floatingFlowers" {
+                assert_eq!(recipe["process"]["special"], json!([1, 2]));
+                assert_eq!(recipe["inputs"].as_array().unwrap().len(), 3);
+                assert_eq!(
+                    recipe["inputs"][2]["choices"][0]["rule"],
+                    json!({"kind":"string_tag","key":"type"})
+                );
+                assert_eq!(recipe["outputs"][0]["amount"], "1");
+                assert_eq!(recipe["outputs"][0]["change"]["input"], 2);
+                assert_eq!(
+                    recipe["outputs"][0]["change"]["action"]["kind"],
+                    "floatingFlower"
+                );
+                return Ok(());
+            }
+            if recipe["process"]["kind"] == "qed" {
+                assert_eq!(recipe["process"]["enderFlux"], "20000");
+                assert!(recipe["process"]["earlier"][0]["grid"].is_null());
+                assert_eq!(recipe["grid"]["cells"], json!([0]));
+                assert_eq!(recipe["grid"]["mirror"], true);
+                assert_eq!(recipe["inputs"][0]["choices"][0]["amount"], "1");
+                assert_eq!(
+                    recipe["inputs"][0]["choices"][0]["consume"]["kind"],
+                    "consume"
+                );
+                assert_eq!(recipe["inputs"][0]["choices"][0]["returns"], json!([]));
+                assert_eq!(recipe["outputs"][0]["amount"], "1");
+                assert!(recipe["duration"].is_null() && recipe["energy"].is_null());
+                return Ok(());
+            }
             if recipe["process"]["kind"] == "buildcraftIntegration" {
                 assert_eq!(recipe["process"]["rule"]["kind"], "robot");
                 let change = &recipe["outputs"][0]["change"];
@@ -165,6 +195,14 @@ fn java_source_is_verified_without_losing_identity_or_large_quantities() {
                     recipe["inputs"][1]["choices"][0]["consume"]["kind"],
                     "allocated"
                 );
+                assert!(recipe["duration"].is_null() && recipe["energy"].is_null());
+                return Ok(());
+            }
+            if recipe["process"]["kind"] == "galaxyspace-assembly" {
+                assert_eq!(recipe["outputs"][0]["amount"], "70");
+                assert_eq!(recipe["grid"]["cells"], json!([0, null, null, 1]));
+                assert_eq!(recipe["grid"]["mirror"], true);
+                assert_eq!(recipe["process"]["earlier"].as_array().unwrap().len(), 1);
                 assert!(recipe["duration"].is_null() && recipe["energy"].is_null());
                 return Ok(());
             }

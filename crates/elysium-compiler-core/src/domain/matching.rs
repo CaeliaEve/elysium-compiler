@@ -87,6 +87,16 @@ impl Match {
             Self::Wildcard { meta, nbt } => {
                 ensure!(*meta || *nbt, "wildcard must ignore metadata or NBT")
             }
+            Self::StringTag { key } => {
+                ensure!(
+                    !key.is_empty() && key.len() <= 65535,
+                    "invalid string tag key"
+                );
+                ensure!(
+                    simple(self, item, item),
+                    "string tag predicate rejects its example"
+                );
+            }
             Self::Metadata { value, nbt, absent } => {
                 ensure!(*value >= 0, "literal metadata must be nonnegative");
                 ensure!(
@@ -237,6 +247,9 @@ fn simple(rule: &Match, offered: &Item, anchor: &Item) -> bool {
         Match::Wildcard { meta, nbt } => {
             (*meta || offered.meta == anchor.meta) && (*nbt || offered.nbt == anchor.nbt)
         }
+        Match::StringTag { key } => compound_tags(offered)
+            .and_then(|tags| tags.get(key))
+            .is_none_or(|tag| matches!(tag, Nbt::String { .. })),
         Match::Metadata { value, nbt, absent } => {
             offered.meta == *value
                 && (*nbt || offered.nbt == anchor.nbt)

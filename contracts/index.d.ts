@@ -263,6 +263,10 @@ export type Match =
       nbt: boolean;
     }
   | {
+      key: string;
+      kind: "string_tag";
+    }
+  | {
       absent: string[];
       kind: "metadata";
       nbt: boolean;
@@ -300,6 +304,10 @@ export type Edit =
   | {
       base: string;
       kind: "soul";
+    }
+  | {
+      base: string;
+      kind: "floatingFlower";
     }
   | {
       kind: "mapScaling";
@@ -474,6 +482,19 @@ export type Process =
       powered: boolean;
     }
   | {
+      earlier: CraftingSelector[];
+      enderFlux: string;
+      kind: "qed";
+    }
+  | {
+      earlier: CraftingSelector[];
+      kind: "galaxyspace-assembly";
+    }
+  | {
+      kind: "floatingFlowers";
+      special: number[];
+    }
+  | {
       capacity: number;
       drains: boolean;
       earlier: SoulSelector[];
@@ -618,7 +639,7 @@ export type ResearchFlag =
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "SpeciesKind".
  */
-export type SpeciesKind = "bee" | "tree";
+export type SpeciesKind = "bee" | "tree" | "butterfly" | "flower";
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "RuleKind".
@@ -774,6 +795,14 @@ export type Table =
       records: Mutation[];
     }
   | {
+      kind: "ore-groups";
+      records: OreGroup[];
+    }
+  | {
+      kind: "ore-members";
+      records: OreMember[];
+    }
+  | {
       kind: "programs";
       records: ProgramChunk[];
     }
@@ -821,7 +850,8 @@ export type Table =
  * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "TopicKind".
  */
-export type TopicKind = "material" | "circuit" | "bee" | "tree" | "structure" | "aspect" | "research";
+export type TopicKind =
+  "material" | "circuit" | "bee" | "tree" | "butterfly" | "flower" | "ore" | "structure" | "aspect" | "research";
 
 /**
  * Owns the schema exported to consumers; it is not a runtime payload itself.
@@ -847,7 +877,7 @@ export interface Manifest {
   files: File[];
   format: "elysium.catalog";
   id: string;
-  revision: 36;
+  revision: 37;
   scope: string;
   source: string;
 }
@@ -882,6 +912,8 @@ export interface Domain {
   materials: Material[];
   models: Model[];
   mutations: Mutation[];
+  oreGroups: OreGroup[];
+  oreMembers: OreMember[];
   programs: ProgramChunk[];
   recipes: Recipe[];
   research: Research[];
@@ -1346,6 +1378,56 @@ export interface Gene {
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "OreGroup".
+ */
+export interface OreGroup {
+  id: string;
+  /**
+   * Number of original registration-list positions, including duplicates.
+   */
+  members: number;
+  /**
+   * Exact native ore dictionary name, not a translated item label.
+   */
+  name: string;
+  /**
+   * Native Java string ordering of all registered non-null names.
+   */
+  order: number;
+  source: Origin;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "OreMember".
+ */
+export interface OreMember {
+  /**
+   * A verified concrete NEI example; null when none is known safe to display.
+   */
+  display?: string | null;
+  group: string;
+  id: string;
+  index: number;
+  template: OreTemplate;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "OreTemplate".
+ */
+export interface OreTemplate {
+  /**
+   * Signed native stackSize. Registry metadata, not a consumption quantity.
+   */
+  amount: string;
+  /**
+   * Raw stored metadata; 32767 remains a wildcard template, never a display stack.
+   */
+  meta: number;
+  nbt?: Nbt | null;
+  registry: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
  * via the `definition` "ProgramChunk".
  */
 export interface ProgramChunk {
@@ -1785,6 +1867,7 @@ export interface Species {
   counted: boolean;
   description: string;
   dominant: boolean;
+  flower?: FlowerTraits | null;
   /**
    * Whether the tree species supports its default template's fruit family.
    */
@@ -1792,11 +1875,15 @@ export interface Species {
   genes: Gene[];
   humidity: string;
   id: string;
+  /**
+   * Native bee specialty-condition description; not a live housing eligibility result.
+   */
+  jubilance?: string | null;
   kind: SpeciesKind;
   members: Member[];
   name: string;
   /**
-   * Natural bee activity; distinct from the template's nocturnal tolerance chromosome.
+   * Natural bee or butterfly activity; distinct from nocturnal tolerance chromosomes.
    */
   nocturnal?: boolean | null;
   products: Produce[];
@@ -1810,6 +1897,21 @@ export interface Species {
    * Native climate symbols from Forestry, not guessed biome or numeric ranges.
    */
   temperature: string;
+}
+/**
+ * This interface was referenced by `Contract`'s JSON-Schema
+ * via the `definition` "FlowerTraits".
+ */
+export interface FlowerTraits {
+  /**
+   * Native Botany soil symbols, distinct from Forestry air humidity.
+   */
+  acidity: string;
+  moisture: string;
+  /**
+   * Native IFlowerType identifier; colors remain separate chromosome values.
+   */
+  type: number;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -2016,7 +2118,7 @@ export interface Mod {
 export interface Pointer {
   format: "elysium.catalog-pointer";
   id: string;
-  revision: 36;
+  revision: 37;
 }
 /**
  * This interface was referenced by `Contract`'s JSON-Schema
@@ -2028,7 +2130,7 @@ export interface SourceManifest {
   format: "elysium.source";
   id: string;
   producer: Producer;
-  revision: 37;
+  revision: 38;
   scope: Scope;
 }
 /**

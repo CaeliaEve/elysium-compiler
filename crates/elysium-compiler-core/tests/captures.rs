@@ -1,4 +1,7 @@
-use elysium_compiler_core::{fragments::assemble, source::SourceManifest};
+use elysium_compiler_core::{
+    fragments::assemble,
+    source::{SourceManifest, SOURCE_REVISION},
+};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -25,7 +28,7 @@ fn large_capture_reaches_blob_verification_without_count_or_double_manifest_limi
                 "encoding":"jsonl.gzip","bytes":20,"decodedBytes":0,"rows":0,"sha256":digest(b"empty")}));
         }
         let mut source: SourceManifest =
-            serde_json::from_value(json!({"format":"elysium.source","revision":37,
+            serde_json::from_value(json!({"format":"elysium.source","revision":SOURCE_REVISION,
             "id":"", "environment":environment,"producer":{"name":"nesql","version":"fixture"},
             "scope":{"mode":"selection","collections":["items"]},"files":files}))
             .unwrap();

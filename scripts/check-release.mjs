@@ -36,7 +36,7 @@ try {
   const repeated = run(['compile', '--input', input, '--output', output]);
   assert.equal(publication.id, repeated.id, 'Release compilation is not deterministic');
   assert.equal(publication.source, JSON.parse(readFileSync(join(input, 'manifest.json'), 'utf8')).id);
-  for (const kind of ['items', 'recipes', 'programs', 'textures', 'materials', 'circuits', 'species', 'mutations', 'lineage', 'structures', 'blocks', 'builds', 'models', 'shapes', 'aspects', 'research']) assert.ok(publication.counts[kind] > 0, `No fixture ${kind} in release output`);
+  for (const kind of ['items', 'recipes', 'programs', 'textures', 'materials', 'circuits', 'species', 'mutations', 'lineage', 'structures', 'blocks', 'builds', 'models', 'shapes', 'aspects', 'research', 'ore-groups', 'ore-members']) assert.ok(publication.counts[kind] > 0, `No fixture ${kind} in release output`);
   run(['check', '--input', output]);
 } finally {
   // Delete only the temporary directory created by this invocation, never a caller-supplied path.

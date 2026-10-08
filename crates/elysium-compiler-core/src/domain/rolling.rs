@@ -1,4 +1,5 @@
-//! Native Railcraft grid selection and machine gates; see docs/rolling.md.
+//! Shared native crafting-grid contract for Railcraft, QED and GalaxySpace.
+//! Their power, repair and machine gates remain separate.
 use super::{Consumption, Grid, Item, Kind, Match, MatchCase, OutputRole, Recipe};
 use anyhow::{ensure, Context, Result};
 use schemars::JsonSchema;
@@ -20,13 +21,13 @@ fn grid(grid: Option<&Grid>, inputs: usize) -> Result<()> {
             (1..=3).contains(&g.width)
                 && (1..=3).contains(&g.height)
                 && g.cells.len() == (g.width * g.height) as usize,
-            "invalid rolling grid dimensions"
+            "invalid native crafting grid dimensions"
         );
         let cells: Vec<_> = g.cells.iter().flatten().copied().collect();
         ensure!(
             cells.len() == inputs
                 && cells.iter().copied().collect::<BTreeSet<_>>() == (0..inputs as u32).collect(),
-            "rolling grid must use each ordered input once"
+            "native crafting grid must use each ordered input once"
         );
     }
     Ok(())
@@ -35,7 +36,7 @@ fn grid(grid: Option<&Grid>, inputs: usize) -> Result<()> {
 fn rule(rule: &Match) -> Result<()> {
     ensure!(
         matches!(rule, Match::Wildcard { nbt: true, .. }),
-        "rolling requires native item/meta matching with ignored NBT"
+        "native crafting requires item/meta matching with ignored NBT"
     );
     Ok(())
 }
@@ -52,20 +53,20 @@ pub(super) fn validate(
             && (1..=9).contains(&recipe.inputs.len())
             && recipe.outputs.len() == 1
             && earlier.len() <= 262144,
-        "invalid rolling recipe shape"
+        "invalid native crafting recipe shape"
     );
     grid(recipe.grid.as_ref(), recipe.inputs.len())?;
     for (slot, input) in recipe.inputs.iter().enumerate() {
         ensure!(
             input.kind == Kind::Item && input.slot == slot as u32 && !input.choices.is_empty(),
-            "invalid rolling input slot"
+            "invalid native crafting input slot"
         );
         for choice in &input.choices {
             ensure!(
                 choice.amount == "1"
                     && matches!(choice.consume, Consumption::Consume)
                     && choice.returns.is_empty(),
-                "rolling consumes one per occupied cell and never returns crafting containers"
+                "native machine crafting consumes one per occupied cell and never returns containers"
             );
             rule(&choice.rule)?;
         }
@@ -80,27 +81,30 @@ pub(super) fn validate(
             && matches!(output.role, OutputRole::Result)
             && output.chance.numerator == "1"
             && output.chance.denominator == "1",
-        "rolling result must be fixed and unconditional after selection"
+        "native crafting result must be fixed and unconditional after selection"
     );
     let mut count = 0;
     for prior in earlier {
         ensure!(
             (1..=9).contains(&prior.inputs.len()),
-            "invalid prior rolling input count"
+            "invalid prior native crafting input count"
         );
         grid(prior.grid.as_ref(), prior.inputs.len())?;
         for choices in &prior.inputs {
             ensure!(
                 !choices.is_empty() && choices.len() <= 65536,
-                "empty or oversized prior rolling choices"
+                "empty or oversized prior native crafting choices"
             );
             count += choices.len();
-            ensure!(count <= 1_048_576, "rolling selector budget exceeded");
+            ensure!(
+                count <= 1_048_576,
+                "native crafting selector budget exceeded"
+            );
             for choice in choices {
                 rule(&choice.rule)?;
                 items
                     .get(choice.id.as_str())
-                    .context("missing earlier rolling template")?;
+                    .context("missing earlier native crafting template")?;
             }
         }
     }

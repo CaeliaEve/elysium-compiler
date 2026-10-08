@@ -1,6 +1,7 @@
 //! Shared game facts. Source and catalog use these meanings without compatibility aliases.
 mod change;
 mod check;
+mod floating;
 pub mod forestry;
 mod genetics;
 mod grinding;
@@ -9,6 +10,7 @@ pub mod integration;
 mod magic;
 mod matching;
 mod model;
+mod ores;
 mod process;
 pub mod programs;
 mod quantity;
@@ -21,6 +23,7 @@ pub use grinding::{GrindingBall, GrindingRequirement};
 pub use industry::*;
 pub use magic::*;
 pub use model::*;
+pub use ores::*;
 pub use process::{HarmonyMode, HarmonyOutcome, Process, VatConsumption};
 pub use quantity::{quantity_bounds, Quantity};
 pub use rolling::CraftingSelector;
@@ -169,6 +172,12 @@ pub enum Match {
     Wildcard {
         meta: bool,
         nbt: bool,
+    },
+    /// Same registry, any metadata, with the named root tag absent or a string.
+    /// Other tags are unrestricted. This explicitly excludes native non-string
+    /// coercion paths that cannot be reconstructed from canonical NBT.
+    StringTag {
+        key: String,
     },
     /// Literal raw metadata independent of the concrete display item. Registry
     /// and, unless nbt is true, NBT still come from that item. Absent root keys
@@ -574,6 +583,10 @@ pub struct Domain {
     pub circuits: Vec<Circuit>,
     pub species: Vec<Species>,
     pub mutations: Vec<Mutation>,
+    #[serde(rename = "oreGroups")]
+    pub ore_groups: Vec<OreGroup>,
+    #[serde(rename = "oreMembers")]
+    pub ore_members: Vec<OreMember>,
     pub structures: Vec<Structure>,
     pub blocks: Vec<Block>,
     pub models: Vec<Model>,
@@ -603,6 +616,8 @@ impl Domain {
             circuits: read(source, "circuits")?,
             species: read(source, "species")?,
             mutations: read(source, "mutations")?,
+            ore_groups: read(source, "ore-groups")?,
+            ore_members: read(source, "ore-members")?,
             structures: read(source, "structures")?,
             blocks: read(source, "blocks")?,
             models: read(source, "models")?,
