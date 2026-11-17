@@ -769,7 +769,7 @@ mod tests {
         use serde_json::json;
         let source = Source::open(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../contracts/fixtures/source"),
+                .join("../../contracts/fixtures/source-semantic-40"),
         )
         .unwrap();
         let domain = Domain::load(&source).unwrap();
@@ -805,7 +805,7 @@ mod tests {
         ];
         let items = all.iter().map(|i| (i.id.as_str(), i)).collect();
         let choice = |id: &str| json!({"id":id,"amount":"1","rule":{"kind":"integration"},"consume":{"kind":"allocated"},"returns":[]});
-        let mut value = json!({"id":"recipe_test","source":{"owner":"fixture","handler":"integration","key":"robot"},"category":"category_test","order":0,"duration":null,"energy":null,"grid":null,"magic":null,"view":null,"properties":{},
+        let mut value = json!({"id":"recipe_test","source":{"owner":"fixture","handler":"integration","key":"robot"},"category":"category_test","order":0,"duration":null,"energy":null,"grid":null,"magic":null,"properties":{},
             "process":{"kind":"buildcraftIntegration","rule":{"kind":"robot","energy":50000,"maximum":1,"primary":["fixture:robot"],"robot":"fixture:robot","empty":"empty","boards":{"red":"red","blue":"blue"}}},
             "inputs":[{"kind":"item","slot":0,"choices":[choice(&input.id)]},{"kind":"item","slot":1,"choices":[choice(&red.id),choice(&blue.id)]},{"kind":"item","slot":8,"choices":[choice(&blue.id)]}],
             "outputs":[{"kind":"item","slot":0,"id":red_product.id,"amount":"1","quantity":null,"role":"result","chance":{"numerator":"1","denominator":"1"},
@@ -875,7 +875,7 @@ mod tests {
         .unwrap();
         let source = crate::source::Source::open(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../contracts/fixtures/source"),
+                .join("../../contracts/fixtures/source-semantic-40"),
         )
         .unwrap();
         let domain = crate::domain::Domain::load(&source).unwrap();

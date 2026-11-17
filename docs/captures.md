@@ -1,17 +1,55 @@
 # Capture recovery
 
-The current paired contract is NESQL 0.43.0 / Compiler 0.38.0, Source revision
-38 and Catalog revision 37. The completed archive envelope remains revision 1.
+The development candidate pairs NESQL 0.45.0-semantic.13 with Compiler and
+contracts 0.41.0-semantic.1, Source revision 41 and Catalog revision 41.
+Local mechanism checks have passed; full-pack native acceptance still requires
+the external game batch. The completed archive envelope remains revision 1.
 NESQL also writes separate same-session Handler checkpoints. Those journals
 are **not** Compiler inputs: the producer must validate native data again and
 finish a new ordinary Source before compilation. `assemble` still rejects all
 `writing` capture archives, including ones with some completed Handler units.
 The original failed job and archive are preserved by a producer-side retry.
+The new producer checkpoint envelope is revision 5, with semantic proof revision 3
+and continuation proof revision 1, and binds Source revision
+41 and presentation `semantic-content-v1` in addition to the producer, native
+provenance and ordered handlers. The environment also records these capability
+fields, so they participate in environment and runtime fingerprints. A revision
+1/2/3/4 checkpoint or a different presentation cannot be replayed, even if every
+file hash is valid. This does not change the completed capture envelope's
+revision or authorize mixing historical `writing` archives.
+
+Revision 5 retains the per-unit inventory resource classification. The producer
+now wires native renderer/model/texture/shader authority and each unit's owned
+Random boundary state into recovery. Such prefixes additionally require the
+exact released path/digest/count in its process-local capability store. Missing,
+evicted or cross-process capabilities cannot be replaced by JSON or hashes.
+Replaying a shorter prefix retains that earlier unit's state rather than the
+old terminal Random position. Local replay, corrupt/stale-prefix rejection and
+resource-cleanup checks have passed; native game continuation remains to be verified.
+Compiler assembly cannot authorize producer continuation and
+still accepts only a complete ordinary capture envelope.
+
+Semantic proof revision 3 adds ordered native capture dispositions. Handler
+units distinguish captured entries, proven exclusions, identical duplicates,
+domain references and emitted branches. Complete disposition events and their
+count/hash chain are checked before sealing and rechecked against native data
+on producer recovery. Failed or abandoned attempts do not reserve recipe IDs.
+These events belong to the producer journal, not Source collections or Compiler
+inputs. A revision 2 semantic proof lacks this evidence and cannot be resumed.
 For selected Magic recipes, the producer checkpoint seed also includes the
 complete registered research dependency closure. Same-session recovery takes
 a fresh native snapshot and checks research prerequisites, knowledge and
 triggers before replay is accepted. This does not enable full-domain or
 cross-build recovery, and does not make a checkpoint a valid Source.
+
+Selected native structure handlers now journal their component/tier references
+and owned construction geometry in the same Handler unit. Recovery rechecks the
+native scan, controller/provider binding, parameters, descriptions, definition
+cells, actual block states and typed tile NBT before replay. Geometry proof
+normalizes renderer-dependent model attachments and build IDs, but retains each
+occupied cell and native orientation; asset bytes remain independently verified
+by the checkpoint blob manifest. Neither graphics normalization nor a ready-empty
+scan permits missing geometry, unsealed units, cross-session or cross-version reuse.
 
 Compiler 0.14.3 also accepts NESQL 0.15.4's explicit `scope: recipes` exports.
 That scope must match the environment, name explicit handlers and a world, and

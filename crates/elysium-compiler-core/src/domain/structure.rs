@@ -1,6 +1,6 @@
-use super::{check::origin, content_id, origin_id, Appearance, Domain, Kind, Origin};
-use crate::identity::{registry_name, Nbt};
-use anyhow::{ensure, Context, Result};
+use super::{Appearance, Domain, Kind, Origin, check::origin, content_id, origin_id};
+use crate::identity::{Nbt, registry_name};
+use anyhow::{Context, Result, ensure};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -40,6 +40,21 @@ pub enum BuildMethod {
     Survival,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ConstructionFacing {
+    North,
+    South,
+}
+
+/// A native display provider can intentionally supply geometry before gameplay completion.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum BuildCompletion {
+    NativeDisplayBeforeControllerTick,
+    NativeDisplayBeforeUnavailableTileTick,
+}
+
 /// A whole construction preview, not a claim that every runtime machine condition passes.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -50,8 +65,15 @@ pub struct Build {
     pub method: BuildMethod,
     /// The survival constructor's final result; creative construction has no return code.
     pub result: Option<i32>,
-    /// Coordinates are east, down, north, with the controller facing south.
+    /// Coordinates are east, down, north, independent of the native construction orientation.
     pub size: [u32; 3],
+    /// GT uses south; the pinned compatibility wrapper uses ExtendedFacing.DEFAULT (north).
+    /// Historical GT builds omit this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub facing: Option<ConstructionFacing>,
+    /// Present only for the pinned Botania enchanter's StructureLib display provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completion: Option<BuildCompletion>,
     pub controller: [u32; 3],
     /// Dummy-world coordinate of local [0, 0, 0]; never a player-world position.
     pub origin: [i32; 3],
@@ -64,6 +86,14 @@ pub struct Build {
 }
 
 /// A StructureLib definition, not a claim that one assembled machine passes its world checks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum DefinitionKind {
+    Structurelib,
+    Construction,
+    Gtconstruction,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Structure {
@@ -72,12 +102,231 @@ pub struct Structure {
     pub name: String,
     pub controller: String,
     pub description: Vec<String>,
+    /// Older structure records omit this field and use enumerable StructureLib definitions.
+    /// Construction providers supply actual builds, not invented definition pieces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub definition_kind: Option<DefinitionKind>,
     /// First requested parameter set, used for definition placement hints.
     pub probe: Probe,
     pub pieces: Vec<Piece>,
     pub variants: Vec<Variant>,
     /// An explicit missing definition is allowed only in a selection snapshot.
     pub problem: Option<String>,
+}
+
+#[cfg(test)]
+mod construction_only_tests {
+    use super::*;
+    fn fixture() -> Domain {
+        let source = crate::source::Source::open(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../contracts/fixtures/source-semantic-40"),
+        )
+        .unwrap();
+        let mut domain = Domain::load(&source).unwrap();
+        domain.structures.clear();
+        domain.builds.clear();
+        domain.shapes.clear();
+        domain.blocks.clear();
+        domain.models.clear();
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../contracts/fixtures/compat-structure-contract.json"
+        ))
+        .unwrap();
+        for row in fixture["records"].as_array().unwrap() {
+            match row["kind"].as_str().unwrap() {
+                "structures" => domain
+                    .structures
+                    .push(serde_json::from_value(row["value"].clone()).unwrap()),
+                "builds" => domain
+                    .builds
+                    .push(serde_json::from_value(row["value"].clone()).unwrap()),
+                "shapes" => domain
+                    .shapes
+                    .push(serde_json::from_value(row["value"].clone()).unwrap()),
+                "blocks" => domain
+                    .blocks
+                    .push(serde_json::from_value(row["value"].clone()).unwrap()),
+                "strings" => domain
+                    .strings
+                    .push(serde_json::from_value(row["value"].clone()).unwrap()),
+                _ => panic!("Unexpected native geometry fixture table"),
+            }
+        }
+        domain
+    }
+    fn check(domain: &Domain, complete: bool) -> Result<()> {
+        let probes = vec![domain.structures[0].probe.clone()];
+        validate(
+            domain,
+            complete,
+            &probes,
+            &|id| {
+                ensure!(
+                    domain.strings.iter().any(|text| text.id == id),
+                    "missing fixture text"
+                );
+                Ok(())
+            },
+            &|kind, id| {
+                ensure!(
+                    kind == Kind::Item
+                        && (id == domain.structures[0].controller
+                            || domain
+                                .blocks
+                                .iter()
+                                .any(|block| block.item.as_deref() == Some(id))),
+                    "missing fixture item"
+                );
+                Ok(())
+            },
+        )
+    }
+    #[test]
+    fn construction_only_java_geometry_is_accepted() {
+        let domain = fixture();
+        check(&domain, false).unwrap();
+        assert_eq!(domain.structures[0].pieces.len(), 0);
+        assert_eq!(domain.builds[0].cells, 2);
+        assert!(
+            check(&domain, true).is_err(),
+            "Complete geometry still requires native models"
+        );
+    }
+    #[test]
+    fn construction_only_geometry_cannot_be_omitted_or_rebound() {
+        let mut domain = fixture();
+        domain.builds.clear();
+        assert!(check(&domain, false).is_err());
+        let mut domain = fixture();
+        domain.builds[0].structure = "structure_wrong".into();
+        domain.builds[0].id = content_id("build", &domain.builds[0]).unwrap();
+        domain.structures[0].variants[0].build = Some(domain.builds[0].id.clone());
+        assert!(check(&domain, false).is_err());
+    }
+
+    fn gt_fixture() -> Domain {
+        let mut domain = fixture();
+        let controller = crate::identity::item_id("gregtech:gt.blockmachines", 1172, None).unwrap();
+        let mut item = domain.items[0].clone();
+        item.id = controller.clone();
+        item.registry = "gregtech:gt.blockmachines".into();
+        item.meta = 1172;
+        item.nbt = None;
+        domain.items.push(item);
+        let structure = &mut domain.structures[0];
+        structure.source = Origin {
+            owner: "gregtech".into(),
+            handler: "gregtech.common.tileentities.machines.multi.MTECleanroom".into(),
+            key: "1172".into(),
+        };
+        structure.id = origin_id("structure", &structure.source).unwrap();
+        structure.controller = controller;
+        let mut value = serde_json::to_value(&*structure).unwrap();
+        value["definitionKind"] = "gtconstruction".into();
+        *structure = serde_json::from_value(value).expect("GT construction needs an explicit contract");
+        let build = &mut domain.builds[0];
+        build.structure = structure.id.clone();
+        build.facing = Some(ConstructionFacing::South);
+        build.id = content_id("build", build).unwrap();
+        structure.variants[0].build = Some(build.id.clone());
+        domain
+    }
+
+    #[test]
+    fn gt_construction_has_native_controller_binding_and_orientation() {
+        let domain = gt_fixture();
+        check(&domain, false).unwrap();
+        for field in ["owner", "handler", "key", "controller", "facing"] {
+            let mut invalid = gt_fixture();
+            match field {
+                "owner" => invalid.structures[0].source.owner = "foreign".into(),
+                "handler" => invalid.structures[0].source.handler = "foreign.Constructable".into(),
+                "key" => invalid.structures[0].source.key = "1173".into(),
+                "controller" => invalid.structures[0].controller = "item_foreign".into(),
+                "facing" => invalid.builds[0].facing = Some(ConstructionFacing::North),
+                _ => unreachable!(),
+            }
+            // Recompute content identities so each test reaches the native binding guard.
+            invalid.structures[0].id = origin_id("structure", &invalid.structures[0].source).unwrap();
+            invalid.builds[0].structure = invalid.structures[0].id.clone();
+            invalid.builds[0].id = content_id("build", &invalid.builds[0]).unwrap();
+            invalid.structures[0].variants[0].build = Some(invalid.builds[0].id.clone());
+            assert!(check(&invalid, false).is_err(), "GT provider lost {field} binding");
+        }
+    }
+
+    #[test]
+    fn botania_display_completion_is_explicit_and_cannot_be_rebound() {
+        let mut domain = fixture();
+        let controller = crate::identity::item_id("Botania:enchanter", 0, None).unwrap();
+        let source = Origin {
+            owner: "Botania".into(),
+            handler: "vazkii.botania.api.lexicon.multiblock.compat.MultiblockCompatRegistry$BotaniaMultiblockInfoContainer".into(),
+            key: format!("vazkii.botania.common.block.tile.TileEnchanter:{controller}"),
+        };
+        let id = origin_id("structure", &source).unwrap();
+        domain.structures[0].source = source;
+        domain.structures[0].id = id.clone();
+        domain.structures[0].controller = controller;
+        domain.builds[0].structure = id;
+        let mut value = serde_json::to_value(&domain.builds[0]).unwrap();
+        value["completion"] = "nativeDisplayBeforeControllerTick".into();
+        domain.builds[0] = serde_json::from_value(value).expect("Display completion must have a typed contract");
+        domain.builds[0].id = content_id("build", &domain.builds[0]).unwrap();
+        domain.structures[0].variants[0].build = Some(domain.builds[0].id.clone());
+        check(&domain, false).unwrap();
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../contracts/fixtures/botania-enchanter-structure-contract.json"
+        )).unwrap();
+        domain.builds.clear(); domain.blocks.clear(); domain.shapes.clear();
+        for row in native["records"].as_array().unwrap() {
+            match row["kind"].as_str().unwrap() {
+                "builds" => domain.builds.push(serde_json::from_value(row["value"].clone()).unwrap()),
+                "blocks" => domain.blocks.push(serde_json::from_value(row["value"].clone()).unwrap()),
+                "shapes" => domain.shapes.push(serde_json::from_value(row["value"].clone()).unwrap()),
+                _ => panic!("Unexpected native enchanter record"),
+            }
+        }
+        domain.structures[0].probe = domain.builds[0].probe.clone();
+        domain.structures[0].variants[0].probe = domain.builds[0].probe.clone();
+        domain.structures[0].variants[0].build = Some(domain.builds[0].id.clone());
+        check(&domain, false).unwrap();
+        assert_eq!(domain.builds[0].cells, 44);
+        domain.structures[0].source.handler = "foreign.Display".into();
+        domain.structures[0].id = origin_id("structure", &domain.structures[0].source).unwrap();
+        domain.builds[0].structure = domain.structures[0].id.clone();
+        domain.builds[0].id = content_id("build", &domain.builds[0]).unwrap();
+        domain.structures[0].variants[0].build = Some(domain.builds[0].id.clone());
+        assert!(check(&domain, false).is_err(), "An unrelated provider may not skip controller completion");
+    }
+
+    #[test]
+    fn railcraft_display_completion_is_bound_to_native_provider() {
+        let mut domain=fixture();
+        let controller=crate::identity::item_id("Railcraft:machine.alpha",15,None).unwrap();
+        let source=Origin{owner:"Railcraft".into(),handler:"net.glease.structurecompat.CompatRailcraft$SimpleMultiblockInfoContainer".into(),
+            key:format!("mods.railcraft.common.blocks.machine.alpha.TileRockCrusher:{controller}")};
+        domain.structures[0].id=origin_id("structure",&source).unwrap();
+        domain.structures[0].source=source;domain.structures[0].controller=controller;
+        domain.builds[0].structure=domain.structures[0].id.clone();
+        let mut raw=serde_json::to_value(&domain.builds[0]).unwrap();raw["completion"]="nativeDisplayBeforeUnavailableTileTick".into();
+        domain.builds[0]=serde_json::from_value(raw).expect("Unavailable display needs its own completion boundary");
+        domain.builds[0].id=content_id("build",&domain.builds[0]).unwrap();
+        domain.structures[0].variants[0].build=Some(domain.builds[0].id.clone());
+        check(&domain,false).unwrap();
+        let mut foreign=domain.clone();
+        foreign.structures[0].source.owner="foreign".into();
+        foreign.structures[0].id=origin_id("structure",&foreign.structures[0].source).unwrap();
+        foreign.builds[0].structure=foreign.structures[0].id.clone();
+        foreign.builds[0].id=content_id("build",&foreign.builds[0]).unwrap();
+        foreign.structures[0].variants[0].build=Some(foreign.builds[0].id.clone());
+        assert!(check(&foreign,false).is_err(),"A foreign provider cannot claim the Railcraft display boundary");
+        domain.builds[0].completion=None;domain.builds[0].id=content_id("build",&domain.builds[0]).unwrap();
+        domain.structures[0].variants[0].build=Some(domain.builds[0].id.clone());
+        // An enabled native preview may use the ordinary completion boundary.
+        check(&domain,false).unwrap();
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -214,10 +463,34 @@ pub(super) fn validate(
         for line in &structure.description {
             text(line)?;
         }
-        ensure!(
-            structure.problem.is_some() == structure.pieces.is_empty(),
-            "missing structure definition status"
-        );
+        if structure.definition_kind == Some(DefinitionKind::Construction) {
+            ensure!(
+                structure.pieces.is_empty()
+                    && structure.problem.is_none()
+                    && structure
+                        .source
+                        .key
+                        .ends_with(&format!(":{}", structure.controller)),
+                "construction-only provider cannot invent definition pieces or omit controller binding"
+            );
+        } else if structure.definition_kind == Some(DefinitionKind::Gtconstruction) {
+            let metadata = structure.source.key.parse::<i32>().context("GT construction controller metadata")?;
+            ensure!(
+                (0..=32767).contains(&metadata)
+                    && structure.source.key == metadata.to_string()
+                    && structure.source.owner == "gregtech"
+                    && structure.source.handler == "gregtech.common.tileentities.machines.multi.MTECleanroom"
+                    && structure.controller == crate::identity::item_id("gregtech:gt.blockmachines", metadata, None)?
+                    && structure.pieces.is_empty()
+                    && structure.problem.is_none(),
+                "GT construction-only provider must retain its native controller and omit invented pieces"
+            );
+        } else {
+            ensure!(
+                structure.problem.is_some() == structure.pieces.is_empty(),
+                "missing structure definition status"
+            );
+        }
         if let Some(problem) = &structure.problem {
             text(problem)?;
             ensure!(
@@ -262,6 +535,34 @@ pub(super) fn validate(
             ensure!(
                 build.probe == variant.probe,
                 "construction parameters differ from the requested variant"
+            );
+            let botania_display = structure.definition_kind == Some(DefinitionKind::Construction)
+                && structure.source.owner == "Botania"
+                && structure.source.handler == "vazkii.botania.api.lexicon.multiblock.compat.MultiblockCompatRegistry$BotaniaMultiblockInfoContainer"
+                && structure.controller == crate::identity::item_id("Botania:enchanter", 0, None)?
+                && structure.source.key == format!("vazkii.botania.common.block.tile.TileEnchanter:{}", structure.controller);
+            let rail_display = structure.definition_kind == Some(DefinitionKind::Construction)
+                && structure.source.owner == "Railcraft"
+                && structure.source.handler == "net.glease.structurecompat.CompatRailcraft$SimpleMultiblockInfoContainer"
+                && structure.controller == crate::identity::item_id("Railcraft:machine.alpha",15,None)?
+                && structure.source.key == format!("mods.railcraft.common.blocks.machine.alpha.TileRockCrusher:{}",structure.controller);
+            ensure!(
+                if botania_display {
+                    build.completion == Some(BuildCompletion::NativeDisplayBeforeControllerTick)
+                } else if rail_display {
+                    matches!(build.completion,None|Some(BuildCompletion::NativeDisplayBeforeUnavailableTileTick))
+                } else { build.completion.is_none() },
+                "native display completion differs from its bound provider"
+            );
+            ensure!(
+                match structure.definition_kind {
+                    Some(DefinitionKind::Construction) =>
+                        build.facing == Some(ConstructionFacing::North),
+                    Some(DefinitionKind::Gtconstruction) =>
+                        build.facing == Some(ConstructionFacing::South),
+                    _ => build.facing.is_none() || build.facing == Some(ConstructionFacing::South),
+                },
+                "native construction orientation differs from provider kind"
             );
             ensure!(build.notes.len() <= 128, "too many construction messages");
             for note in &build.notes {

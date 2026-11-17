@@ -34,6 +34,8 @@ pub struct Manifest {
     pub id: String,
     pub source: String,
     pub environment: String,
+    /// Actual game capture language, shared by all display text and search projections.
+    pub locale: String,
     pub compiler: String,
     pub scope: String,
     pub files: Vec<File>,
@@ -98,6 +100,9 @@ impl Manifest {
             !self.compiler.is_empty(),
             "catalog compiler version is required"
         );
+        ensure!(!self.locale.is_empty() && self.locale.len() <= 32
+            && self.locale.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'),
+            "invalid catalog locale");
         let mut previous = "";
         let mut paths = BTreeSet::new();
         let mut counts = BTreeMap::new();
@@ -305,6 +310,7 @@ impl Writer {
                 id: String::new(),
                 source: source.manifest.id.clone(),
                 environment: source.manifest.environment.clone(),
+                locale: source.environment()?.locale.clone(),
                 compiler: env!("CARGO_PKG_VERSION").to_owned(),
                 scope: source.manifest.scope.mode.clone(),
                 files: Vec::new(),
@@ -356,20 +362,30 @@ impl Writer {
         Ok(path)
     }
 
-    pub fn table<T>(
+    pub fn table<T: Serialize>(
         &mut self,
         kind: &str,
         rows: &[T],
-        wrap: impl Fn(&[T]) -> Table,
         id: impl Fn(&T) -> &str,
     ) -> Result<()> {
+        // Native inventory resources are fetched by the visible icon. Keep a
+        // lookup/model request from reading a 16 MiB general-purpose table page.
+        let (page_bytes, page_rows) = match kind {
+            "visuals" => (1024 * 1024, 64),
+            "recipes" => (256 * 1024, 128),
+            "items" | "textures" | "strings" => (256 * 1024, 512),
+            _ => (FILE_LIMIT, TABLE_ROWS),
+        };
         let mut start = 0;
         let mut part = 0;
         loop {
-            let mut end = rows.len().min(start + TABLE_ROWS);
+            let mut end = rows.len().min(start + page_rows);
             let bytes = loop {
-                let bytes = rmp_serde::to_vec_named(&wrap(&rows[start..end]))?;
-                if bytes.len() <= FILE_LIMIT {
+                let bytes = rmp_serde::to_vec_named(&TablePage {
+                    kind,
+                    records: &rows[start..end],
+                })?;
+                if bytes.len() <= page_bytes || (end-start == 1 && bytes.len() <= FILE_LIMIT) {
                     break bytes;
                 }
                 ensure!(
@@ -431,14 +447,16 @@ impl Writer {
             fs::rename(self.staging.path(), &target)
                 .context("publish immutable catalog directory")?;
         }
-        atomic_json(
-            &self.root.join("current.json"),
-            &Pointer {
+        let pointer = Pointer {
                 format: "elysium.catalog-pointer".to_owned(),
                 revision: REVISION,
                 id: self.manifest.id.clone(),
-            },
-        )?;
+            };
+        let locales = self.root.join("locales");
+        fs::create_dir_all(&locales)?;
+        require_plain(&locales)?;
+        atomic_json(&locales.join(format!("{}.json", self.manifest.locale)), &pointer)?;
+        atomic_json(&self.root.join("current.json"), &pointer)?;
         Ok(Publication {
             id: self.manifest.id,
             source: self.manifest.source,
@@ -447,6 +465,12 @@ impl Writer {
             bytes: self.manifest.files.iter().map(|file| file.bytes).sum(),
         })
     }
+}
+
+#[derive(Serialize)]
+struct TablePage<'a, T> {
+    kind: &'a str,
+    records: &'a [T],
 }
 
 pub fn atomic_json(path: &Path, value: &impl Serialize) -> Result<()> {
@@ -518,4 +542,85 @@ fn read(path: &Path, limit: usize) -> Result<Vec<u8>> {
 
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn borrowed_pages_preserve_owned_wire_bytes_without_cloning_records() {
+        #[derive(Serialize)]
+        struct TextSlice<'a> {
+            id: &'a str,
+            locale: &'a str,
+            text: &'a str,
+        }
+        let source = Source::open(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../contracts/fixtures/source-semantic-40"),
+        )
+        .unwrap();
+        for empty in [false, true] {
+            let output = tempfile::tempdir().unwrap();
+            let mut writer = Writer::new(output.path(), &source).unwrap();
+            let mut rows = vec![TextSlice {
+                id: "text_one",
+                locale: "en_US",
+                text: "exact page bytes",
+            }];
+            if empty {
+                rows.clear();
+            }
+            writer.table("strings", &rows, |row| row.id).unwrap();
+            let expected = Table::Strings(
+                rows.iter()
+                    .map(|row| crate::domain::Text {
+                        id: row.id.into(),
+                        locale: row.locale.into(),
+                        text: row.text.into(),
+                    })
+                    .collect(),
+            );
+            assert_eq!(writer.manifest.files.len(), 1);
+            assert_eq!(writer.manifest.files[0].rows, rows.len() as u64);
+            assert_eq!(
+                fs::read(writer.staging.path().join(&writer.manifest.files[0].path)).unwrap(),
+                rmp_serde::to_vec_named(&expected).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn lookup_pages_stay_small_without_rejecting_a_valid_large_single_record() {
+        let source = Source::open(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../contracts/fixtures/source-semantic-40"),
+        )
+        .unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let mut writer = Writer::new(output.path(), &source).unwrap();
+        // Writer envelope behavior is independent of the domain's text limits.
+        let rows: Vec<_> = [200, 200, 300]
+            .into_iter()
+            .enumerate()
+            .map(|(i, kib)| crate::domain::Text {
+                id: format!("text_{i:064x}"),
+                locale: "en_US".into(),
+                text: "x".repeat(kib * 1024),
+            })
+            .collect();
+        writer
+            .table("strings", &rows, |row| row.id.as_str())
+            .unwrap();
+        assert_eq!(writer.manifest.files.len(), 3);
+        assert!(
+            writer
+                .manifest
+                .files
+                .iter()
+                .all(|file| file.rows == 1 && file.bytes <= FILE_LIMIT as u64)
+        );
+        assert!(writer.manifest.files.last().unwrap().bytes > 256 * 1024);
+    }
 }

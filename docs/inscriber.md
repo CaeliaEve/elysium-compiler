@@ -1,6 +1,7 @@
 # AE2 Inscriber
 
-Source 21 / Catalog 20, compiler and contracts 0.21.0. This process describes
+The current producer uses Source 40 / Catalog 40. The Inscriber process shape is
+unchanged in contracts `0.40.0-semantic.66`. This process describes
 registered recipes in AE2 rv3-beta-695-GTNH, in the observed registry iteration
 order (`recipe.order`). They are conditional branches of one machine, not
 independent unconditional crafting recipes. Dynamic name-press operations precede
@@ -65,8 +66,34 @@ NeoNEI loads process-only item references and explains conditions in its existin
 details area. Reverse links remain observed input examples, not a general game
 matcher or proof that an arbitrary offered inventory can reach a later row.
 
-Native tests execute the pinned recipe/cache constructors and Platform comparator
-on owned objects. The isolated loader exposes NBTTagList.tagList to satisfy AE2's
-native direct access; it does not replace the comparator. TileInscriber routing is
-audited against bytecode; no actual tile ticking, AE network, GL or live registry
-coverage has been tested locally.
+The producer now reads the actual API registry fields before any NEI handler
+factory call. It never constructs CachedInscriberRecipe / PositionedStack and
+never writes a borrowed NEI recipe cache. The API, registry, native HashSet,
+material definitions, optional source, exact source owner and name-press item are
+bound by identity. Both native MaterialStackSrc and ItemStackSrc are supported;
+an absent optional means the name press is disabled. Arbitrary definition,
+recipe, storage and metadata callbacks are rejected before invocation.
+
+Per-batch checks cover roots, count and name-press values. Rows are owned snapshots;
+per-row checks cover their original definition and nested item/NBT identities.
+Sealing additionally checks the full native HashSet encounter order and every
+definition. Same-content replacement is drift. HashSet encounter order is not a
+cross-JVM stable identity, and this observation is not a cross-restart recovery
+proof. Snapshot content and identity bindings have aggregate budgets; close only
+releases owned state and is idempotent.
+
+The current Compiler requires this native Handler to retain the Inscriber process,
+even if its precise rules are also removed. NeoNEI enforces the same boundary in
+query hydration and HTTP recipe decoding. The material calculator lists results
+as conditional because earlier native registrations or name presses may win.
+The explicit declared bottom reference remains hydrated even when it is not a
+required ingredient. Older Inscriber process rows remain readable; no archived
+Source, Catalog or fixture is rewritten to satisfy the new gate.
+
+Native tests execute the pinned recipe/registry, precise Platform comparator and
+real TileInscriber.getTask on owned inventory and API fixtures. They cover first
+registry selection, swapped plates, top-absent precedence, name-press priority and
+the count-greater-than-one guard. Only bootstrap API/MaterialType initialization
+is isolated; recipe, stack-source, inventory, comparator and getTask bodies are
+native. This is not a live-game registry census, AE network, powered tick, GL or
+whole-pack language/pixel validation.

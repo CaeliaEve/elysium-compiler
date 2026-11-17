@@ -5,6 +5,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 impl Domain {
     pub fn validate(&self, source: &Source) -> Result<()> {
+        self.validate_records(source)?;
+        images::verify(source, &self.assets)
+    }
+
+    pub(crate) fn validate_records(&self, source: &Source) -> Result<()> {
+        visual::validate(&self.visuals, &self.assets)?;
         let programs = programs::reconstruct(&self.programs)?;
         let mut referenced_programs = BTreeSet::new();
         for category in &self.categories {
@@ -26,23 +32,81 @@ impl Domain {
             .map(|item| (item.id.as_str(), item))
             .collect();
         let fluids: BTreeSet<_> = self.fluids.iter().map(|fluid| fluid.id.as_str()).collect();
+        for program in programs.values(){if let programs::SharedProgram::Fmp(rules)=program{
+            for material in &rules.materials{let block=items.get(material.block.as_str()).context("FMP shared material block fact absent")?;
+                ensure!(block.registry!=rules.settings().micro_registry,"FMP full block cannot be a micro part");}
+        }}
+        for program in programs.values(){if let programs::SharedProgram::Xu(rules)=program{
+            for material in &rules.materials{let block=items.get(material.block.as_str()).context("XU shared material item fact absent")?;
+                ensure!(block.nbt.is_none(),"XU audited native block item cannot invent a tag");}
+        }}
         let fluid_records: BTreeMap<_, _> = self
             .fluids
             .iter()
             .map(|fluid| (fluid.id.as_str(), fluid))
             .collect();
         let texts: BTreeSet<_> = self.strings.iter().map(|text| text.id.as_str()).collect();
-        let views: BTreeMap<_, _> = self
-            .views
-            .iter()
-            .map(|view| (view.id.as_str(), view))
-            .collect();
+        let text_records:BTreeMap<_,_>=self.strings.iter().map(|text|(text.id.as_str(),text)).collect();
         let assets: BTreeSet<_> = self.assets.iter().map(|asset| asset.id.as_str()).collect();
         let categories: BTreeMap<_, _> = self
             .categories
             .iter()
             .map(|category| (category.id.as_str(), category))
             .collect();
+        references::validate(&self.references,&items)?;
+        forge_registry::validate_facts(&self.references,&fluid_records)?;
+        usage_queries::validate_facts(&self.references,&fluid_records)?;
+        structure_references::validate_facts(self)?;
+        betterquesting::validate_facts(&self.references,&fluid_records)?;
+        underground_fluids::validate_facts(&self.references,&fluid_records)?;
+        aspect_combinations::validate_facts(&self.references, &self.aspects)?;
+        nei_diagrams::validate_facts(&self.references, &fluid_records)?;
+        ender_storage::validate_facts(&self.references, &fluid_records)?;
+        let reference_domains: BTreeMap<_,_>=self.references.iter().filter_map(|row| {
+            match &row.data {
+                references::ReferenceData::CropsNhDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::UsageDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::ProjectBlueDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::LatheDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::FireworkDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::FurnaceFuelDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::Definition{source,..} => Some((row.domain.as_str(),source)),
+                references::ReferenceData::AspectCombinationsDefinition{source,..} => Some((row.domain.as_str(),source)),
+                references::ReferenceData::ItemAspectsDefinition{source,..} => Some((row.domain.as_str(),source)),
+                references::ReferenceData::LexiconDefinition{source,..} => Some((row.domain.as_str(),source)),
+                references::ReferenceData::MobDropsDefinition{source,..} => Some((row.domain.as_str(),source)),
+                references::ReferenceData::InfernalDropsDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::DraconicReactorDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::BeeTreeDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::ForestryAddonsDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::UndergroundFluidsDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::GtMineralsDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::BartworksOresDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::QuestsDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::StructureCatalogDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::VillagerProfession{source,..} => Some((row.domain.as_str(),source)),
+                references::ReferenceData::ToolMaterialsDefinition{source,..} => Some((row.domain.as_str(),source)),
+                references::ReferenceData::ForgeRegistryDefinition(def) => Some((row.domain.as_str(),&def.source)),
+                references::ReferenceData::NeiInformationDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::NeiDiagramDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::EnderStorageDefinition(definition) => Some((row.domain.as_str(),&definition.source)),
+                references::ReferenceData::NeiInformationPage(page) => Some((row.domain.as_str(),&page.source)),
+                references::ReferenceData::NeiInteractiveGroup{source,..} => Some((row.domain.as_str(),source)),
+                _ => None,
+            }
+        }).collect();
+        let mut used_reference_domains=BTreeSet::new();
+        for category in &self.categories {
+            if let Some(domain)=&category.reference {
+                let native=reference_domains.get(domain.as_str()).context("Category refers to a missing native reference domain")?;
+                ensure!(serde_json::to_value(&category.source)?==serde_json::to_value(native)?,
+                    "Reference category changed native source identity");
+                ensure!(used_reference_domains.insert(domain.as_str()) && category.program.is_none()
+                    && !self.recipes.iter().any(|recipe|recipe.category==category.id),
+                    "Native reference category became consuming recipes or shared machine program");
+            }
+        }
+        ensure!(used_reference_domains.len()==reference_domains.len(),"Unreferenced native Database domain");
         let text = |id: &str| -> Result<()> {
             ensure!(texts.contains(id), "missing string: {id}");
             Ok(())
@@ -64,14 +128,18 @@ impl Domain {
         ores::validate(self)?;
         magic::validate(self, &text, &reference, &asset)?;
         model::validate(self, &asset)?;
+        let environment = source.environment()?;
         structure::validate(
             self,
             source.manifest.scope.mode == "complete",
-            &source.environment()?.probes,
+            &environment.probes,
             &text,
             &reference,
         )?;
+        let locale = &environment.locale;
+        usage_queries::validate_locale(&self.references,locale)?;
         for record in &self.strings {
+            ensure!(record.locale == *locale, "string locale differs from source environment: {}", record.id);
             ensure!(
                 record.id == content_id("text", record)?,
                 "string identity mismatch: {}",
@@ -147,6 +215,7 @@ impl Domain {
                 category.id
             );
             text(&category.name)?;
+            notes(&category.notes, &text)?;
             if let Some(icon) = &category.icon {
                 reference(icon.kind, &icon.id)?;
             }
@@ -156,12 +225,6 @@ impl Domain {
                 ensure!(
                     machines.insert((machine.kind, &machine.id)),
                     "duplicate category machine"
-                );
-            }
-            if let Some(view) = &category.view {
-                ensure!(
-                    views.contains_key(view.as_str()),
-                    "missing category view: {view}"
                 );
             }
         }
@@ -191,111 +254,9 @@ impl Domain {
                 );
             }
         }
-        let tracks: BTreeSet<_> = self.tracks.iter().map(|track| track.id.as_str()).collect();
-        ensure!(tracks.len() == self.tracks.len(), "duplicate UI track");
-        let mut used_tracks = BTreeSet::new();
-        for track in &self.tracks {
-            ensure!(
-                track.id == content_id("track", track)?,
-                "UI track identity mismatch"
-            );
-            motion(&track.frames)?;
-        }
-        for view in &self.views {
-            ensure!(
-                view.id == content_id("view", view)?,
-                "view identity mismatch: {}",
-                view.id
-            );
-            dimensions(view.width, view.height, 4096)?;
-            ensure!(
-                view.elements.len() <= 8192,
-                "view has too many elements: {}",
-                view.id
-            );
-            for element in &view.elements {
-                match element {
-                    Element::Clip {
-                        asset: id,
-                        x,
-                        y,
-                        width,
-                        height,
-                        z,
-                        track,
-                    } => {
-                        asset(id)?;
-                        rectangle(*x, *y, *width, *height, *z)?;
-                        ensure!(tracks.contains(track.as_str()), "missing UI track");
-                        used_tracks.insert(track.as_str());
-                    }
-                    Element::Sprite {
-                        asset: id,
-                        x,
-                        y,
-                        width,
-                        height,
-                        z,
-                    } => {
-                        asset(id)?;
-                        rectangle(*x, *y, *width, *height, *z)?;
-                    }
-                    Element::Slot {
-                        x,
-                        y,
-                        width,
-                        height,
-                        z,
-                        slot,
-                        ..
-                    } => {
-                        ensure!(*slot <= 65535, "invalid view slot");
-                        rectangle(*x, *y, *width, *height, *z)?;
-                    }
-                    Element::Cost {
-                        index,
-                        x,
-                        y,
-                        width,
-                        height,
-                        z,
-                    } => {
-                        ensure!(*index < 4096, "invalid view cost index");
-                        rectangle(*x, *y, *width, *height, *z)?;
-                    }
-                    Element::Rectangle {
-                        x,
-                        y,
-                        width,
-                        height,
-                        z,
-                        ..
-                    } => rectangle(*x, *y, *width, *height, *z)?,
-                    Element::Tooltip {
-                        x,
-                        y,
-                        width,
-                        height,
-                        z,
-                        lines,
-                    } => {
-                        rectangle(*x, *y, *width, *height, *z)?;
-                        for line in lines {
-                            text(line)?;
-                        }
-                    }
-                    Element::Text {
-                        text: id, x, y, z, ..
-                    } => {
-                        text(id)?;
-                        position(*x, *y, *z)?;
-                    }
-                }
-            }
-        }
-        ensure!(used_tracks == tracks, "unreferenced UI track");
         for recipe in &self.recipes {
             origin(&recipe.source)?;
+            gt_probability::validate(recipe, &reference)?;
             ensure!(
                 recipe.id == recipe_id(recipe)?,
                 "recipe identity mismatch: {}",
@@ -332,13 +293,42 @@ impl Domain {
                     );
                 }
                 ensure!(
-                    !slots.is_empty() && slots.len() == recipe.inputs.len(),
+                    !slots.is_empty() && (matches!(recipe.process,Some(Process::ForestryFabricator(_) | Process::ForestryProcessing(_)))
+                        || slots.len() == recipe.inputs.len()),
                     "crafting grid omits recipe inputs"
                 );
             }
             let mut inputs = BTreeSet::new();
+            native_crafting::validate(recipe)?;
             process::validate(recipe, &fluid_records, &items, &self.aspects)?;
+            if let Some(Process::NativeBotaniaPool(process))=&recipe.process{
+                let programs::SharedProgram::BeePool(rules)=programs.get(&process.program).context("Missing native pool shared program")?
+                    else{bail!("Native pool linked to another program family");};
+                botania_pool::validate_program(process,recipe,rules,category,&items)?;
+            }
+            ensure!(!recipe.inputs.iter().flat_map(|i|&i.choices).any(|c|matches!(c.rule,Match::NativePoolInput))
+                ||matches!(recipe.process,Some(Process::NativeBotaniaPool(_))),"Native pool display requires its paired process");
+            if let Some(Process::FmpMicroblock(process))=&recipe.process{
+                let programs::SharedProgram::Fmp(rules)=programs.get(&process.program).context("Missing FMP shared program")?
+                    else{bail!("FMP linked to another native program family");};
+                fmp::validate_program(process,recipe,rules,category,&items)?;
+            }
+            if let Some(Process::XuMicroblock(process))=&recipe.process{
+                let programs::SharedProgram::Xu(rules)=programs.get(&process.program).context("Missing XU shared material program")?
+                    else{bail!("XU linked to another native program family");};
+                xu_microblock::validate_program(process,recipe,rules,category,&items)?;
+            }
             forestry::recipes::validate(recipe, &programs, category, &items, &fluid_records)?;
+            if let Some(Process::ForestryFabricator(process)) = &recipe.process {
+                let programs::SharedProgram::Fabricator(program) = programs.get(&process.program).context("Missing Fabricator program")?
+                    else {bail!("Fabricator recipe linked to a different machine program");};
+                fabricator::validate_recipe(process,recipe,program,category,&items,&fluid_records)?;
+            }
+            if let Some(Process::ForestryProcessing(process)) = &recipe.process {
+                let programs::SharedProgram::Processing(program) = programs.get(&process.program).context("Missing Forestry processing program")?
+                    else {bail!("Forestry processing recipe linked to a different machine program");};
+                forestry_processing::validate_recipe(process,recipe,program,category,&items,&fluid_records)?;
+            }
             for input in &recipe.inputs {
                 ensure!(
                     input.slot <= 65535 && inputs.insert((input.kind, input.slot)),
@@ -357,6 +347,8 @@ impl Domain {
                             matches!(
                                 choice.rule,
                                 Match::Exact
+                                    | Match::NativeZeroFluid { .. }
+                                    | Match::LumbermillTank
                                     | Match::Wildcard {
                                         meta: false,
                                         nbt: true
@@ -366,7 +358,17 @@ impl Domain {
                         );
                     }
                     reference(input.kind, &choice.id)?;
-                    if matches!(choice.rule, Match::Forestry) {
+                    if let Consumption::GtTool {cost,owner,sample} = &choice.consume {
+                        ensure!(input.kind == Kind::Item, "GT crafting tool cannot be a fluid");
+                        gt_tool::validate(recipe, choice, items.get(choice.id.as_str()).context("missing GT tool specimen")?, *cost, owner, sample)?;
+                    }
+                    if let Consumption::NativeContainer { callback } = choice.consume {
+                        ensure!(input.kind == Kind::Item, "native crafting container cannot be a fluid");
+                        super::native_container::validate(recipe, choice, items.get(choice.id.as_str()).context("missing native container specimen")?, callback)?;
+                    }
+                    if let Match::NativeZeroFluid { policy } = choice.rule {
+                        native_zero_fluid(recipe, input, choice, policy)?;
+                    } else if matches!(choice.rule, Match::Forestry) {
                         integer(&choice.amount, i64::from(i32::MIN), i64::from(i32::MAX))?;
                     } else {
                         integer(&choice.amount, 1, i64::MAX)?;
@@ -382,15 +384,27 @@ impl Domain {
                             "invalid durability consumption"
                         );
                     }
+                    if let Consumption::Chance { chance: probability } = &choice.consume {
+                        ensure!(recipe.gt_native.is_some() ||
+                            input.kind == Kind::Item && matches!(recipe.process,Some(Process::GendustryGenetics(_))),
+                            "conditional consumption requires a typed native RNG process");
+                        chance(probability)?;
+                    }
                     if matches!(choice.consume, Consumption::Stack) {
+                        // A decay chest replaces the whole stored slot under its checked lifecycle.
+                        let decay = matches!(recipe.process,Some(Process::DecayChest(_)));
                         ensure!(
                             input.kind == Kind::Item
-                                && matches!(choice.rule, Match::Member { .. })
+                                && (decay || matches!(recipe.process,Some(Process::NativeInfusion(_)|Process::DisguiseInfusion(_)|Process::NativeRunic(_))) || matches!((&choice.rule, &recipe.process),
+                                    (Match::BloodAltar { .. }, Some(Process::BloodAltar(p))) if !p.can_be_filled)
+                                    || matches!((&choice.rule, &recipe.process),
+                                        (Match::ChiselSource { .. }, Some(Process::Chisel(p))) if p.mode == super::chisel::ChiselMode::Stack)
+                                    || matches!(choice.rule, Match::Member { .. })
                                 && recipe.outputs.iter().any(|output| output
                                     .change
                                     .as_ref()
                                     .is_some_and(|change| change.input == input.slot
-                                        && matches!(change.action, Edit::Analyze))),
+                                        && matches!(change.action, Edit::Analyze)))),
                             "whole-stack consumption requires native analysis"
                         );
                     }
@@ -430,123 +444,49 @@ impl Domain {
                 text(&property.name)?;
                 property_value(&property.value, &text, &reference, 0)?;
             }
-            if let Some(id) = recipe.view.as_ref().or(category.view.as_ref()) {
-                let view = views
-                    .get(id.as_str())
-                    .with_context(|| format!("missing recipe view: {id}"))?;
-                for element in &view.elements {
-                    if let Element::Cost { index, .. } = element {
-                        ensure!(
-                            recipe
-                                .magic
-                                .as_ref()
-                                .is_some_and(|magic| (*index as usize) < magic.aspects.len()),
-                            "view refers to a missing magic cost"
-                        );
-                    }
-                    if let Element::Slot {
-                        direction,
-                        substance,
-                        slot,
-                        ..
-                    } = element
-                    {
-                        match direction {
-                            Direction::Input => {
-                                ensure!(
-                                    inputs.contains(&(*substance, *slot)),
-                                    "view refers to a missing input slot"
-                                );
-                            }
-                            Direction::Output => {
-                                ensure!(
-                                    outputs.contains(&(*substance, *slot)),
-                                    "view refers to a missing output slot"
-                                );
-                            }
-                        }
-                    }
-                }
-            }
+            notes(&recipe.notes, &text)?;
+            botania::validate_observations(recipe,&text_records,&locale)?;
         }
-        let files: BTreeMap<_, _> = source
-            .files("asset")
-            .map(|file| (file.path.as_str(), file))
-            .collect();
-        let mut used = BTreeSet::new();
-        for asset in &self.assets {
-            ensure!(
-                asset.id == content_id("asset", asset)?,
-                "asset identity mismatch: {}",
-                asset.id
-            );
-            let file = files
-                .get(asset.path.as_str())
-                .with_context(|| format!("undeclared asset file: {}", asset.path))?;
-            used.insert(asset.path.as_str());
-            dimensions(asset.width, asset.height, 16384)?;
-            ensure!(
-                asset.width as u64 * asset.height as u64 <= 16 * 1024 * 1024,
-                "asset exceeds 16 million pixels: {}",
-                asset.id
-            );
-            ensure!(
-                asset.frames.len() <= 4096 && !asset.source.location.is_empty(),
-                "invalid asset source or animation"
-            );
-            ensure!(
-                !asset.interpolate || !asset.frames.is_empty(),
-                "still asset cannot interpolate"
-            );
-            let mut frame_size = None;
-            for frame in &asset.frames {
-                dimensions(frame.width, frame.height, 4096)?;
-                ensure!(
-                    frame.x as u64 + frame.width as u64 <= asset.width as u64
-                        && frame.y as u64 + frame.height as u64 <= asset.height as u64,
-                    "animation crop exceeds asset bounds: {}",
-                    asset.id
-                );
-                ensure!(
-                    frame.ticks > 0 && frame.ticks <= 72000,
-                    "invalid animation duration"
-                );
-                let size = (frame.width, frame.height);
-                if let Some(previous) = frame_size {
-                    ensure!(
-                        size == previous,
-                        "animation frames must have equal dimensions"
-                    );
-                }
-                frame_size = Some(size);
-            }
-            let bytes = source.read_file(file)?;
-            let format = match file.encoding.as_str() {
-                "png" => image::ImageFormat::Png,
-                "webp" => image::ImageFormat::WebP,
-                _ => bail!("unsupported image encoding"),
-            };
-            let mut reader = image::ImageReader::with_format(std::io::Cursor::new(bytes), format);
-            let mut limits = image::Limits::default();
-            limits.max_image_width = Some(asset.width);
-            limits.max_image_height = Some(asset.height);
-            limits.max_alloc = Some(128 * 1024 * 1024);
-            reader.limits(limits);
-            let decoded = reader
-                .decode()
-                .with_context(|| format!("decode asset {}", asset.id))?;
-            ensure!(
-                decoded.width() == asset.width && decoded.height() == asset.height,
-                "asset dimensions differ from pixels: {}",
-                asset.id
-            );
-        }
-        ensure!(
-            used.len() == files.len(),
-            "source declares orphaned image files"
-        );
-        Ok(())
+        images::validate_metadata(source, &self.assets)
     }
+}
+
+fn native_zero_fluid(recipe: &Recipe, input: &Input, choice: &Choice, policy: NativeZeroFluidPolicy) -> Result<()> {
+    ensure!(input.kind == Kind::Fluid && choice.amount == "0"
+        && matches!(choice.consume, Consumption::Keep) && choice.returns.is_empty(),
+        "native zero fluid must retain a zero amount without debit/returns");
+    match policy {
+        NativeZeroFluidPolicy::BinnieIncubator => ensure!(
+            recipe.source.handler=="binnie.genetics.nei.IncubatorRecipeHandler" && input.slot==0
+                && matches!(&recipe.process,Some(Process::BinnieGenetics(binnie_genetics::GeneticsProcess::Incubator(p))) if p.recipe.fluid_input.amount==0),
+            "Incubator zero matching requires its native fluid-presence process"),
+        NativeZeroFluidPolicy::VatMatch => ensure!(
+            recipe.source.handler == "crazypants.enderio.nei.VatRecipeHandler"
+                && matches!(recipe.process, Some(Process::Vat { .. })),
+            "VAT zero matching requires its native table process"),
+        NativeZeroFluidPolicy::GregtechCost | NativeZeroFluidPolicy::GregtechPresence => {
+            ensure!(matches!(recipe.source.handler.as_str(),
+                "gregtech.nei.GTNEIDefaultHandler" | "bartworks.neiHandler.BioLabNEIHandler" | "bartworks.neiHandler.BioVatNEIHandler")
+                && recipe.process.is_none(), "GT zero-cost policy requires an ordinary native GT recipe");
+            let rock_breaker = recipe.source.key.starts_with("gtpp.recipe.multiblockrockbreaker/");
+            ensure!(rock_breaker == (policy == NativeZeroFluidPolicy::GregtechPresence),
+                "GT zero-cost/presence policy differs from the native machine family");
+            if rock_breaker {
+                let fluids: Vec<_> = recipe.inputs.iter().filter(|i| i.kind == Kind::Fluid).collect();
+                ensure!(fluids.len() == 2, "Rock breaker requires both native fluid presence conditions");
+                for (slot, registry) in [(0, "water"), (1, "lava")] {
+                    let requirement = fluids.iter().find(|i| i.slot == slot).context("Missing native rock breaker fluid slot")?;
+                    ensure!(requirement.choices.len() == 1, "Rock breaker fluid presence is not an alternative");
+                    let value = &requirement.choices[0];
+                    ensure!(value.id == fluid_id(registry, None)? && value.amount == "0"
+                        && matches!(value.rule, Match::NativeZeroFluid { policy: NativeZeroFluidPolicy::GregtechPresence })
+                        && matches!(value.consume, Consumption::Keep) && value.returns.is_empty(),
+                        "Rock breaker fluid presence differs from native water/lava identities");
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn origin(value: &Origin) -> Result<()> {
@@ -565,21 +505,6 @@ fn dimensions(width: u32, height: u32, limit: u32) -> Result<()> {
         "invalid dimensions {width}x{height}"
     );
     Ok(())
-}
-
-fn position(x: i32, y: i32, z: i32) -> Result<()> {
-    ensure!(
-        (-65536..=65536).contains(&x)
-            && (-65536..=65536).contains(&y)
-            && (-65536..=65536).contains(&z),
-        "view coordinate exceeds range"
-    );
-    Ok(())
-}
-
-fn rectangle(x: i32, y: i32, width: u32, height: u32, z: i32) -> Result<()> {
-    position(x, y, z)?;
-    dimensions(width, height, 16384)
 }
 
 pub(super) fn chance(chance: &Chance) -> Result<()> {
@@ -614,51 +539,6 @@ pub(super) fn scalar(value: &str, minimum: f32, maximum: f32) -> Result<f32> {
         "rendering coordinate outside bounds"
     );
     Ok(number)
-}
-
-fn motion(frames: &[Motion]) -> Result<()> {
-    ensure!(
-        !frames.is_empty() && frames.len() <= 4096,
-        "invalid UI motion frame budget"
-    );
-    let mut total = 0u64;
-    for (index, frame) in frames.iter().enumerate() {
-        ensure!(
-            frame.ticks > 0 && frame.ticks <= 72000 && frame.areas.len() <= 16,
-            "invalid UI motion state"
-        );
-        total += u64::from(frame.ticks);
-        ensure!(
-            total <= 72000,
-            "UI motion cycle exceeds its duration budget"
-        );
-        ensure!(
-            index == 0 || frames[index - 1].areas != frame.areas,
-            "UI motion repeats consecutive states"
-        );
-        let mut areas: Vec<[f32; 4]> = Vec::new();
-        for area in &frame.areas {
-            let rect = [
-                scalar(&area[0], 0.0, 1.0)?,
-                scalar(&area[1], 0.0, 1.0)?,
-                scalar(&area[2], 0.0, 1.0)?,
-                scalar(&area[3], 0.0, 1.0)?,
-            ];
-            ensure!(
-                rect[0] < rect[2] && rect[1] < rect[3],
-                "empty or reversed UI clipping area"
-            );
-            ensure!(
-                areas.iter().all(|other| rect[2] <= other[0]
-                    || rect[0] >= other[2]
-                    || rect[3] <= other[1]
-                    || rect[1] >= other[3]),
-                "overlapping UI clipping areas"
-            );
-            areas.push(rect);
-        }
-    }
-    Ok(())
 }
 
 fn decimal(value: &str) -> Result<()> {
@@ -730,6 +610,21 @@ pub(super) fn property_value(
                 property_value(value, text, reference, depth + 1)?;
             }
         }
+    }
+    Ok(())
+}
+
+
+fn notes(notes: &[Note], text: &impl Fn(&str) -> Result<()>) -> Result<()> {
+    ensure!(notes.len() <= 256, "too many native notes");
+    let mut keys = BTreeSet::new();
+    for note in notes {
+        ensure!(note.key.len() <= 256, "native note key exceeds 256 bytes");
+        property_key(&note.key)?;
+        ensure!(keys.insert(&note.key), "duplicate native note key");
+        ensure!(!note.source.is_empty() && note.source.len() <= 512
+            && !note.source.chars().any(char::is_control), "invalid native note source");
+        text(&note.text)?;
     }
     Ok(())
 }

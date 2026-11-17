@@ -30,7 +30,7 @@ try {
   const schema = join(temporary, 'schema.json');
   run(['schema', '--output', schema]);
   assert.deepEqual(JSON.parse(readFileSync(schema, 'utf8')), JSON.parse(readFileSync(join(root, 'contracts/schema.json'), 'utf8')), 'Release schema differs from the packaged contract');
-  const input = join(root, 'contracts/fixtures/source'), output = join(temporary, 'catalog');
+  const input = join(root, 'contracts/fixtures/source-semantic-40'), output = join(temporary, 'catalog');
   run(['inspect', '--input', input]);
   const publication = run(['compile', '--input', input, '--output', output]);
   const repeated = run(['compile', '--input', input, '--output', output]);

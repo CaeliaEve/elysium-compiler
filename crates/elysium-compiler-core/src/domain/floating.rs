@@ -2,11 +2,82 @@ use super::{Consumption, Edit, Item, Kind, Match, OutputRole, Recipe};
 use anyhow::{ensure, Context, Result};
 use std::collections::BTreeMap;
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFloatingFlowers {
+    pub version: String,
+    pub special: Vec<u32>,
+    pub coercions: Vec<Coercion>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Coercion {
+    pub input: String,
+    pub value: String,
+}
+
+/// String/absent tags are independently reproducible. Other types use a bound native
+/// observation: canonical compounds do not preserve NBTTagCompound's storage order.
+pub(super) fn validate_native(p: &NativeFloatingFlowers, r: &Recipe, items: &BTreeMap<&str, &Item>) -> Result<()> {
+    use crate::identity::{item_id, Nbt};
+    use std::collections::BTreeSet;
+    let n=r.inputs.len(); let start=n.checked_sub(p.special.len()).context("invalid special count")?;
+    ensure!(p.version=="1.12.28-GTNH" && r.source.owner=="Botania"
+        && r.source.handler=="vazkii.botania.client.integration.nei.recipe.RecipeHandlerFloatingFlowers"
+        && (2..=9).contains(&n) && start>0 && !p.special.is_empty()
+        && p.special.iter().copied().eq(start as u32..n as u32), "invalid native floating flower branch");
+    ensure!(r.grid.is_none() && r.magic.is_none() && r.duration.is_none()
+        && r.energy.is_none() && r.properties.is_empty() && r.outputs.len()==1, "invalid native flower shape");
+    let last=&r.inputs[n-1];
+    ensure!(!p.coercions.is_empty() && p.coercions.len()<=4096 && p.coercions.len()==last.choices.len(), "missing native coercions");
+    let mut roles=Vec::new();
+    for (slot,input) in r.inputs.iter().enumerate() {
+        ensure!(input.kind==Kind::Item && input.slot==slot as u32 && !input.choices.is_empty()
+            && (slot==n-1 || input.choices.len()==1), "invalid flower examples");
+        let mut registry=None;
+        for choice in &input.choices {
+            ensure!(choice.amount=="1" && matches!(choice.consume,Consumption::Consume) && choice.returns.is_empty()
+                && matches!(choice.rule,Match::Wildcard{meta:true,nbt:true}), "native flowers ignore tags and metadata");
+            let item=items.get(choice.id.as_str()).context("missing flower example")?;
+            ensure!(registry.is_none_or(|value| value==item.registry.as_str()),"flower role has different registries");
+            registry=Some(item.registry.as_str());
+        }
+        roles.push(registry.context("empty flower role")?);
+    }
+    ensure!(roles[0]!=roles[start] && roles.iter().enumerate().all(|(i,value)|*value==roles[if i<start {0}else{start}]),"flower roles disagree");
+    let out=&r.outputs[0]; let change=out.change.as_ref().context("missing native flower change")?;
+    let Edit::NativeFloatingFlower{base}=&change.action else {anyhow::bail!("native flower action required");};
+    let base=items.get(base.as_str()).context("missing native flower base")?;
+    ensure!(base.meta==0 && !roles.contains(&base.registry.as_str()) && out.kind==Kind::Item && out.slot==0
+        && matches!(out.role,OutputRole::Result) && out.amount.as_deref()==Some("1") && out.quantity.is_none()
+        && out.chance.numerator=="1" && out.chance.denominator=="1" && change.input==n as u32-1
+        && change.bindings.is_none() && change.samples.len()==last.choices.len(),"invalid native flower output");
+    let mut ids=BTreeSet::new(); let mut bytes=0usize;
+    for ((observation,choice),sample) in p.coercions.iter().zip(&last.choices).zip(&change.samples) {
+        bytes=bytes.checked_add(observation.value.len()).context("coercion budget overflow")?;
+        ensure!(observation.input==choice.id && ids.insert(&observation.input)
+            && observation.value.encode_utf16().count()<=16384 && bytes<=1024*1024,"invalid native coercion binding");
+        let offered=items.get(choice.id.as_str()).context("missing coerced input")?;
+        let tag=match &offered.nbt {None=>None,Some(Nbt::Compound{value})=>value.get("type"),_=>anyhow::bail!("invalid flower root tag")};
+        match tag {
+            None=>ensure!(observation.value.is_empty(),"missing type must read as empty"),
+            Some(Nbt::String{value})=>ensure!(*value==observation.value,"string type coercion changed"),
+            Some(_)=>{},
+        }
+        let nbt=Nbt::Compound{value:BTreeMap::from([("type".into(),Nbt::String{value:observation.value.clone()})])};
+        ensure!(sample.amount=="1" && sample.id==item_id(&base.registry,0,Some(&nbt))? && items.contains_key(sample.id.as_str()),"native flower sample is not a fresh coerced type");
+    }
+    ensure!(out.id==change.samples[0].id,"native flower default differs from first sample");
+    Ok(())
+}
+
 pub(super) fn validate(
     recipe: &Recipe,
     special: &[u32],
     items: &BTreeMap<&str, &Item>,
 ) -> Result<()> {
+    ensure!(recipe.properties.is_empty(),"Floating flower rules cannot contain GUI or fixed English properties");
     let count = recipe.inputs.len();
     ensure!(
         (2..=9).contains(&count) && !special.is_empty() && special.len() < count,
@@ -185,7 +256,7 @@ mod tests {
                 .collect();
             let choice = |id: &str, rule: Value| json!({"id":id,"amount":"1","rule":rule,"consume":{"kind":"consume"},"returns":[]});
             let mut r = json!({"id":"recipe_flower","source":{"owner":"Botania","handler":"vazkii.botania.client.integration.nei.recipe.RecipeHandlerFloatingFlowers","key":"flowers"},
-                "category":"category_flowers","order":0,"duration":null,"energy":null,"grid":null,"magic":null,"view":null,"properties":{},
+                "category":"category_flowers","order":0,"duration":null,"energy":null,"grid":null,"magic":null,"properties":{},
                 "process":{"kind":"floatingFlowers","special":[1,2]},
                 "inputs":[{"kind":"item","slot":0,"choices":[choice(&floating.id,json!({"kind":"wildcard","meta":true,"nbt":true}))]},
                     {"kind":"item","slot":1,"choices":[choice(&flower.id,json!({"kind":"wildcard","meta":true,"nbt":true}))]},

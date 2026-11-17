@@ -9,6 +9,17 @@ use std::collections::BTreeSet;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Quantity {
+    /// Native in-world yield depends on power, settings and output acceptance.
+    #[serde(rename="spaceAcquisition")]
+    SpaceAcquisition {nominal:String},
+    /// No per-opening fixed amount: shared draws, retry state and split-stack budget.
+    #[serde(rename="lootBag")]
+    LootBag {},
+    /// Prototype count scaled by the complete altar input stack at completion.
+    #[serde(rename = "bloodAltar")]
+    BloodAltar { nominal: String },
+    /// Stack size for one selection in a shared HarvestCraft draw process.
+    Harvest { nominal: String },
     /// Native signed output parameter; the shared Squeezer process determines actual completion.
     Squeezer {
         nominal: String,
@@ -68,6 +79,22 @@ pub enum Quantity {
 /// Conservative display bounds; the rules retain correlation and attainable values.
 pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
     let Some(rule) = &output.quantity else {
+        if matches!(recipe.process,Some(super::Process::NativeBotaniaPool(_))){
+            return Ok((0,i64::from(i32::MAX)));
+        }
+        if matches!(recipe.process,Some(super::Process::WirelessTerminalUpgrade(_))) {
+            ensure!(output.kind==Kind::Item&&output.role==super::OutputRole::Result&&output.change.is_some(),
+                "wireless output must retain its offered-stack copy");
+            return Ok((1,i64::from(i32::MAX)));
+        }
+        if matches!((&recipe.process, &output.change),
+            (Some(super::Process::Chisel(_)),Some(change)) if matches!(change.action,super::Edit::ChiselTool{..})) {
+            ensure!(output.kind==Kind::Item && matches!(output.role,super::OutputRole::Return),
+                "Chisel change must retain its conditional tool return");
+            // A broken tool disappears. An offered stack can also contain more
+            // tools than the preview; do not advertise a guaranteed fixed return.
+            return Ok((0,i64::from(i32::MAX)));
+        }
         let value = integer(
             output
                 .amount
@@ -87,6 +114,34 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
         "computed output cannot carry an independent probability"
     );
     match rule {
+        Quantity::SpaceAcquisition{nominal}=>{
+            let Some(super::Process::SpaceAcquisition(p))=&recipe.process else{anyhow::bail!("Space yield lacks acquisition laws");};
+            let n=integer(nominal,1,i64::from(i32::MAX))?;
+            ensure!(output.kind==Kind::Fluid&&nominal==&p.base_amount,"Space nominal differs from its native registry");
+            Ok((0,if p.operation==super::space_acquisition::Operation::Pump {n*64*128*4}else{i64::from(i32::MAX)}))
+        }
+        Quantity::LootBag {} => {
+            ensure!(output.kind==Kind::Item&&matches!(recipe.process,Some(super::Process::LootBagOpening(_))),
+                "Grouped loot quantity requires native opening laws");
+            // Native q is a signed int stack budget, not units. The last draw
+            // may exceed q with grouped/split outputs; retry pending state persists.
+            Ok((0,i64::MAX))
+        }
+        Quantity::BloodAltar { nominal } => {
+            ensure!(matches!(&recipe.process, Some(super::Process::BloodAltar(p)) if !p.can_be_filled)
+                && output.kind == Kind::Item, "Altar quantity requires stack conversion");
+            integer(nominal, 1, i32::MAX as i64)?;
+            // Signed-int multiplication can wrap or eliminate a result.
+            // Nominal is a per-item preview, not a guaranteed whole-stack yield.
+            Ok((0, i32::MAX as i64))
+        }
+        Quantity::Harvest { nominal } => {
+            let Some(super::Process::HarvestDrops(drops)) = &recipe.process else {
+                anyhow::bail!("Harvest quantity lacks its shared draw process");
+            };
+            ensure!(output.kind == Kind::Item, "Harvest quantity requires an item");
+            drops.bounds(output.slot, nominal)
+        }
         Quantity::Squeezer { nominal } => {
             ensure!(
                 matches!(
@@ -204,6 +259,7 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
             Ok((0, max_val))
         }
         Quantity::Potential {
+            stat,
             nominal,
             sample,
             parameters,
@@ -232,6 +288,30 @@ pub fn quantity_bounds(recipe: &Recipe, output: &Output) -> Result<(i64, i64)> {
                     sample_val,
                     max_val
                 );
+            }
+            if stat == "binnie:geneticTransform" {
+                let Some(super::Process::BinnieGenetics(process)) = &recipe.process else {
+                    anyhow::bail!("genetic quantity requires its native Binnie process");
+                };
+                // The captured specimen is a preview, not the maximum yield of
+                // all admitted genomes. A bee drone yields 10; a mated bee 50.
+                let upper = if output.kind == Kind::Fluid {
+                    let super::binnie_genetics::GeneticsProcess::Genepool(pool) = process else {
+                        anyhow::bail!("dynamic genetic fluid requires the genepool");
+                    };
+                    if pool.domain.root_class == "forestry.apiculture.genetics.BeeHelper" { 50 } else { 10 }
+                } else { 1 };
+                ensure!(max_val <= upper, "genetic specimen exceeds native yield");
+                return Ok((0, upper));
+            }
+            if stat == "chisel:selection" {
+                let Some(super::Process::Chisel(process))=&recipe.process else {
+                    anyhow::bail!("Chisel quantity requires its native process");
+                };
+                let preview=if process.mode==super::chisel::ChiselMode::Stack {1}else{process.target_count};
+                ensure!(output.kind==Kind::Item && max_val==i64::from(preview),
+                    "Chisel preview differs from the native selection");
+                return Ok((0,if process.mode==super::chisel::ChiselMode::Stack {i64::from(i32::MAX)}else{max_val}));
             }
             Ok((0, max_val))
         }

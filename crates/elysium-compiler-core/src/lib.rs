@@ -1,4 +1,5 @@
 pub mod catalog;
+mod canonical;
 pub mod domain;
 pub mod fragments;
 pub mod identity;

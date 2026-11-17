@@ -10,6 +10,109 @@ fn fixture() -> PathBuf {
 }
 
 #[test]
+fn catalog_language_is_bound_to_source_and_rejects_foreign_text() {
+    use serde_json::json;
+    let source = Source::open(&fixture()).unwrap();
+    let expected = &source.environment().unwrap().locale;
+    let mut domain = Domain::load(&source).unwrap();
+    let mut text = domain.strings[0].clone();
+    text.locale = if expected == "en_US" { "zh_CN" } else { "en_US" }.to_owned();
+    text.id = content_id("text", &text).unwrap();
+    domain.strings.push(text);
+    let failure = domain.validate(&source).expect_err("foreign-language text must not enter a single-language snapshot");
+    assert!(failure.to_string().contains("locale"), "{failure:#}");
+    let output = tempfile::tempdir().unwrap();
+    compile(&fixture(), output.path()).unwrap();
+    let catalog = Catalog::current(output.path()).unwrap();
+    assert_eq!(serde_json::to_value(&catalog.manifest).unwrap()["locale"], json!(expected));
+}
+
+#[test]
+fn recipe_notes_are_validated_text_with_stable_semantic_identity() {
+    use serde_json::json;
+    let source = Source::open(&fixture()).unwrap();
+    let original = Domain::load(&source).unwrap();
+    let mut raw = serde_json::to_value(&original).unwrap();
+    let text = original.strings[0].id.clone();
+    raw["recipes"][0]["notes"] = json!([{"key":"native:requirement","source":"FixtureRecipe#getRequirement","text":text}]);
+    raw["categories"][0]["notes"] = json!([{"key":"native:machine","source":"FixtureMachine#getCondition","text":text}]);
+    let domain: Domain = serde_json::from_value(raw.clone()).unwrap();
+    domain.validate(&source).unwrap();
+    assert_eq!(recipe_id(&domain.recipes[0]).unwrap(), original.recipes[0].id);
+    for (path, value) in [
+        ("/recipes/0/notes/0/text", json!("text_missing")),
+        ("/categories/0/notes/0/text", json!("text_missing")),
+        ("/recipes/0/notes/0/source", json!("")),
+        ("/recipes/0/notes/0/key", json!("")),
+    ] {
+        let mut invalid = raw.clone();
+        *invalid.pointer_mut(path).unwrap() = value;
+        assert!(serde_json::from_value::<Domain>(invalid).and_then(|d|
+            d.validate(&source).map_err(serde::de::Error::custom)).is_err(), "{path}");
+    }
+    let note = raw["recipes"][0]["notes"][0].clone();
+    raw["recipes"][0]["notes"].as_array_mut().unwrap().push(note);
+    assert!(serde_json::from_value::<Domain>(raw).unwrap().validate(&source).is_err());
+}
+
+#[test]
+fn java_native_notes_pass_the_complete_domain_gate() {
+    let raw: serde_json::Value = serde_json::from_str(include_str!("../../../contracts/fixtures/semantic-notes-contract.json")).unwrap();
+    let source = Source::open(&fixture()).unwrap();
+    let mut domain = Domain::load(&source).unwrap();
+    let recipe: elysium_compiler_core::domain::Recipe = serde_json::from_value(raw["recipe"].clone()).unwrap();
+    let mut category = domain.categories[0].clone();
+    category.id = recipe.category.clone();
+    category.source = recipe.source.clone();
+    category.program = None; category.reference = None;
+    domain.categories.push(category);
+    domain.recipes.push(recipe);
+    for fluid in serde_json::from_value::<Vec<elysium_compiler_core::domain::Fluid>>(raw["fluids"].clone()).unwrap() {
+        domain.fluids.retain(|existing| existing.id != fluid.id);
+        domain.fluids.push(fluid);
+    }
+    for text in serde_json::from_value::<Vec<elysium_compiler_core::domain::Text>>(raw["strings"].clone()).unwrap() {
+        if !domain.strings.iter().any(|existing| existing.id == text.id) { domain.strings.push(text); }
+    }
+    domain.validate(&source).unwrap();
+}
+
+#[test]
+fn headless_catalog_preserves_notes_without_gui_collections() {
+    let source = Source::open(&fixture()).unwrap();
+    let domain = Domain::load(&source).unwrap();
+    let expected: std::collections::BTreeSet<_> = domain.recipes.iter()
+        .flat_map(|recipe| &recipe.notes).chain(domain.categories.iter().flat_map(|category| &category.notes))
+        .map(|note| note.text.clone()).collect();
+    assert!(!expected.is_empty(), "fixture must exercise real explanatory text");
+    let directory = tempfile::tempdir().unwrap();
+    compile(&fixture(), directory.path()).unwrap();
+    let catalog = Catalog::current(directory.path()).unwrap();
+    assert!(!catalog.manifest.counts.contains_key("views"));
+    assert!(!catalog.manifest.counts.contains_key("tracks"));
+    for kind in ["views", "tracks"] {
+        assert!(serde_json::from_value::<Table>(serde_json::json!({"kind":kind,"records":[]})).is_err());
+    }
+    let mut old_recipe = serde_json::to_value(&domain.recipes[0]).unwrap();
+    old_recipe["view"] = serde_json::Value::Null;
+    assert!(serde_json::from_value::<elysium_compiler_core::domain::Recipe>(old_recipe).is_err());
+    let mut actual = std::collections::BTreeSet::new();
+    for file in &catalog.manifest.files {
+        if file.kind != "recipes" && file.kind != "categories" { continue; }
+        match rmp_serde::from_slice::<Table>(&catalog.read(file).unwrap()).unwrap() {
+            Table::Recipes(rows) => for row in rows {
+                actual.extend(row.notes.into_iter().map(|note| note.text));
+            },
+            Table::Categories(rows) => for row in rows {
+                actual.extend(row.notes.into_iter().map(|note| note.text));
+            },
+            _ => unreachable!(),
+        }
+    }
+    assert!(expected.is_subset(&actual));
+}
+
+#[test]
 fn bee_jubilance_description_is_a_validated_localized_reference() {
     use serde_json::json;
     let source = Source::open(&fixture()).unwrap();
@@ -558,13 +661,6 @@ fn java_facts_compile_into_deterministic_queryable_catalogs() {
                         .amount,
                     "3"
                 );
-            }
-            Table::Tracks(rows) => {
-                assert_eq!(rows.len(), 1);
-                let frames = &rows[0].frames;
-                assert_eq!(frames.iter().map(|frame| frame.ticks).sum::<u32>(), 16);
-                assert!(frames[0].areas.is_empty());
-                assert_eq!(frames[2].areas.len(), 2);
             }
             Table::Structures(rows) => {
                 assert_eq!(rows[0].controller, stone);
@@ -1258,7 +1354,6 @@ fn invalid_facts_and_damaged_catalogs_cannot_replace_a_published_snapshot() {
         "fraction",
         "reference",
         "slot",
-        "view",
         "alternative",
     ] {
         let mut invalid = domain.clone();
@@ -1276,66 +1371,12 @@ fn invalid_facts_and_damaged_catalogs_cannot_replace_a_published_snapshot() {
                 let repeated = invalid.recipes[0].outputs[0].clone();
                 invalid.recipes[0].outputs.push(repeated);
             }
-            "view" => invalid.recipes[0].view = Some("view_missing".to_owned()),
             _ => unreachable!(),
         }
         invalid.recipes[0].id = recipe_id(&invalid.recipes[0]).unwrap();
         assert!(
             invalid.validate(&source).is_err(),
             "accepted invalid {issue}"
-        );
-    }
-    for issue in [
-        "empty", "duration", "budget", "bounds", "nan", "overlap", "repeat", "missing", "orphan",
-    ] {
-        let mut invalid = domain.clone();
-        let old = invalid.tracks[0].id.clone();
-        let frames = &mut invalid.tracks[0].frames;
-        match issue {
-            "empty" => frames.clear(),
-            "duration" => frames[0].ticks = 0,
-            "budget" => frames[0].ticks = 72000,
-            "bounds" => frames[1].areas[0][2] = "1.1".to_owned(),
-            "nan" => frames[1].areas[0][2] = "NaN".to_owned(),
-            "overlap" => {
-                let repeated = frames[1].areas[0].clone();
-                frames[1].areas.push(repeated);
-            }
-            "repeat" => frames.insert(1, frames[0].clone()),
-            "orphan" => {
-                let mut orphan = invalid.tracks[0].clone();
-                orphan.frames[0].ticks += 1;
-                orphan.id = content_id("track", &orphan).unwrap();
-                invalid.tracks.push(orphan);
-            }
-            "missing" => {}
-            _ => unreachable!(),
-        }
-        invalid.tracks[0].id = content_id("track", &invalid.tracks[0]).unwrap();
-        let replacement = if issue == "missing" {
-            "track_missing"
-        } else {
-            &invalid.tracks[0].id
-        };
-        for view in &mut invalid.views {
-            let old_view = view.id.clone();
-            for element in &mut view.elements {
-                if let elysium_compiler_core::domain::Element::Clip { track, .. } = element {
-                    if track == &old {
-                        *track = replacement.to_owned();
-                    }
-                }
-            }
-            view.id = content_id("view", view).unwrap();
-            for recipe in &mut invalid.recipes {
-                if recipe.view.as_ref() == Some(&old_view) {
-                    recipe.view = Some(view.id.clone());
-                }
-            }
-        }
-        assert!(
-            invalid.validate(&source).is_err(),
-            "accepted invalid UI motion {issue}"
         );
     }
     for issue in ["component", "ratio", "fluid_ratio", "circuit_item", "tier"] {
@@ -1459,7 +1500,6 @@ fn invalid_facts_and_damaged_catalogs_cannot_replace_a_published_snapshot() {
         "central",
         "grid",
         "candidate",
-        "cost_view",
     ] {
         let mut invalid = domain.clone();
         let recipe = invalid
@@ -1483,20 +1523,6 @@ fn invalid_facts_and_damaged_catalogs_cannot_replace_a_published_snapshot() {
             "grid" => recipe.grid.as_mut().unwrap().cells[1] = Some(0),
             "candidate" => {
                 recipe.inputs[0].choices[1].rule = recipe.inputs[0].choices[0].rule.clone()
-            }
-            "cost_view" => {
-                let view = invalid
-                    .views
-                    .iter_mut()
-                    .find(|view| Some(&view.id) == recipe.view.as_ref())
-                    .unwrap();
-                for element in &mut view.elements {
-                    if let elysium_compiler_core::domain::Element::Cost { index, .. } = element {
-                        *index = 99;
-                    }
-                }
-                view.id = content_id("view", view).unwrap();
-                recipe.view = Some(view.id.clone());
             }
             _ => unreachable!(),
         }
@@ -1813,6 +1839,7 @@ fn test_branch_and_potential_quantities() {
     use std::collections::BTreeMap;
 
     let base_recipe = Recipe {
+        gt_native: None,
         id: "recipe_test".to_string(),
         source: Origin {
             owner: "test".to_string(),
@@ -1820,7 +1847,7 @@ fn test_branch_and_potential_quantities() {
             key: "test".to_string(),
         },
         category: "test".to_string(),
-        view: None,
+        notes: vec![],
         duration: Some("100".to_string()),
         energy: Some("32".to_string()),
         grid: None,
@@ -2101,13 +2128,14 @@ fn test_edit_append_wand_augmentations() {
     };
     let recipe = Recipe {
         id: "recipe_wand_aug".to_string(),
+        gt_native: None,
         source: Origin {
             owner: "test".to_string(),
             handler: "wand_aug".to_string(),
             key: "test".to_string(),
         },
         category: "infusion".to_string(),
-        view: None,
+        notes: vec![],
         duration: Some("100".to_string()),
         energy: Some("32".to_string()),
         properties: BTreeMap::new(),
@@ -2268,8 +2296,7 @@ fn harmony_quantities_require_a_shared_process() {
     let value = serde_json::json!({
         "id":"test", "source":{"owner":"tectech","handler":"harmony","key":"planet"},
         "category":"test", "order":0, "inputs":[], "properties":{},
-        "duration":null,"energy":null,"grid":null,"magic":null,"view":null,
-        "process":{"kind":"harmony","mode":"parallel","hydrogen":"1000000000",
+        "duration":null,"energy":null,"grid":null,"magic":null,"process":{"kind":"harmony","mode":"parallel","hydrogen":"1000000000",
             "helium":"1000000000","ticks":"360000","startEu":"123456789012345",
             "outputEu":"234567890123456","chance":"0.95","rocketTier":1,"compressionTier":1},
         "outputs":[{"slot":0,"kind":"item","id":"test","amount":null,"change":null,

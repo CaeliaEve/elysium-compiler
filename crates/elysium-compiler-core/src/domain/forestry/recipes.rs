@@ -1,4 +1,5 @@
 //! Cross-check display rows against a single validated native rule context.
+#[cfg(test)]
 use super::SqueezerProgram;
 use crate::domain::{
     Category, Consumption, Fluid, Item, Kind, Match, OutputRole, Process, Quantity, Recipe,
@@ -8,7 +9,7 @@ use std::collections::BTreeMap;
 
 pub fn validate(
     recipe: &Recipe,
-    programs: &BTreeMap<String, SqueezerProgram>,
+    programs: &BTreeMap<String, crate::domain::programs::SharedProgram>,
     category: &Category,
     items: &BTreeMap<&str, &Item>,
     fluids: &BTreeMap<&str, &Fluid>,
@@ -26,7 +27,8 @@ pub fn validate(
         category.program.as_ref() == Some(program),
         "Squeezer process and category use different programs"
     );
-    let rules = programs.get(program).context("Missing Squeezer program")?;
+    let crate::domain::programs::SharedProgram::Squeezer(rules) = programs.get(program).context("Missing Squeezer program")?
+        else {anyhow::bail!("Squeezer recipe linked to a different machine program");};
     let native = rules.entry(selector)?;
     ensure!(
         *time == native.time,
@@ -152,7 +154,7 @@ mod tests {
     fn check_native_adapter_rows(observed: Value) {
         let source = crate::source::Source::open(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../contracts/fixtures/source"),
+                .join("../../contracts/fixtures/source-semantic-40"),
         )
         .unwrap();
         let domain = crate::domain::Domain::load(&source).unwrap();
@@ -189,7 +191,7 @@ mod tests {
         let id = observed["programId"].as_str().unwrap().to_string();
         let programs = BTreeMap::from([(
             id.clone(),
-            serde_json::from_value::<SqueezerProgram>(observed["program"].clone()).unwrap(),
+            crate::domain::programs::SharedProgram::Squeezer(serde_json::from_value::<SqueezerProgram>(observed["program"].clone()).unwrap()),
         )]);
         let mut category = domain.categories[0].clone();
         category.program = Some(id);

@@ -1,0 +1,18 @@
+{
+  "archiveSha256":"b969e11625a0298416a75b6e39703da795233edb71cb66f25fb9bbf654d75528",
+  "nativeRecipeClass":"gregtech.api.util.GTRecipe",
+  "nbtSensitive":false,
+  "fake":false,
+  "enabled":true,
+  "itemInputs":[{"id":"item_f172837519051e5cb32e9c27d45caa849f9a55d9f86f612959b66d966f9354b5","amount":"4"},null,{"id":"item_f172837519051e5cb32e9c27d45caa849f9a55d9f86f612959b66d966f9354b5","amount":"4"}],
+  "itemOutputs":[{"id":"item_f172837519051e5cb32e9c27d45caa849f9a55d9f86f612959b66d966f9354b5","amount":"3"},null,{"id":"item_676490827565a85727e049ab9947e3c2fdf6511cce3b8b7f9dd588086c3f632b","amount":"9"}],
+  "fluidInputs":[{"id":"fluid_2b3eda75e0483162f0a6012bf663794fa30b539b68ff481ebd2108a48f2da63d","amount":"1000"},{"id":"fluid_68b565db0b5f3e93e36ad9b456a9a8a115b1765c64ae083ea2d3ff2f970de79b","amount":"0"}],
+  "fluidOutputs":[{"id":"fluid_2b3eda75e0483162f0a6012bf663794fa30b539b68ff481ebd2108a48f2da63d","amount":"125"}],
+  "itemAlternatives":null,
+  "fluidAlternatives":[[{"id":"fluid_2b3eda75e0483162f0a6012bf663794fa30b539b68ff481ebd2108a48f2da63d","amount":"1000"},{"id":"fluid_68b565db0b5f3e93e36ad9b456a9a8a115b1765c64ae083ea2d3ff2f970de79b","amount":"500"}],[]],
+  "inputChances":[0],
+  "outputChances":[1000,10000,9000],
+  "fluidInputChances":[5000,0],
+  "fluidOutputChances":[2500],
+  "policy":{"itemConsumption":"nativeMatchingGroups","fluidConsumption":"nativeSlots","sampler":"gtIntegralChancedMultiplier","execution":"unresolvedMachineContext","projection":"nativeSlots"}
+}

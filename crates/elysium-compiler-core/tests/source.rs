@@ -10,10 +10,32 @@ fn fixture() -> PathBuf {
 }
 
 #[test]
+fn source_session_keeps_its_verified_environment_snapshot() {
+    let input =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../contracts/fixtures/source-semantic-40");
+    let directory = tempfile::tempdir().unwrap();
+    for path in ["manifest.json", "environment.json"] {
+        fs::copy(input.join(path), directory.path().join(path)).unwrap();
+    }
+    let source = Source::open(directory.path()).unwrap();
+    let expected = serde_json::to_value(source.environment().unwrap()).unwrap();
+    fs::write(directory.path().join("environment.json"), b"{}").unwrap();
+    assert_eq!(
+        serde_json::to_value(source.environment().unwrap()).unwrap(),
+        expected,
+        "later stages must use the same verified input, not reread a changed path"
+    );
+    assert!(
+        Source::open(directory.path()).unwrap().environment().is_err(),
+        "a new session must validate the bytes again"
+    );
+}
+
+#[test]
 fn java_source_is_verified_without_losing_identity_or_large_quantities() {
     let source = Source::open(&fixture()).unwrap();
     source.verify().unwrap();
-    let probes = source.environment().unwrap().probes;
+    let probes = &source.environment().unwrap().probes;
     assert_eq!(probes.len(), 2);
     assert_eq!(probes[0].count, 1);
     assert_eq!(probes[1].count, 4);

@@ -2,6 +2,8 @@
 mod atlas;
 pub mod cli;
 pub(crate) mod store;
+mod references;
+mod schema;
 
 use crate::domain::*;
 use crate::source::{Source, SOURCE_REVISION};
@@ -15,7 +17,7 @@ use std::path::Path;
 pub use store::{Catalog, File, Manifest, Pointer, Publication};
 
 pub const FORMAT: &str = "elysium.catalog";
-pub const REVISION: u32 = 37;
+pub const REVISION: u32 = 41;
 pub const FILE_LIMIT: usize = 16 * 1024 * 1024;
 pub const IMAGE_LIMIT: usize = 80 * 1024 * 1024;
 pub const TABLE_ROWS: usize = 4096;
@@ -112,6 +114,8 @@ pub struct Texture {
     pub height: u32,
     pub frames: Vec<Sprite>,
     pub interpolate: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visual: Option<String>,
 }
 
 // One declaration owns schema variants, the required table set and record inspection.
@@ -152,6 +156,7 @@ tables! {
     OreMembers(OreMember) => "ore-members",
     Programs(programs::ProgramChunk) => "programs",
     Recipes(Recipe) => "recipes",
+    References(crate::domain::references::GeneticReferenceRow) => "references",
     Research(Research) => "research",
     Shapes(Shape) => "shapes",
     Species(Species) => "species",
@@ -159,8 +164,7 @@ tables! {
     Structures(Structure) => "structures",
     Textures(Texture) => "textures",
     Topics(Topic) => "topics",
-    Tracks(Track) => "tracks",
-    Views(View) => "views",
+    Visuals(crate::domain::visual::Visual) => "visuals",
 }
 
 /// Owns the schema exported to consumers; it is not a runtime payload itself.
@@ -174,44 +178,46 @@ pub struct Contract {
     pub table: Table,
 }
 
+pub fn schema() -> Result<serde_json::Value> { schema::contract() }
+
 pub fn compile(input: &Path, output: &Path) -> Result<Publication> {
     let source = Source::open(input)?;
     ensure!(
         source.manifest.revision == SOURCE_REVISION,
         "unsupported source revision"
     );
-    let domain = Domain::load(&source)?;
+    let domain = Domain::load_for_compile(&source)?;
     let mut writer = store::Writer::new(output, &source)?;
-    let textures = atlas::pack(&source, &domain.assets, &mut writer)?;
+    let textures = atlas::pack(&source, &domain, &mut writer)?;
     macro_rules! write {
-        ($kind:literal, $records:expr, $variant:ident) => {
+        ($kind:literal, $records:expr) => {
             writer.table(
                 $kind,
                 $records,
-                |rows| Table::$variant(rows.to_vec()),
                 |row| row.id.as_str(),
             )?;
         };
     }
-    write!("items", &domain.items, Items);
-    write!("fluids", &domain.fluids, Fluids);
-    write!("recipes", &domain.recipes, Recipes);
-    write!("categories", &domain.categories, Categories);
-    write!("programs", &domain.programs, Programs);
-    write!("groups", &domain.groups, Groups);
-    write!("views", &domain.views, Views);
-    write!("tracks", &domain.tracks, Tracks);
-    write!("strings", &domain.strings, Strings);
-    write!("textures", &textures, Textures);
+    write!("items", &domain.items);
+    write!("fluids", &domain.fluids);
+    write!("recipes", &domain.recipes);
+    write!("references", &references::project(&domain.references));
+    write!("categories", &domain.categories);
+    write!("programs", &domain.programs);
+    write!("groups", &domain.groups);
+    write!("strings", &domain.strings);
+    write!("textures", &textures);
+    write!("visuals", &domain.visuals);
     let entries = entries(&domain);
-    write!("browse", &entries, Browse);
+    write!("browse", &entries);
     let items: BTreeMap<_, _> = domain
         .items
         .iter()
         .map(|item| (item.id.as_str(), item))
         .collect();
-    let links = links(&domain, &items);
-    write!("links", &links, Links);
+    let fuel_targets = independent_fuel_targets(&domain, &items);
+    let links = links_with_fuels(&domain, &items, &fuel_targets);
+    write!("links", &links);
     let index: Vec<_> = domain
         .recipes
         .iter()
@@ -237,27 +243,28 @@ pub fn compile(input: &Path, output: &Path) -> Result<Publication> {
                         .flat_map(Output::ids)
                         .map(str::to_owned),
                 )
+                .chain(fuel_targets.get(&recipe.id).into_iter().flatten().cloned())
                 .collect::<std::collections::BTreeSet<_>>()
                 .into_iter()
                 .collect(),
         })
         .collect();
-    write!("index", &index, Index);
-    write!("materials", &domain.materials, Materials);
-    write!("circuits", &domain.circuits, Circuits);
-    write!("species", &domain.species, Species);
-    write!("mutations", &domain.mutations, Mutations);
-    write!("ore-groups", &domain.ore_groups, OreGroups);
-    write!("ore-members", &domain.ore_members, OreMembers);
-    write!("structures", &domain.structures, Structures);
-    write!("blocks", &domain.blocks, Blocks);
-    write!("models", &domain.models, Models);
-    write!("builds", &domain.builds, Builds);
-    write!("shapes", &domain.shapes, Shapes);
-    write!("aspects", &domain.aspects, Aspects);
-    write!("research", &domain.research, Research);
-    write!("lineage", &lineage(&domain), Lineage);
-    write!("topics", &topics(&domain), Topics);
+    write!("index", &index);
+    write!("materials", &domain.materials);
+    write!("circuits", &domain.circuits);
+    write!("species", &domain.species);
+    write!("mutations", &domain.mutations);
+    write!("ore-groups", &domain.ore_groups);
+    write!("ore-members", &domain.ore_members);
+    write!("structures", &domain.structures);
+    write!("blocks", &domain.blocks);
+    write!("models", &domain.models);
+    write!("builds", &domain.builds);
+    write!("shapes", &domain.shapes);
+    write!("aspects", &domain.aspects);
+    write!("research", &domain.research);
+    write!("lineage", &lineage(&domain));
+    write!("topics", &topics(&domain));
     writer.publish()
 }
 
@@ -522,7 +529,7 @@ fn indexes_choice(input: &Input, choice: &Choice, items: &BTreeMap<&str, &Item>)
 #[test]
 fn exclusion_references_never_become_use_edges() {
     let source = Source::open(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../contracts/fixtures/source"),
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../contracts/fixtures/source-semantic-40"),
     )
     .unwrap();
     let mut domain = Domain::load(&source).unwrap();
@@ -572,7 +579,25 @@ fn exclusion_references_never_become_use_edges() {
     );
 }
 
+fn independent_fuel_targets(domain:&Domain,items:&BTreeMap<&str,&Item>)->BTreeMap<String,Vec<String>> {
+    let mut cache=BTreeMap::<String,Vec<String>>::new();
+    let mut targets=BTreeMap::new();
+    for recipe in &domain.recipes {
+        if let Some(crate::domain::Process::RailcraftBlast(process))=&recipe.process {
+            let key=serde_json::to_string(&process.fuel).expect("serializable native fuel declaration");
+            let ids=cache.entry(key).or_insert_with(||crate::domain::rail_blast::uses(process,items).expect("validated native fuel predicates"));
+            targets.insert(recipe.id.clone(),ids.clone());
+        }
+    }
+    targets
+}
+
+#[cfg(test)]
 fn links(domain: &Domain, items: &BTreeMap<&str, &Item>) -> Vec<Links> {
+    links_with_fuels(domain,items,&independent_fuel_targets(domain,items))
+}
+
+fn links_with_fuels(domain: &Domain, items: &BTreeMap<&str, &Item>,fuel_targets:&BTreeMap<String,Vec<String>>) -> Vec<Links> {
     let mut links: BTreeMap<&str, Links> = domain
         .items
         .iter()
@@ -750,6 +775,11 @@ fn links(domain: &Domain, items: &BTreeMap<&str, &Item>) -> Vec<Links> {
                         .uses
                         .push(recipe.id.clone());
                 }
+            }
+        }
+        for id in fuel_targets.get(&recipe.id).into_iter().flatten() {
+            if used.insert(id) {
+                links.get_mut(id.as_str()).expect("validated native fuel").uses.push(recipe.id.clone());
             }
         }
         let mut produced = std::collections::BTreeSet::new();

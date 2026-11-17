@@ -239,7 +239,7 @@ mod tests {
     fn soul_examples_do_not_erase_gates_or_reconstruct_entity_nbt() {
         let source = crate::source::Source::open(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../contracts/fixtures/source"),
+                .join("../../contracts/fixtures/source-semantic-40"),
         )
         .unwrap();
         let domain = super::super::Domain::load(&source).unwrap();

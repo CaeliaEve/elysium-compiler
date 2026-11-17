@@ -1,6 +1,6 @@
 {
   "name": "@elysium/contracts",
-  "version": "0.38.0",
+  "version": "0.41.0-semantic.1",
   "description": "Generated source and catalog contract for NESQL and NeoNEI",
   "license": "MIT",
   "main": "index.cjs",
@@ -8,7 +8,10 @@
   "files": [
     "schema.json",
     "index.cjs",
-    "index.d.ts"
+    "index.d.ts",
+    "metadata.json",
+    "validators.cjs",
+    "numeric-formats.cjs"
   ],
   "scripts": {
     "generate": "node generate.cjs"

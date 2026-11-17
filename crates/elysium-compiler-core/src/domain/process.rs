@@ -13,7 +13,7 @@ mod tests {
         use serde_json::json;
         let choice = |id, amount, rule, returns| json!({"id":id,"amount":amount,"rule":rule,"consume":{"kind":"staged"},"returns":returns});
         let mut value = json!({"id":"recipe_test","source":{"owner":"IC2","handler":"native","key":"blast"},"category":"category_test","order":0,
-            "duration":null,"energy":null,"grid":null,"magic":null,"view":null,"properties":{},"process":{"kind":"ic2Blast","heat":50000,"containers":[[null],[null]]},
+            "duration":null,"energy":null,"grid":null,"magic":null,"properties":{},"process":{"kind":"ic2Blast","heat":50000,"containers":[[null],[null]]},
             "inputs":[{"kind":"item","slot":0,"choices":[choice("item_iron","4",json!({"kind":"wildcard","meta":false,"nbt":true}),json!([]))]},
                 {"kind":"item","slot":1,"choices":[choice("item_air","1",json!({"kind":"untagged","meta":true}),json!([{"kind":"item","id":"item_cell","amount":"1"}]))]}],
             "outputs":[{"kind":"item","slot":0,"id":"item_steel","amount":"2","quantity":null,"change":null,"role":"result","chance":{"numerator":"1","denominator":"1"}},
@@ -56,7 +56,7 @@ mod tests {
         use crate::domain::Recipe;
         use serde_json::json;
         let recipe = json!({"id":"recipe_test","source":{"owner":"TConstruct","handler":"tconstruct.plugins.nei.RecipeHandlerCastingTable","key":"casting"},
-            "category":"category_test","order":0,"duration":"80","energy":null,"grid":null,"magic":null,"view":null,"properties":{},
+            "category":"category_test","order":0,"duration":"80","energy":null,"grid":null,"magic":null,"properties":{},
             "process":{"kind":"unstableCasting"},"inputs":[{"kind":"fluid","slot":0,"choices":[{"id":"fluid_metal","amount":"144","rule":{"kind":"exact"},"consume":{"kind":"consume"},"returns":[]}]}],
             "outputs":[{"kind":"item","slot":0,"id":"item_part","amount":"1","quantity":null,"change":null,"role":"result","chance":{"numerator":"1","denominator":"1"}}]});
         let check = |value| -> anyhow::Result<()> {
@@ -84,7 +84,7 @@ mod tests {
         use serde_json::json;
         let source = Source::open(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../contracts/fixtures/source"),
+                .join("../../contracts/fixtures/source-semantic-40"),
         )
         .unwrap();
         let domain = Domain::load(&source).unwrap();
@@ -139,7 +139,7 @@ mod tests {
         use serde_json::json;
         let source = Source::open(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../contracts/fixtures/source"),
+                .join("../../contracts/fixtures/source-semantic-40"),
         )
         .unwrap();
         let domain = Domain::load(&source).unwrap();
@@ -299,6 +299,112 @@ pub enum InscriberMode {
     deny_unknown_fields
 )]
 pub enum Process {
+    #[serde(rename="nativeBotaniaPool")]
+    NativeBotaniaPool(super::botania_pool::Pool),
+    #[serde(rename="botaniaPool")]
+    BotaniaPool(super::botania::Pool),
+    #[serde(rename="botaniaRunic")]
+    BotaniaRunic(super::botania::Runic),
+    #[serde(rename="botaniaWorld")]
+    BotaniaWorld(super::botania_world::WorldProcess),
+    #[serde(rename="aeCrafting")]
+    AeCrafting(super::ae_crafting::AeCrafting),
+    #[serde(rename="wirelessTerminalUpgrade")]
+    WirelessTerminalUpgrade(super::wireless_terminal::Upgrade),
+    #[serde(rename="projectRedCrafting")]
+    ProjectRedCrafting(super::projectred::Crafting),
+    #[serde(rename="bloodCalcinator")]
+    BloodCalcinator(super::blood_calcinator::Calcinator),
+    #[serde(rename="bloodAlchemy")]
+    BloodAlchemy(super::inventory_process::Alchemy),
+    #[serde(rename="bloodOrbCrafting")]
+    BloodOrbCrafting(super::blood_orb::Crafting),
+    #[serde(rename="randomThingsImbuing")]
+    RandomThingsImbuing(super::imbuing::Imbuing),
+    #[serde(rename="logisticsSoldering")]
+    LogisticsSoldering(super::inventory_process::Soldering),
+    #[serde(rename="nativeBrewing")]
+    NativeBrewing(super::native_brewing::Brewing),
+    #[serde(rename="enderioEnchanter")]
+    EnderioEnchanter(super::enchanter::EnchanterProcess),
+    #[serde(rename="creativeCoreCrafting")]
+    CreativeCoreCrafting(super::creativecore::CreativeCoreProcess),
+    #[serde(rename = "ic2Advanced")]
+    Ic2Advanced(super::ic2_advanced::Advanced),
+    #[serde(rename = "gtCrafting")]
+    GtCrafting(super::gt_crafting::GtCrafting),
+    /// Vanilla LAST-tagged-input result, with independent native projections.
+    #[serde(rename = "craftingNbt")]
+    CraftingNbt {},
+    #[serde(rename="ic2CropPrediction")]
+    Ic2CropPrediction(super::crop_prediction::Prediction),
+    #[serde(rename="spaceAcquisition")]
+    SpaceAcquisition(super::space_acquisition::Acquisition),
+    #[serde(rename="calImprint")]
+    CalImprint(super::cal_imprint::Imprint),
+    #[serde(rename="xuMicroblock")]
+    XuMicroblock(super::xu_microblock::Procedure),
+    #[serde(rename="fmpMicroblock")]
+    FmpMicroblock(super::fmp::Procedure),
+    #[serde(rename="lootBagOpening")]
+    LootBagOpening(super::lootbag::Opening),
+    #[serde(rename="bannerPattern")]
+    BannerPattern(super::banner::BannerProcess),
+    #[serde(rename = "extraUtilsSoul")]
+    ExtraUtilsSoul(super::extrautils_soul::SoulProcess),
+    #[serde(rename = "decayChest")]
+    DecayChest(super::decay::DecayProcess),
+    #[serde(rename="molecularTransformer")]
+    MolecularTransformer(super::solar::SolarProcess),
+    #[serde(rename="circuitFabricator")]
+    CircuitFabricator(super::circuit::CircuitProcess),
+    #[serde(rename="galacticraftRefinery")]
+    GalacticraftRefinery(super::refinery::RefineryProcess),
+    #[serde(rename="witcheryDistillery")]
+    WitcheryDistillery(super::distillery::DistilleryProcess),
+    #[serde(rename = "ae2WorldAcquisition")]
+    AeWorldAcquisition(super::ae_world::WorldProcess),
+    #[serde(rename = "ae2Facade")]
+    AeFacade(super::ae_world::FacadeProcess),
+    #[serde(rename = "witcheryOven")]
+    WitcheryOven(super::witchery::OvenProcess),
+    #[serde(rename = "witcheryNativeOven")]
+    WitcheryNativeOven(super::native_oven::NativeOven),
+    #[serde(rename = "witcheryKettle")]
+    WitcheryKettle(super::witchery::KettleProcess),
+    #[serde(rename = "witcheryRitual")]
+    WitcheryRitual(super::witchery::RitualProcess),
+    #[serde(rename = "witcheryNativeRitual")]
+    WitcheryNativeRitual(super::native_ritual::NativeRitual),
+    #[serde(rename = "witcheryInfernal")]
+    WitcheryInfernal(super::witchery::InfernalProcess),
+    Chisel(super::chisel::ChiselProcess),
+    /// One native weighted selection per draw, shared by all candidate outputs.
+    #[serde(rename = "harvestDrops")]
+    HarvestDrops(super::harvest::HarvestDrops),
+    #[serde(rename = "bloodmagic-altar")]
+    BloodAltar(super::blood::AltarProcess),
+    #[serde(rename = "bloodmagic-binding")]
+    BloodBinding(super::blood::BindingProcess),
+    #[serde(rename = "bloodmagic-meteor")]
+    BloodMeteor(super::blood::MeteorProcess),
+    #[serde(rename = "forestryFabricator")]
+    ForestryFabricator(super::fabricator::FabricatorProcess),
+    #[serde(rename = "forestryProcessing")]
+    ForestryProcessing(super::forestry_processing::ForestryProcessingProcess),
+    #[serde(rename = "forestryBottler")]
+    ForestryBottler(super::bottler::BottlerProcess),
+    #[serde(rename="binnieLumbermill")]
+    BinnieLumbermill(super::binnie::LumbermillProcess),
+    /// Native genome admission, stateful work and input-dependent NBT results.
+    #[serde(rename = "binnie_genetics")]
+    BinnieGenetics(super::binnie_genetics::GeneticsProcess),
+    #[serde(rename = "gendustryGenetics")]
+    GendustryGenetics(super::gendustry::GeneticsProcess),
+    #[serde(rename = "gendustryTemplate")]
+    GendustryTemplate(super::gendustry::TemplateProcess),
+    #[serde(rename = "gendustryFluid")]
+    GendustryFluid(super::gendustry_fluid::FluidProcess),
     /// Native shared stock/selection, conditional output and powered work steps.
     #[serde(rename = "forestrySqueezer")]
     ForestrySqueezer {
@@ -337,10 +443,16 @@ pub enum Process {
     /// Selected BuildCraft assembly plan; ordered greedy allocation and signed RF budget.
     #[serde(rename = "buildcraftAssembly")]
     BuildcraftAssembly { energy: i32 },
+    #[serde(rename="railcraftBlast")]
+    RailcraftBlast(super::rail_blast::Process),
+    #[serde(rename = "extremeCrafting")]
+    ExtremeCrafting(super::extreme::Process),
     /// Railcraft shared ordered crafting registry and native reserve/power gates.
     Rolling {
         powered: bool,
         earlier: Vec<super::CraftingSelector>,
+        #[serde(rename = "copyNbt", default, skip_serializing_if = "is_false")]
+        copy_nbt: bool,
     },
     /// Extra Utilities QED ordered crafting registry. A completed craft drains
     /// the native default Ender Flux buffer and one item from every occupied cell.
@@ -348,18 +460,35 @@ pub enum Process {
         #[serde(rename = "enderFlux")]
         ender_flux: String,
         earlier: Vec<super::CraftingSelector>,
+        #[serde(rename = "copyNbt", default, skip_serializing_if = "is_false")]
+        copy_nbt: bool,
     },
-    /// Ordinary GalaxySpace machine crafting after native repair priority has
-    /// been ruled out. Timing remains dependent on the external power tier.
+    /// Registered GalaxySpace crafting is conditional on native repair priority.
+    /// Timing remains dependent on the external power tier.
     #[serde(rename = "galaxyspace-assembly")]
     GalaxyspaceAssembly {
         earlier: Vec<super::CraftingSelector>,
+        repair: Vec<super::extreme::Repair>,
     },
     /// Botania's ordinary floating-flower crafting within a 2x2 or 3x3 grid.
     /// Special inputs bind in increasing physical cell order. Only a missing
     /// or string `type` on the last special input is in the admitted domain.
     #[serde(rename = "floatingFlowers")]
     FloatingFlowers { special: Vec<u32> },
+    #[serde(rename = "nativeFloatingFlowers")]
+    NativeFloatingFlowers(super::floating::NativeFloatingFlowers),
+    #[serde(rename="arcaneSpecial")]
+    ArcaneSpecial(super::arcane_special::ArcaneSpecial),
+    #[serde(rename="nativeInfusion")]
+    NativeInfusion(super::infusion::NativeInfusion),
+    #[serde(rename="disguiseInfusion")]
+    DisguiseInfusion(super::infusion_disguise::DisguiseInfusion),
+    #[serde(rename="stickyJar")]
+    StickyJar(super::arcane_special::StickyJar),
+    #[serde(rename="witcherySpinning")]
+    WitcherySpinning(super::witchery_spinning::Spinning),
+    #[serde(rename="witchingSpinning")]
+    WitchingSpinning(super::witching_spinning::Spinning),
     /// Native two-slot Soul Binder selection, XP debit and last-vessel completion.
     Soul {
         energy: i32,
@@ -420,6 +549,12 @@ pub enum Process {
     /// costs are an observed sample. Actual costs use the offered IRunicArmor's
     /// native final charge, including nested upgrades; see docs/runic.md.
     Runic { charge: i32 },
+    #[serde(rename="nativeRunic")]
+    NativeRunic(super::runic::NativeRunic),
+    #[serde(rename="salisReplacement")]
+    SalisReplacement(super::salis_wand::SalisReplacement),
+    #[serde(rename="matterManipulatorUpgrade")]
+    MatterManipulatorUpgrade(super::matter_manipulator::MatterManipulator),
     Harmony {
         mode: HarmonyMode,
         hydrogen: String,
@@ -437,6 +572,8 @@ pub enum Process {
         compression_tier: u8,
     },
 }
+
+fn is_false(value: &bool) -> bool { !value }
 
 #[cfg(test)]
 mod soul_contract_test {
@@ -467,7 +604,7 @@ mod qed_contract_test {
     fn fixture() -> (Domain, Value) {
         let source = Source::open(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../contracts/fixtures/source"),
+                .join("../../contracts/fixtures/source-semantic-40"),
         )
         .unwrap();
         let domain = Domain::load(&source).unwrap();
@@ -487,7 +624,7 @@ mod qed_contract_test {
     fn galaxyspace_preserves_priority_without_inventing_fixed_timing() {
         let (domain, mut value) = fixture();
         let earlier = value["process"]["earlier"].clone();
-        value["process"] = json!({"kind":"galaxyspace-assembly","earlier":earlier});
+        value["process"] = json!({"kind":"galaxyspace-assembly","earlier":earlier,"repair":[]});
         value["source"]["handler"] = json!("galaxyspace.core.nei.AssemblyMachineRecipeHandler");
         let items = domain
             .items
@@ -672,6 +809,127 @@ pub(super) fn validate(
     items: &BTreeMap<&str, &super::Item>,
     aspects: &[super::Aspect],
 ) -> Result<()> {
+    // Native acquisition pages are stateful even when the NEI view has no item
+    // inputs. Enforce the handler/process binding before generic process rules
+    // can accept a free, fixed output.
+    ensure!(match recipe.source.handler.as_str() {
+        "vazkii.botania.client.integration.nei.recipe.RecipeHandlerManaPool"=>matches!(recipe.process,Some(Process::BotaniaPool(_)|Process::NativeBotaniaPool(_))),
+        "vazkii.botania.client.integration.nei.recipe.RecipeHandlerRunicAltar"=>matches!(recipe.process,Some(Process::BotaniaRunic(_))),
+        "vazkii.botania.client.integration.nei.recipe.RecipeHandlerFloatingFlowers"=>matches!(recipe.process,Some(Process::FloatingFlowers{..}|Process::NativeFloatingFlowers(_))),
+        _=>true,
+    },"Native Botania handler requires its conditional process");
+    ensure!(recipe.source.handler != "speiger.src.crops.prediction.NEIPlugin"
+        || matches!(recipe.process, Some(Process::Ic2CropPrediction(_))),
+        "native crop handler requires conditional prediction semantics");
+    ensure!(recipe.source.handler!="alkalus.main.nei.NEI_Handler_SpinningWheel"||matches!(recipe.process,Some(Process::WitcherySpinning(_))),"native spinning handler requires ordered selection and modifier inventory rules");
+    ensure!(recipe.source.handler!="witchinggadgets.client.nei.NEISpinningWheelHandler"||matches!(recipe.process,Some(Process::WitchingSpinning(_))),"native Witching Gadgets spinning handler requires list-removal and physical-slot rules");
+    ensure!(recipe.source.handler != "appeng.integration.modules.NEIHelpers.NEIWorldCraftingHandler"
+        || matches!(recipe.process, Some(Process::AeWorldAcquisition(_))),
+        "native AE2 world handler requires its acquisition action");
+    ensure!(recipe.source.handler!="tonius.neiintegration.mods.railcraft.RecipeHandlerBlastFurnace"
+        ||matches!(recipe.process,Some(Process::RailcraftBlast(_))),"Native Railcraft blast requires independent fuel semantics");
+    ensure!(!matches!(recipe.source.handler.as_str(),
+        "fox.spiteful.avaritia.compat.nei.ExtremeShapedRecipeHandler" | "fox.spiteful.avaritia.compat.nei.ExtremeShapelessRecipeHandler")
+        || matches!(recipe.process, Some(Process::ExtremeCrafting(_))), "Native extreme handler requires selector/repair priority semantics");
+    ensure!(recipe.source.handler != "com.rwtema.extrautils.nei.EnderConstructorHandler"
+        || matches!(recipe.process, Some(Process::Qed { .. })), "Native QED requires flux and selector semantics");
+    ensure!(recipe.source.handler != "galaxyspace.core.nei.AssemblyMachineRecipeHandler"
+        || matches!(recipe.process, Some(Process::GalaxyspaceAssembly { .. })), "Native GalaxySpace requires repair and selector semantics");
+    ensure!(recipe.source.handler!="com.rwtema.extrautils.nei.FMPMicroBlocksHandler"||matches!(recipe.process,Some(Process::FmpMicroblock(_))),"FMP handler requires procedural laws");
+    ensure!(!recipe.inputs.iter().flat_map(|s|&s.choices).any(|c|matches!(c.rule,Match::FmpMaterial{..}))
+        ||matches!(recipe.process,Some(Process::FmpMicroblock(_)|Process::XuMicroblock(_))),"FMP material predicate requires its shared native process");
+    ensure!(recipe.source.handler!="com.rwtema.extrautils.nei.MicroBlocksHandler"||matches!(recipe.process,Some(Process::XuMicroblock(_))),"XU microblock handler requires template/material laws");
+    ensure!(recipe.source.handler!="gregtech.nei.GTNEIImprintHandler"||matches!(recipe.process,Some(Process::CalImprint(_))),"Native CAL handler requires imprint laws");
+    ensure!(!recipe.inputs.iter().flat_map(|s|&s.choices).any(|c|matches!(c.rule,Match::CalInput{..}))
+        ||matches!(recipe.process,Some(Process::CalImprint(_))),"CAL inputs require native imprint process");
+    ensure!(!matches!(recipe.source.handler.as_str(),"gtnhintergalactic.nei.SpacePumpModuleRecipeHandler"|"gtnhintergalactic.nei.GasSiphonRecipeHandler")
+        ||matches!(recipe.process,Some(Process::SpaceAcquisition(_))),"Native space handler requires acquisition laws");
+    ensure!(recipe.source.handler!="eu.usrv.enhancedlootbags.integration.nei.LootBagRecipeHandler"
+        ||matches!(recipe.process,Some(Process::LootBagOpening(_))),"Native loot handler requires opening laws");
+    ensure!(recipe.source.handler!="ganymedes01.etfuturum.compat.nei.BannerPatternHandler"
+        || matches!(recipe.process,Some(Process::BannerPattern(_))), "native banner handler requires its pattern process");
+    ensure!(!recipe.inputs.iter().flat_map(|s|&s.choices).any(|c|matches!(c.rule,Match::BannerInput{..}))
+        || matches!(recipe.process,Some(Process::BannerPattern(_))), "banner history matching requires its native process");
+    ensure!(recipe.source.handler!="com.rwtema.extrautils.nei.SoulHandler"
+        || matches!(recipe.process,Some(Process::ExtraUtilsSoul(_))),
+        "native Soul handler requires its pending result/player lifecycle");
+    ensure!(recipe.source.handler!="com.recursive_pineapple.matter_manipulator.client.nei.UpdateRecipeNEIHandler"
+        ||matches!(recipe.process,Some(Process::MatterManipulatorUpgrade(_))),"Matter upgrade handler requires its versioned native state codec law");
+    ensure!(!recipe.inputs.iter().flat_map(|input|&input.choices).any(|choice|matches!(choice.rule,Match::MatterManipulatorInput|Match::MatterManipulatorUpgrade))
+        ||matches!(recipe.process,Some(Process::MatterManipulatorUpgrade(_))),"Matter state and metadata predicates require their native process");
+    let gendustry=match recipe.source.handler.as_str() {
+        "net.bdew.gendustry.nei.ImprinterHandler"=>Some(super::gendustry::Operation::Imprint),
+        "net.bdew.gendustry.nei.SamplerHandler"=>Some(super::gendustry::Operation::Sample),
+        "net.bdew.gendustry.nei.TransposerHandler"=>Some(super::gendustry::Operation::TransposeSample),
+        "net.bdew.gendustry.nei.MutatronHandler"=>Some(super::gendustry::Operation::Mutate),
+        "net.bdew.gendustry.nei.ReplicatorHandler"=>Some(super::gendustry::Operation::Replicate),
+        "net.bdew.gendustry.nei.ExtractorHandler"=>Some(super::gendustry::Operation::Extract),
+        _=>None,
+    };
+    if let Some(operation)=gendustry {
+        ensure!(matches!(&recipe.process,Some(Process::GendustryGenetics(p)) if p.operation==operation
+            || operation==super::gendustry::Operation::TransposeSample&&p.operation==super::gendustry::Operation::TransposeTemplate),
+            "native Gendustry handler requires its machine process");
+    }
+    ensure!(recipe.source.handler!="net.bdew.gendustry.nei.TemplateCraftingHandler"
+        || matches!(recipe.process,Some(Process::GendustryTemplate(_))),
+        "native Gendustry template handler requires its gene merge process");
+    ensure!(!matches!(recipe.source.handler.as_str(),"net.bdew.gendustry.nei.LiquifierHandler"|"net.bdew.gendustry.nei.MutagenProducerHandler")
+        ||matches!(recipe.process,Some(Process::GendustryFluid(_))),"Native Gendustry fluid handler requires its source-table process");
+    ensure!(!matches!(recipe.source.handler.as_str(),"mrtjp.projectred.core.libmc.recipe.PRShapedRecipeHandler"|"mrtjp.projectred.core.libmc.recipe.PRShapelessRecipeHandler")
+        ||matches!(recipe.process,Some(Process::ProjectRedCrafting(_))),"ProjectRed requires its native physical/greedy predicates");
+    ensure!(!matches!(recipe.source.handler.as_str(),"vazkii.botania.client.integration.nei.recipe.RecipeHandlerPureDaisy"|"vazkii.botania.client.integration.nei.recipe.RecipeHandlerPetalApothecary"|"vazkii.botania.client.integration.nei.recipe.RecipeHandlerElvenTrade"|"vazkii.botania.client.integration.nei.recipe.RecipeHandlerBrewery")
+        ||matches!(recipe.process,Some(Process::BotaniaWorld(_))),"Botania world handler requires its native state/selection law");
+    ensure!(recipe.source.handler!="lumien.randomthings.Handler.ModCompability.NEI.ImbuingStationRecipeHandler"||matches!(recipe.process,Some(Process::RandomThingsImbuing(_))),"Imbuing requires identity-map and cached output law");
+    ensure!(!matches!(recipe.source.handler.as_str(),"WayofTime.alchemicalWizardry.client.nei.NEIBloodOrbShapedHandler"|"WayofTime.alchemicalWizardry.client.nei.NEIBloodOrbShapelessHandler")||matches!(recipe.process,Some(Process::BloodOrbCrafting(_))),"Blood Orb workbench requires its early-failure predicate law");
+    ensure!(recipe.source.handler!="WayofTime.alchemicalWizardry.client.nei.NEIAlchemyRecipeHandler"||matches!(recipe.process,Some(Process::BloodAlchemy(_))),"Alchemy table requires its native inventory and container replacement law");
+    ensure!(recipe.source.handler!="logisticspipes.nei.NEISolderingStationRecipeManager"||matches!(recipe.process,Some(Process::LogisticsSoldering(_))),"Soldering requires native side-effect removal and result callbacks");
+    ensure!(recipe.source.handler!="WayofTime.alchemicalWizardry.client.nei.NEICalcinatorHandler"||matches!(recipe.process,Some(Process::BloodCalcinator(_))),"Calcinator requires its internal reagent process");
+    ensure!(recipe.source.handler!="codechicken.nei.recipe.BrewingRecipeHandler"||matches!(recipe.process,Some(Process::NativeBrewing(_))),"Brewing handler requires its shared-ingredient inventory transformation");
+    ensure!(recipe.source.handler != "appeng.integration.modules.NEIHelpers.NEIFacadeRecipeHandler"
+        || matches!(recipe.process,Some(Process::AeFacade(_))),
+        "native AE2 facade handler requires its grid process");
+    ensure!(recipe.source.handler!="alkalus.main.nei.NEI_Handler_Oven"
+        || matches!(recipe.process,Some(Process::WitcheryOven(_)|Process::WitcheryNativeOven(_))),"native Witchery oven requires its jar/byproduct process");
+    ensure!(recipe.source.handler!="alkalus.main.nei.NEI_Handler_Cauldron"
+        || matches!(recipe.process,Some(Process::WitcheryRitual(_)|Process::WitcheryNativeRitual(_))),"native cauldron requires its explicit action/result scope");
+    ensure!(matches!(recipe.process,Some(Process::WitcheryOven(_)))
+        || !recipe.inputs.iter().flat_map(|input|&input.choices).any(|choice|matches!(choice.rule,Match::WitcheryOvenNbt{..})),
+        "oven NBT admission requires its native byproduct process");
+    ensure!(matches!(recipe.process,Some(Process::Chisel(_)))
+        || !recipe.inputs.iter().flat_map(|input|&input.choices)
+            .any(|choice|matches!(choice.rule,Match::ChiselSource{..}|Match::ChiselTool{..})),
+        "Chisel predicates require the native carving process");
+    ensure!(matches!(recipe.process,Some(Process::WitcheryDistillery(_)))
+        || !recipe.inputs.iter().flat_map(|input|&input.choices).any(|choice|matches!(choice.rule,Match::DistilleryJar)),
+        "Distillery jar predicate requires its native inventory process");
+    ensure!(matches!(recipe.process,Some(Process::CreativeCoreCrafting(_)))
+        ||!recipe.inputs.iter().flat_map(|i|&i.choices).any(|c|matches!(c.rule,Match::CreativeCore{..})),"CreativeCore predicates require native stock and selection law");
+    ensure!(recipe.source.handler!="com.creativemd.creativecore.api.nei.NEIRecipeInfoHandler"||matches!(recipe.process,Some(Process::CreativeCoreCrafting(_))),"CreativeCore handler requires native stock and selection law");
+    ensure!(!["appeng.integration.modules.NEIHelpers.NEIAEShapedRecipeHandler","appeng.integration.modules.NEIHelpers.NEIAEShapelessRecipeHandler","net.p455w0rd.wirelesscraftingterminal.integration.modules.NEIHelpers.NEIAEShapedRecipeHandler"].contains(&recipe.source.handler.as_str())||matches!(recipe.process,Some(Process::AeCrafting(_))),"AE native handler requires its cell and greedy selection law");
+    ensure!(recipe.source.handler!="crazypants.enderio.nei.EnchanterRecipeHandler"||matches!(recipe.process,Some(Process::EnderioEnchanter(_))),"Enchanter requires count-selected level and native pickup law");
+    ensure!(matches!(recipe.process,Some(Process::EnderioEnchanter(_)))||!recipe.inputs.iter().flat_map(|i|&i.choices).any(|c|matches!(c.rule,Match::EnchanterBook)),"Enchanter book presence requires native slot-clearing law");
+    ensure!(recipe.source.handler!="binnie.extratrees.nei.NEIHandlerLumbermill"||matches!(recipe.process,Some(Process::BinnieLumbermill(_))),"Native lumbermill requires runtime inventory semantics");
+    let blood=match recipe.source.handler.as_str() {
+        "WayofTime.alchemicalWizardry.client.nei.NEIAltarRecipeHandler"=>matches!(recipe.process,Some(Process::BloodAltar(_))),
+        "WayofTime.alchemicalWizardry.client.nei.NEIBindingRitualHandler"=>matches!(recipe.process,Some(Process::BloodBinding(_))),
+        "WayofTime.alchemicalWizardry.client.nei.NEIMeteorRecipeHandler"=>matches!(recipe.process,Some(Process::BloodMeteor(_))),
+        _=>true,
+    };
+    ensure!(blood,"Native Blood Magic handler requires its altar or world ritual process");
+    ensure!(matches!(recipe.process,Some(Process::BloodAltar(_)))
+        || !recipe.inputs.iter().flat_map(|i|&i.choices).any(|c|matches!(c.rule,Match::BloodAltar{..})),
+        "Native altar predicate requires its stack conversion or charging process");
+    ensure!(matches!(recipe.process,Some(Process::BinnieLumbermill(_)))||!recipe.inputs.iter().flat_map(|i|&i.choices).any(|c|matches!(c.rule,Match::LumbermillTank)),"Lumbermill tank presence requires native runtime law");
+    ensure!(matches!(recipe.process,Some(Process::AeFacade(_)))
+        || !recipe.inputs.iter().flat_map(|input|&input.choices).any(|choice|matches!(choice.rule,Match::FacadeTexture)),
+        "facade texture admission requires its native grid");
+    ensure!(matches!(recipe.process,Some(Process::AeWorldAcquisition(_)))
+        || !recipe.inputs.iter().flat_map(|input|&input.choices).any(|choice|matches!(choice.rule,Match::AeCrystalSeed{..})),
+        "crystal progress admission requires its native growth action");
+    ensure!(matches!(recipe.process,Some(Process::AeWorldAcquisition(_)))
+        || !recipe.inputs.iter().flat_map(|input|&input.choices).any(|choice|matches!(choice.rule,Match::AeEnderDust{..})),
+        "AE2 ender-dust admission requires its native world action");
     ensure!(
         matches!(recipe.process, Some(Process::ForestrySqueezer { .. }))
             || !recipe
@@ -691,13 +949,13 @@ pub(super) fn validate(
         "integration predicate requires its machine process"
     );
     ensure!(
-        matches!(recipe.process, Some(Process::Ic2Blast { .. }))
+        matches!(recipe.process, Some(Process::Ic2Blast { .. } | Process::BinnieGenetics(_)))
             || !recipe
                 .inputs
                 .iter()
                 .flat_map(|i| &i.choices)
                 .any(|c| matches!(c.consume, Consumption::Staged)),
-        "staged consumption requires the IC2 blast process"
+        "staged consumption requires a typed native process"
     );
     ensure!(
         matches!(recipe.process, Some(Process::Soul { .. }))
@@ -728,13 +986,26 @@ pub(super) fn validate(
                     | Process::BuildcraftRefinery { .. }
                     | Process::BuildcraftIntegration { .. }
                     | Process::ForestrySqueezer { .. }
+                    | Process::ForestryFabricator(_)
+                    | Process::ForestryProcessing(_)
+                    | Process::WitcheryOven(_)
+                    | Process::WitcheryNativeOven(_)
+                    | Process::WitcheryKettle(_)
+                    | Process::LootBagOpening(_)
+                    | Process::WitcheryDistillery(_)
+                    | Process::EnderioEnchanter(_)
+                    | Process::BinnieLumbermill(_)
+                    | Process::BloodAlchemy(_)
+                    | Process::LogisticsSoldering(_)
+                    | Process::RandomThingsImbuing(_)
+                    | Process::NativeInfusion(_)
             )
         ) || !recipe
             .inputs
             .iter()
             .flat_map(|i| &i.choices)
             .any(|c| matches!(c.consume, Consumption::Allocated)),
-        "allocated consumption requires a native assembly process"
+        "allocated consumption requires a typed native inventory process"
     );
     ensure!(
         matches!(recipe.process, Some(Process::Sag { .. }))
@@ -746,13 +1017,13 @@ pub(super) fn validate(
         "optional ball stock requires a SAG process"
     );
     ensure!(
-        matches!(recipe.process, Some(Process::Splice { .. }))
+        matches!(recipe.process, Some(Process::Splice { .. } | Process::BinnieGenetics(_) | Process::FmpMicroblock(_)))
             || !recipe
                 .inputs
                 .iter()
                 .flat_map(|i| &i.choices)
                 .any(|c| matches!(c.consume, Consumption::Wear)),
-        "conditional tool wear requires a native splice process"
+        "conditional wear requires a typed native process"
     );
     ensure!(
         matches!(recipe.process, Some(Process::Vat { .. }))
@@ -772,6 +1043,14 @@ pub(super) fn validate(
             || matches!(recipe.process, Some(Process::Inscriber { .. })),
         "AE precise inputs require an inscriber process"
     );
+    ensure!(recipe.source.handler != "appeng.integration.modules.NEIHelpers.NEIInscriberRecipeHandler"
+        || matches!(recipe.process,Some(Process::Inscriber{..})),
+        "Native inscriber requires precise plate, rename and consumption semantics");
+    ensure!(recipe.source.handler != "gtPlusPlus.nei.DecayableRecipeHandler" || matches!(recipe.process,Some(Process::DecayChest(_))), "GT++ decay handler requires native whole-stack lifecycle rules");
+    ensure!(recipe.source.handler != "advsolar.client.nei.MTRecipeHandler" || matches!(recipe.process,Some(Process::MolecularTransformer(_))), "Molecular transformer requires native priority/energy/output rules");
+    ensure!(!super::circuit::is_handler(&recipe.source.handler) || matches!(recipe.process,Some(Process::CircuitFabricator(_))), "Circuit handler requires native five-slot/output-state law");
+    ensure!(recipe.source.handler!="micdoodle8.mods.galacticraft.core.nei.RefineryRecipeHandler"||matches!(recipe.process,Some(Process::GalacticraftRefinery(_))),"Refinery requires native tank/output-state law");
+    ensure!(recipe.source.handler!="alkalus.main.nei.NEI_Handler_Distillery"||matches!(recipe.process,Some(Process::WitcheryDistillery(_))),"Distillery requires native priority/inventory/work law");
     let Some(process) = &recipe.process else {
         ensure!(
             !recipe.inputs.iter().any(|i| i
@@ -783,6 +1062,66 @@ pub(super) fn validate(
         return Ok(());
     };
     process.validate_parameters()?;
+    match process {
+        Process::MatterManipulatorUpgrade(p)=>return super::matter_manipulator::validate(p,recipe,items),
+        Process::SalisReplacement(p)=>return super::salis_wand::validate(p,recipe,items,aspects),
+        Process::NativeRunic(p)=>return super::runic::validate(p,recipe,items,aspects),
+        Process::NativeBotaniaPool(p)=>return super::botania_pool::validate(p,recipe,items),
+        Process::BotaniaPool(p)=>return super::botania::validate_pool(p,recipe,items),
+        Process::BotaniaRunic(p)=>return super::botania::validate_runic(p,recipe,items),
+        Process::BotaniaWorld(p)=>return super::botania_world::validate(p,recipe,items),
+        Process::EnderioEnchanter(p)=>return super::enchanter::validate(p,recipe,items),
+        Process::CreativeCoreCrafting(p)=>return super::creativecore::validate(p,recipe,items),
+        Process::AeCrafting(p)=>return super::ae_crafting::validate(p,recipe,items),
+        Process::WirelessTerminalUpgrade(p)=>return super::wireless_terminal::validate(p,recipe,items),
+        Process::ProjectRedCrafting(p)=>return super::projectred::validate(p,recipe,items),
+        Process::RandomThingsImbuing(p)=>return super::imbuing::validate(p,recipe,items),
+        Process::BloodOrbCrafting(p)=>return super::blood_orb::validate(p,recipe,items),
+        Process::BloodAlchemy(p)=>return super::inventory_process::validate_alchemy(p,recipe,items),
+        Process::LogisticsSoldering(p)=>return super::inventory_process::validate_soldering(p,recipe,items),
+        Process::BloodCalcinator(p)=>return super::blood_calcinator::validate(p,recipe,items),
+        Process::NativeBrewing(p)=>return super::native_brewing::validate(p,recipe,items),
+        Process::Ic2CropPrediction(p) => return super::crop_prediction::validate(p, recipe),
+        Process::XuMicroblock(p) => return super::xu_microblock::validate(p,recipe,items),
+        Process::FmpMicroblock(p) => return super::fmp::validate(p,recipe,items),
+        Process::CalImprint(p) => return super::cal_imprint::validate(p,recipe,items),
+        Process::SpaceAcquisition(p) => return super::space_acquisition::validate(p,recipe),
+        Process::LootBagOpening(p) => return super::lootbag::validate(p,recipe,items),
+        Process::BannerPattern(p) => return super::banner::validate(p,recipe,items),
+        Process::ExtraUtilsSoul(p) => return super::extrautils_soul::validate(p,recipe,items),
+        Process::DecayChest(p) => return super::decay::validate(p,recipe,items),
+        Process::MolecularTransformer(p) => return super::solar::validate(p,recipe,items),
+        Process::CircuitFabricator(p) => return super::circuit::validate(p,recipe,items),
+        Process::GalacticraftRefinery(p) => return super::refinery::validate(p,recipe,fluids),
+        Process::WitcheryDistillery(p) => return super::distillery::validate(p,recipe,items),
+        Process::AeWorldAcquisition(p) => return super::ae_world::validate_world(p,recipe,items),
+        Process::AeFacade(p) => return super::ae_world::validate_facade(p,recipe,items),
+        Process::WitcheryOven(p) => return super::witchery::validate_oven(p,recipe,items),
+        Process::WitcheryNativeOven(p) => return super::native_oven::validate(p,recipe,items),
+        Process::WitcheryKettle(p) => return super::witchery::validate_kettle(p,recipe,items),
+        Process::WitcheryRitual(p) => return super::witchery::validate_ritual(p,recipe,items),
+        Process::WitcheryNativeRitual(p) => return super::native_ritual::validate(p,recipe,items,fluids),
+        Process::WitcheryInfernal(p) => return super::witchery::validate_infernal(p,recipe,items),
+        Process::Chisel(p) => return super::chisel::validate(p,recipe,items),
+        Process::BloodAltar(p) => return super::blood::validate_altar(p,recipe,items),
+        Process::BloodBinding(p) => return super::blood::validate_binding(p,recipe,items),
+        Process::BloodMeteor(p) => return super::blood::validate_meteor(p,recipe,items),
+        Process::BinnieLumbermill(p) => return super::binnie::validate_native_recipe(p,recipe,items,fluids),
+        Process::BinnieGenetics(p) => return super::binnie_genetics::validate_recipe(p,recipe,items,fluids),
+        Process::GendustryGenetics(p) => return super::gendustry::validate_genetics(p,recipe,items,fluids),
+        Process::GendustryTemplate(p) => return super::gendustry::validate_template(p,recipe,items),
+        Process::GendustryFluid(p) => return super::gendustry_fluid::validate(p,recipe,items,fluids),
+        Process::ForestryBottler(p) => return super::bottler::validate_recipe(p,recipe,items,fluids),
+        Process::ForestryFabricator(_) | Process::ForestryProcessing(_) => {
+            ensure!(recipe.duration.is_none() && recipe.energy.is_none() && recipe.magic.is_none(), "Fabricator cannot invent fixed timing or EU/t");
+            // Typed shared-program cross-check is performed by Domain::validate.
+            return Ok(());
+        }
+        _ => {}
+    }
+    if let Process::HarvestDrops(drops) = process {
+        return super::harvest::validate_recipe(recipe, drops);
+    }
     if matches!(process, Process::ForestrySqueezer { .. }) {
         ensure!(
             recipe.duration.is_none()
@@ -861,11 +1200,41 @@ pub(super) fn validate(
     if let Process::Rolling { earlier, .. } = process {
         return super::rolling::validate(recipe, earlier, items);
     }
-    if let Process::GalaxyspaceAssembly { earlier } = process {
-        return super::rolling::validate(recipe, earlier, items);
+    if let Process::RailcraftBlast(p)=process {
+        return super::rail_blast::validate(p,recipe,items);
+    }
+    if let Process::ExtremeCrafting(p) = process {
+        return super::extreme::validate(p, recipe, items);
+    }
+    if let Process::GalaxyspaceAssembly { earlier, repair } = process {
+        ensure!(recipe.source.handler == "galaxyspace.core.nei.AssemblyMachineRecipeHandler",
+            "GalaxySpace assembly process is bound to its native handler");
+        super::rolling::validate(recipe, earlier, items)?;
+        return super::extreme::validate_repair(repair, recipe, items);
     }
     if let Process::FloatingFlowers { special } = process {
         return super::floating::validate(recipe, special, items);
+    }
+    if let Process::NativeFloatingFlowers(p) = process {
+        return super::floating::validate_native(p, recipe, items);
+    }
+    if let Process::ArcaneSpecial(p)=process {
+        return super::arcane_special::validate(p,recipe,items,aspects);
+    }
+    if let Process::NativeInfusion(p)=process {
+        return super::infusion::validate(p,recipe,items);
+    }
+    if let Process::DisguiseInfusion(p)=process {
+        return super::infusion_disguise::validate(p,recipe,items);
+    }
+    if let Process::StickyJar(p)=process {
+        return super::arcane_special::validate_sticky(p,recipe,items,aspects);
+    }
+    if let Process::WitcherySpinning(p)=process {
+        return super::witchery_spinning::validate(p,recipe,items);
+    }
+    if let Process::WitchingSpinning(p)=process {
+        return super::witching_spinning::validate(p,recipe,items);
     }
     if let Process::Qed { earlier, .. } = process {
         ensure!(
@@ -915,6 +1284,13 @@ pub(super) fn validate(
             name_press.as_deref(),
             items,
         );
+    }
+    if matches!(process, Process::GtCrafting(_)) {
+        return super::gt_crafting::validate(recipe, items);
+    }
+    if matches!(process,Process::Ic2Advanced(_)){return super::ic2_advanced::validate(recipe,items);}
+    if matches!(process, Process::CraftingNbt {}) {
+        return super::crafting_nbt::validate(recipe, items);
     }
     if matches!(process, Process::MapScaling {}) {
         return validate_map(recipe, items);
@@ -1162,12 +1538,12 @@ fn validate_vat(
         .context("missing Vat input fluid")?;
     ensure!(input.choices.len() == 1, "Vat requires one table fluid");
     let c = &input.choices[0];
-    integer(&c.amount, 1, 8000)?;
+    integer(&c.amount, 0, 8000)?;
     ensure!(
-        matches!(c.rule, Match::Exact)
-            && c.returns.is_empty()
-            && (matches!(c.consume, Consumption::Consume)
-                || matches!(c.consume, Consumption::Keep) && c.amount == "1"),
+        c.returns.is_empty()
+            && (c.amount == "0" && matches!(c.rule, Match::NativeZeroFluid { policy: super::NativeZeroFluidPolicy::VatMatch })
+                && matches!(c.consume, Consumption::Keep)
+                || c.amount != "0" && matches!(c.rule, Match::Exact) && matches!(c.consume, Consumption::Consume)),
         "invalid Vat fluid consumption"
     );
     ensure!(
@@ -1728,7 +2104,7 @@ fn validate_map(recipe: &Recipe, items: &BTreeMap<&str, &super::Item>) -> Result
     Ok(())
 }
 
-fn runic_costs(charge: i32) -> (i64, i32, i32) {
+pub(super) fn runic_costs(charge: i32) -> (i64, i32, i32) {
     (
         1 + i64::from(charge.max(0)),
         (32.0 * 2.0_f64.powi(charge)) as i32,

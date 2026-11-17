@@ -1,0 +1,55 @@
+{
+  "schemaSha256": "eea3bbaecc743ddf53bb5fbad2e26a1f16c5ae9e238f5cae4bb770b70783f682",
+  "formats": {
+    "source": {
+      "name": "elysium.source",
+      "revision": 41
+    },
+    "catalog": {
+      "name": "elysium.catalog",
+      "revision": 41
+    }
+  },
+  "collections": [
+    "aspects",
+    "blocks",
+    "browse",
+    "builds",
+    "categories",
+    "circuits",
+    "fluids",
+    "groups",
+    "index",
+    "items",
+    "lineage",
+    "links",
+    "materials",
+    "models",
+    "mutations",
+    "ore-groups",
+    "ore-members",
+    "programs",
+    "recipes",
+    "references",
+    "research",
+    "shapes",
+    "species",
+    "strings",
+    "structures",
+    "textures",
+    "topics",
+    "visuals"
+  ],
+  "topicKinds": [
+    "material",
+    "circuit",
+    "bee",
+    "tree",
+    "butterfly",
+    "flower",
+    "ore",
+    "structure",
+    "aspect",
+    "research"
+  ]
+}

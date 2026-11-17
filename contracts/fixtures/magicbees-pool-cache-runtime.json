@@ -1,0 +1,1 @@
+{"afterNanos":"160634348120400","artifactSha256":"8c36a80ea613d0b6b8040a17cf837c5bbe3677bc1b06a058a6c174fdb787ebbc","beforeNanos":"160634347884700","clock":"javaSystemNanoTime","runtime":"guava17StrongAccess","scope":"serialOwnedTransitionsFromBoundSnapshotWithExplicitTickerReads"}

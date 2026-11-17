@@ -1,5 +1,15 @@
 # Runic augmentation
 
+## Current implementation batch
+
+Unverified: production has moved to a distinct `nativeRunic` process carrying the exact native recipe owner, observed signed charge, source-bound `LegacyPattern` and pedestal limit. It uses two symbolic component groups and separate startup/cycle observations for all four configured ore modes. Center and diamond use whole-slot consumption; the repeated resource amount counts distinct pedestals. Charge, costs, instability and output remain observations for the offered specimen, not a universal price for all NBT variants. `Edit::Runic` is shared with the historical process and preserves native hardening-byte overflow.
+
+The Compiler checks generated template roles, comparison states and native phase matching, the saturated vis formula and its aspect sources, sample multiplicities, return limits and result bindings. TS/Query/HTTP/detail/materials receive the same family; Chinese and English are separate. The current producer does not emit a native recipe view, background, slot frame or progress track. Existing historical Source/Catalog fixtures are preserved. Contract generation, unified protocol/version migration and concentrated verification have not run, and no export-ready claim follows from this code.
+
+See NESQL++ `docs/runic-provider-readers.md` for provider ownership, nested BloodMagic inventory semantics, sealing dependencies and outstanding parity boundaries.
+
+## Historical process
+
 Source 19 / Catalog 18: `process: {kind: "runic", charge: int32}` identifies the
 Thaumcraft 4.2.3.5a `InfusionRunicAugmentRecipe` process. It is not a fixed-cost
 infusion recipe. `charge`, `magic.aspects`, `magic.instability`, and the amount of

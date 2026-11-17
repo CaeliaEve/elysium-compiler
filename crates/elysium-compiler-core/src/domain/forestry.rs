@@ -69,20 +69,36 @@ pub struct FilledContainer {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct SqueezerCallback {
-    pub registry: String,
-    pub kind: CallbackKind,
+#[serde(tag="kind",rename_all="camelCase",rename_all_fields="camelCase",deny_unknown_fields)]
+pub enum SqueezerCallback {
+    Unsupported {registry:String},
+    NoFluid {registry:String},
+    Forge {registry:String},
+    Ic2 {registry:String},
+    NoContainerRule {registry:String,
+        #[serde(rename="drainedRegistries")]drained_registries:Vec<String>,
+        #[serde(rename="readEffect")]read_effect:SqueezerReadEffect,
+        #[serde(rename="minMeta")]min_meta:i32,
+        #[serde(rename="maxMeta")]max_meta:i32,
+        #[serde(rename="compoundTags")]compound_tags:Vec<String>},
+    GtFixed {registry:String,rows:Vec<SqueezerGtFluid>},
 }
-
-/// Forge/IC2 here prove no matching container key; they are not general drain models.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub enum CallbackKind {
-    Unsupported,
-    NoFluid,
-    Forge,
-    Ic2,
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all="camelCase")]
+pub enum SqueezerReadEffect {Preserve,EnsureCompound,GtppPump}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all="camelCase",deny_unknown_fields)]
+pub struct SqueezerGtFluid {
+    pub meta:i16,pub fluid:ForestryFluid,
+    #[serde(deserialize_with="super::nei_information::required_nullable")]
+    #[schemars(with="super::nei_information::RequiredNullable<String>")]
+    pub empty_registry:Option<String>,pub empty_meta:i32,
+}
+impl SqueezerCallback {
+    fn registry(&self)->&str{match self{
+        Self::Unsupported{registry}|Self::NoFluid{registry}|Self::Forge{registry}|Self::Ic2{registry}
+        |Self::NoContainerRule{registry,..}|Self::GtFixed{registry,..}=>registry,
+    }}
 }
 
 #[derive(Debug, PartialEq)]
@@ -127,7 +143,7 @@ impl SqueezerProgram {
                     !self
                         .dynamic
                         .iter()
-                        .any(|c| c.registry == fixed.filled.registry),
+                        .any(|c| c.registry() == fixed.filled.registry),
                     "Squeezer selector requires an unmodeled Java callback"
                 );
                 let (index, recipe) = self.fixed_recipe(&fixed.filled, fixed).ok_or_else(|| {
@@ -208,16 +224,36 @@ impl SqueezerProgram {
         // Containers are searched by physical input slot before any ordinary rule.
         let mut observed = stock.to_vec();
         for stack in observed.iter_mut().flatten() {
-            if let Some(callback) = self.dynamic.iter().find(|c| c.registry == stack.registry) {
-                ensure!(
-                    callback.kind != CallbackKind::Unsupported,
-                    "Squeezer container requires an unmodeled Java callback: {}",
-                    stack.registry
-                );
-                if callback.kind == CallbackKind::Ic2 && stack.nbt.is_none() {
-                    stack.nbt = Some(Nbt::Compound {
-                        value: Default::default(),
-                    });
+            if let Some(callback) = self.dynamic.iter().find(|c| c.registry() == stack.registry) {
+                match callback {
+                    SqueezerCallback::Unsupported{..}=>anyhow::bail!("Squeezer container requires an unmodeled Java callback: {}",stack.registry),
+                    SqueezerCallback::Ic2{..}=>ensure_compound(stack),
+                    SqueezerCallback::NoContainerRule{read_effect,min_meta,max_meta,compound_tags,..}=>{
+                        ensure!((*min_meta..=*max_meta).contains(&stack.meta),"Native container metadata is outside its verified domain");
+                        if let Some(Nbt::Compound{value})=&stack.nbt{for key in compound_tags{
+                            ensure!(value.get(key).is_none_or(|tag|matches!(tag,Nbt::Compound{..})),"Native container compound tag has an incompatible type");
+                        }}
+                        match read_effect {
+                            SqueezerReadEffect::Preserve => {},
+                            SqueezerReadEffect::EnsureCompound => ensure_compound(stack),
+                            SqueezerReadEffect::GtppPump => initialize_gtpp_pump(stack),
+                        }
+                    }
+                    SqueezerCallback::GtFixed{rows,..}=>{
+                        if stack.amount>=0 {if let Some(row)=rows.iter().find(|row|row.meta==stack.meta as i16){
+                            let mut drained=stack.clone();
+                            if row.fluid.amount!=0 {
+                                if let Some(empty)=&row.empty_registry{drained.registry=empty.clone();drained.meta=row.empty_meta.max(0);}
+                                else{drained.amount=0;}
+                            }
+                            if let Some(container)=self.containers.iter().find(|container|container.key.matches(&drained)){
+                                let mut demand=stack.clone();demand.amount=1;
+                                let recipe=SqueezerRecipe{time:container.time,requirements:vec![Some(demand)],fluid:Some(row.fluid.clone()),remnant:container.remnant.clone(),chance:container.chance.clone()};
+                                return Ok(SqueezerSelection{selected:Some(recipe),stock:observed});
+                            }
+                        }}
+                    }
+                    SqueezerCallback::NoFluid{..}|SqueezerCallback::Forge{..}=>{}
                 }
                 // Dynamic dispatch never falls through to the fixed Forge registry.
                 continue;
@@ -263,33 +299,49 @@ impl SqueezerProgram {
             match &container.key {
                 ContainerKey::Stack { stack } => {
                     stack.validate()?;
-                    container_registries.insert(&stack.registry);
+                    container_registries.insert(stack.registry.as_str());
                 }
                 ContainerKey::Item { registry } => {
                     registry_name(registry)?;
-                    container_registries.insert(registry);
+                    container_registries.insert(registry.as_str());
                 }
                 ContainerKey::Ore { members } => {
                     ensure!(members.len() <= 65536, "Squeezer ore key exceeds budget");
                     for stack in members {
                         stack.validate()?;
-                        container_registries.insert(&stack.registry);
+                        container_registries.insert(stack.registry.as_str());
                     }
                 }
             }
         }
         let mut callbacks = std::collections::BTreeSet::new();
         for callback in &self.dynamic {
-            registry_name(&callback.registry)?;
+            let registry=callback.registry();registry_name(registry)?;
             ensure!(
-                callbacks.insert(&callback.registry),
+                callbacks.insert(registry),
                 "Duplicate squeezer callback registry"
             );
-            if matches!(callback.kind, CallbackKind::Forge | CallbackKind::Ic2) {
+            if matches!(callback, SqueezerCallback::Forge{..} | SqueezerCallback::Ic2{..}|SqueezerCallback::GtFixed{..}) {
                 ensure!(
-                    !container_registries.contains(&callback.registry),
+                    !container_registries.contains(registry),
                     "Squeezer callback proof conflicts with a container key"
                 );
+            }
+            match callback {
+                SqueezerCallback::NoContainerRule{drained_registries,min_meta,max_meta,compound_tags,..}=>{
+                    let unique:std::collections::BTreeSet<_>=drained_registries.iter().collect();
+                    ensure!(min_meta<=max_meta&&!drained_registries.is_empty()&&drained_registries.len()<=65536
+                        &&unique.len()==drained_registries.len()&&drained_registries.iter().any(|target|target==registry),"Invalid native drain target/metadata domain");
+                    for target in drained_registries{registry_name(target)?;ensure!(!container_registries.contains(target.as_str()),"Native drain target can select a container rule");}
+                    let tags:std::collections::BTreeSet<_>=compound_tags.iter().collect();
+                    ensure!(compound_tags.len()<=4096&&tags.len()==compound_tags.len()&&compound_tags.iter().all(|key|!key.is_empty()&&key.len()<=65535),"Invalid native compound-tag domain");
+                }
+                SqueezerCallback::GtFixed{rows,..}=>{
+                    ensure!(rows.len()<=65536,"GT fixed container table exceeds its short metadata domain");
+                    let mut metas=std::collections::BTreeSet::new();
+                    for row in rows{ensure!(metas.insert(row.meta),"Duplicate GT container short metadata");row.fluid.validate()?;if let Some(empty)=&row.empty_registry{registry_name(empty)?;}}
+                }
+                _=>{}
             }
         }
         let mut keys = std::collections::BTreeSet::new();
@@ -298,7 +350,7 @@ impl SqueezerProgram {
             container.empty.validate()?;
             container.fluid.validate()?;
             ensure!(
-                !callbacks.contains(&container.filled.registry),
+                !callbacks.contains(container.filled.registry.as_str()),
                 "Dynamic squeezer item declared as a fixed container"
             );
             ensure!(
@@ -307,6 +359,26 @@ impl SqueezerProgram {
             );
         }
         Ok(())
+    }
+}
+
+fn ensure_compound(stack:&mut ForestryStack){if stack.nbt.is_none(){stack.nbt=Some(Nbt::Compound{value:Default::default()});}}
+
+/// GT++ 5.09.51.482 ItemGregtechPump#getFluid calls initNBT on the offered original.
+/// Native hasKey tests presence, including false or incorrectly typed markers.
+fn initialize_gtpp_pump(stack: &mut ForestryStack) {
+    let meta = if stack.meta < 1000 { 0 } else { (stack.meta - 1000).min(4) };
+    ensure_compound(stack);
+    if let Some(Nbt::Compound { value }) = &mut stack.nbt {
+        if value.contains_key("mInit") { return; }
+        value.insert("mMeta".into(), Nbt::Int { value: meta.to_string() });
+        value.insert("mInit".into(), Nbt::Byte { value: "1".into() });
+        value.insert("mFluid".into(), Nbt::String { value: "@@@@@".into() });
+        value.insert("mFluidAmount".into(), Nbt::Int { value: "0".into() });
+        if !value.contains_key("capacityInit") {
+            value.insert("mCapacity".into(), Nbt::Int { value: (2000 * 4i32.pow(meta as u32)).to_string() });
+            value.insert("capacityInit".into(), Nbt::Byte { value: "1".into() });
+        }
     }
 }
 
@@ -609,14 +681,14 @@ mod tests {
         ))
         .unwrap();
         let program: SqueezerProgram = serde_json::from_value(cases[0]["program"].clone()).unwrap();
-        for kind in [CallbackKind::Forge, CallbackKind::Ic2] {
+        for kind in ["forge", "ic2"] {
             let registry = program
                 .dynamic
                 .iter()
-                .find(|c| c.kind == kind)
+                .find(|c| matches!(c,SqueezerCallback::Forge{..})&&kind=="forge"||matches!(c,SqueezerCallback::Ic2{..})&&kind=="ic2")
                 .unwrap()
-                .registry
-                .clone();
+                .registry()
+                .to_owned();
             let empty = ForestryStack {
                 registry: registry.clone(),
                 meta: 0,
@@ -658,10 +730,10 @@ mod tests {
         let registry = program
             .dynamic
             .iter()
-            .find(|c| c.kind == CallbackKind::Unsupported)
+            .find(|c| matches!(c,SqueezerCallback::Unsupported{..}))
             .unwrap()
-            .registry
-            .clone();
+            .registry()
+            .to_owned();
         let stack = ForestryStack {
             registry,
             meta: 0,
@@ -769,9 +841,8 @@ mod tests {
             "Selector bypassed native first-key precedence"
         );
         let mut callback = observations.program.clone();
-        callback.dynamic.push(SqueezerCallback {
+        callback.dynamic.push(SqueezerCallback::Unsupported {
             registry: callback.filled[fixed.1 as usize].filled.registry.clone(),
-            kind: CallbackKind::Unsupported,
         });
         assert!(
             callback
@@ -802,9 +873,8 @@ mod tests {
             .unwrap();
         assert_eq!(selected.fluid.unwrap().amount, 1000);
         assert_eq!(selected.requirements[0].as_ref().unwrap().amount, 1);
-        program.dynamic.push(SqueezerCallback {
+        program.dynamic.push(SqueezerCallback::Unsupported {
             registry: filled.registry.clone(),
-            kind: CallbackKind::Unsupported,
         });
         assert!(
             program.select(&[Some(filled.clone())], None).is_err(),

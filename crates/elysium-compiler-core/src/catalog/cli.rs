@@ -1,7 +1,7 @@
 use super::{
     compile,
     store::{atomic_json, destination},
-    Catalog, Contract,
+    Catalog,
 };
 use crate::domain::Domain;
 use crate::source::Source;
@@ -179,7 +179,7 @@ pub fn run() -> Result<()> {
             serde_json::to_value(publication)?
         }
         Command::Schema { output } => {
-            atomic_json(&output, &schemars::schema_for!(Contract))?;
+            atomic_json(&output, &super::schema()?)?;
             json!({"schema": output})
         }
     };

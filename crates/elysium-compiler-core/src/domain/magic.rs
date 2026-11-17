@@ -5,6 +5,17 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+pub(super) const ARI_SHAPED: &str =
+    "com.gtnewhorizons.aspectrecipeindex.nei.arcaneworkbench.ShapedArcaneRecipeHandler";
+pub(super) const ARI_SHAPELESS: &str =
+    "com.gtnewhorizons.aspectrecipeindex.nei.arcaneworkbench.ShapelessArcaneRecipeHandler";
+pub(super) const ARI_INFUSION: &str =
+    "com.gtnewhorizons.aspectrecipeindex.nei.InfusionRecipeHandler";
+
+pub(super) fn ari_source(source: &Origin, handler: &str) -> bool {
+    source.owner == "aspectrecipeindex" && source.handler == handler
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AspectAmount {
@@ -247,7 +258,14 @@ pub(super) fn validate(
     };
     for recipe in &domain.recipes {
         if let Some(magic) = &recipe.magic {
-            amounts(&magic.aspects)?;
+            if matches!(recipe.process,Some(super::Process::NativeInfusion(_))) {
+                ensure!(magic.aspects.len()<=4096,"native infusion aspect budget exceeded");
+                let mut seen=BTreeSet::new();
+                for row in &magic.aspects {aspect(&row.aspect)?;ensure!(seen.insert(&row.aspect),"duplicate native infusion aspect");integer(&row.amount,i32::MIN as i64,i32::MAX as i64)?;}
+                if let Some(super::Process::NativeInfusion(p))=&recipe.process {
+                    if let Some(random)=&p.random_aspects {for row in random.bases(){aspect(&row.aspect)?;}}
+                }
+            } else {amounts(&magic.aspects)?;}
             links(&magic.research, true)?;
             if let Some(payment) = &magic.payment {
                 ensure!(
@@ -281,8 +299,9 @@ pub(super) fn validate(
                     changes.len() == 1,
                     "self-payment must bind one output patch"
                 );
-                let super::Edit::Patch { set, limits } = &changes[0].action else {
-                    anyhow::bail!("self-payment requires an output patch");
+                let(set,limits)=match &changes[0].action{
+                    super::Edit::Patch{set,limits}|super::Edit::SalisWand{set,limits,..}=>(set,limits),
+                    _=>anyhow::bail!("self-payment requires a native wand output edit"),
                 };
                 let mut keys = BTreeSet::new();
                 for (id, key) in &payment.charges {
@@ -297,7 +316,10 @@ pub(super) fn validate(
                         ensure!(
                             !set.contains_key(key)
                                 && (limits.is_empty()
-                                    || limits.get(key) == Some(&payment.capacity)),
+                                    || limits.get(key) == Some(&match &recipe.process {
+                                        Some(super::Process::SalisReplacement(p)) => p.charge_capacity,
+                                        _ => payment.capacity,
+                                    })),
                             "preserved charge contradicts the output patch"
                         );
                     } else {
@@ -347,7 +369,7 @@ pub(super) fn validate(
                 );
                 ensure!(
                     magic.instability.is_some_and(|value| value >= 0
-                        || matches!(recipe.process, Some(super::Process::Runic { .. }))),
+                        || matches!(recipe.process, Some(super::Process::Runic { .. }|super::Process::NativeRunic(_)|super::Process::NativeInfusion(_)|super::Process::DisguiseInfusion(_)))),
                     "invalid infusion instability"
                 );
             } else {

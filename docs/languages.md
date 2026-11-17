@@ -1,0 +1,11 @@
+# Single-language Catalogs (development Catalog 40)
+
+Each Catalog declares `locale`, copied from the verified Source environment. Every Source `Text.locale` must equal that environment locale. Localized display names, tooltips, notes, inline browse labels and search terms therefore belong to one immutable snapshot. Raw item identity (registry, metadata, typed NBT) and the recipe semantic identity are independent of display text; this does not prove two separate game sessions have equivalent rules or resources.
+
+Compiling `zh_CN` and `en_US` Sources into the same **new Catalog 40 publication directory** creates distinct immutable Catalog IDs and `locales/zh_CN.json` and `locales/en_US.json` pointers. `current.json` remains the last successful publication. Source revision remains 40; the Catalog manifest shape advances from 39 to 40. Existing historical publication directories are not rewritten or used as staging directories for the new revision.
+
+NeoNEI selects the matching Catalog through `/api/catalog?locale=zh_CN` or `en_US`, and pins its ID and UI `lang=zh-CN` or `en-US` in links. All record and asset caches remain scoped to that immutable ID. An explicit language mismatch is rejected before rendering. An unavailable translation is not supplied by translating images, filtering characters, guessing translations or mixing a second language's string table into a snapshot. The offline manifest and saved-copy metadata retain the locale and select a matching ready copy.
+
+Actual game names and tooltips must come from native capture in that language, including resource-pack overrides and game callbacks. UI translation does not create an English game export. Native unlocalized/mixed text and language-dependent image contents still require coverage reporting during formal acceptance; declared locale alone cannot prove every upstream translation exists. The two small local language fixtures exercise the reading and UI paths, not whole-pack native translation or pixel correctness.
+
+The NeoNEI reader keeps the existing archived 36/38 boundaries and a distinct Catalog 39 schema. It never changes archived revisions, identities or files. New manifests and new string tables are checked against Catalog 40 language rules.

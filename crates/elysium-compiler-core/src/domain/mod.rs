@@ -1,20 +1,119 @@
 //! Shared game facts. Source and catalog use these meanings without compatibility aliases.
 mod change;
 mod check;
+pub(crate) mod images;
+mod native_crafting;
+mod gt_tool;
+mod native_container;
+mod native_item_metadata;
+pub mod gt_crafting;
+pub mod gt_probability;
+mod crafting_nbt;
+#[cfg(test)]
+mod native_contracts;
 mod floating;
+pub mod botania;
+pub mod botania_cache;
+pub mod botania_cache_machine;
+pub mod botania_bee;
+pub mod botania_selection;
+pub mod botania_session;
+pub mod botania_program;
+pub mod botania_pool;
+pub mod botania_world;
 pub mod forestry;
 mod genetics;
 mod grinding;
+mod harvest;
+pub mod blood;
+pub mod blood_calcinator;
+pub mod inventory_process;
+pub mod blood_orb;
+pub mod imbuing;
+pub mod native_brewing;
+pub mod arcane_special;
+pub mod infusion;
+pub mod infusion_merge;
+pub mod infusion_ingredient;
+pub mod runic;
+pub mod salis_wand;
+pub mod matter_manipulator;
+pub mod infusion_disguise;
+pub mod binnie;
+pub mod binnie_genetics;
+pub mod chisel;
+pub mod distillery;
+pub mod creativecore;
+pub mod ae_crafting;
+pub mod wireless_terminal;
+pub mod infusion_cost;
+pub mod projectred;
+pub mod enchanter;
+pub mod gendustry;
+pub mod gendustry_fluid;
+pub mod bottler;
+pub mod fabricator;
+pub mod forestry_processing;
 mod industry;
 pub mod integration;
 mod magic;
 mod matching;
+pub mod ae_world;
+pub mod extrautils_soul;
+pub mod decay;
+pub mod decay_state;
+pub mod solar;
+pub mod circuit;
+pub mod refinery;
+pub mod banner;
+pub mod lootbag;
+pub mod space_acquisition;
+pub mod crop_prediction;
+pub mod cal_imprint;
+pub mod fmp;
+pub mod witchery;
+pub mod native_oven;
+pub mod native_ritual;
+pub mod witchery_spinning;
+pub mod witching_spinning;
 mod model;
 mod ores;
 mod process;
 pub mod programs;
+pub mod visual;
+pub mod fmp_program;
+pub mod xu_microblock;
+pub mod references;
+pub mod cropsnh;
+pub mod forge_registry;
+pub mod projectblue;
+pub mod ic2_advanced;
+pub mod structure_references;
+pub mod aspect_combinations;
+pub mod item_aspects;
+pub mod furnace_fuels;
+pub mod fireworks;
+pub mod lathe;
+pub mod lexicon;
+pub mod mob_drops;
+pub mod infernal_drops;
+pub mod draconic_reactor;
+pub mod bee_tree;
+pub mod forestry_addons;
+pub mod nei_information;
+pub mod usage_queries;
+pub mod nei_diagrams;
+pub mod ender_storage;
+pub mod underground_fluids;
+pub mod gt_minerals;
+pub mod bartworks_ores;
+pub mod betterquesting;
+pub mod villager_trades;
+pub mod tool_materials;
 mod quantity;
 mod rolling;
+pub mod extreme;
+pub mod rail_blast;
 mod soul;
 mod structure;
 pub use change::{Change, Edit, Stack};
@@ -109,7 +208,7 @@ pub struct Reference {
 #[serde(deny_unknown_fields)]
 pub struct Choice {
     pub id: String,
-    /// Positive signed-64-bit integer: item count or fluid millibuckets.
+    /// Signed-64-bit count/millibuckets. Zero requires a native fluid policy; Forestry has native signed values.
     pub amount: String,
     pub consume: Consumption,
     pub returns: Vec<Remainder>,
@@ -127,7 +226,51 @@ pub struct Remainder {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Match {
+    /// Display anchor only; the ordered shared pool session owns admission.
+    #[serde(rename="nativePoolInput")]
+    NativePoolInput,
+    #[serde(rename="matterManipulatorInput")]
+    MatterManipulatorInput,
+    #[serde(rename="matterManipulatorUpgrade")]
+    MatterManipulatorUpgrade,
+    #[serde(rename = "nativeZeroFluid")]
+    NativeZeroFluid { policy: NativeZeroFluidPolicy },
+    #[serde(rename="fmpMaterial",rename_all="camelCase")]
+    FmpMaterial {program:String,material_id:i32,#[serde(default,skip_serializing_if="Option::is_none")]native_text:Option<String>},
+    #[serde(rename="calInput",rename_all="camelCase")]
+    CalInput {role:cal_imprint::Role,#[schemars(length(min=1,max=1000))] imprint_ids:Vec<i32>},
+    #[serde(rename="bannerInput",rename_all="camelCase")]
+    BannerInput { max_patterns:u8 },
     Exact,
+    #[serde(rename = "facadeTexture")]
+    FacadeTexture,
+    #[serde(rename = "ae2CrystalSeed")]
+    AeCrystalSeed { start: i32, end: i32 },
+    /// EntitySingularity passes the offered stack first to itemMatches(false).
+    #[serde(rename = "ae2EnderDust")]
+    AeEnderDust { ore: String, #[schemars(range(min = 0))] metadata: i32 },
+    /// Native oven admission partitioned by the offered stack's Genome tags.
+    /// The display anchor may belong to another partition; it is not a witness.
+    #[serde(rename = "witcheryOvenNbt")]
+    WitcheryOvenNbt { meta: bool, product: witchery::OvenByproduct },
+    #[serde(rename = "chiselSource")]
+    ChiselSource { meta: bool, nbt: bool },
+    #[serde(rename = "chiselTool")]
+    ChiselTool { source: u32 },
+    #[serde(rename = "distilleryJar")]
+    DistilleryJar,
+    #[serde(rename = "creativeCore")]
+    CreativeCore { input:u32 },
+    #[serde(rename="enchanterBook")]
+    EnchanterBook,
+    #[serde(rename="lumbermillTank")]
+    LumbermillTank,
+    #[serde(rename="nativeMetadataKey")]
+    NativeMetadataKey { code:u16 },
+    /// Native literal metadata and tag presence; compound values at required
+    /// keys trigger the pinned matcher's recursive failure.
+    #[serde(rename = "bloodmagic-altar")]
+    BloodAltar { tagged: bool, keys: Vec<String> },
     /// Example of a multi-slot integration rule, not an independent item predicate.
     Integration,
     /// Native Forestry shared-stock requirement; the linked machine process owns matching.
@@ -183,9 +326,27 @@ pub enum Match {
     /// and, unless nbt is true, NBT still come from that item. Absent root keys
     /// are rejected even when their stored value is false or zero.
     Metadata {
+        /// Nonnegative raw metadata, or Railcraft's native -1 sentinel.
+        #[schemars(range(min = -1))]
         value: i32,
         nbt: bool,
         absent: Vec<String>,
+    },
+    /// Finite physical-metadata partition, or its complement. Shared values keep
+    /// large native smelting domains compact without changing item identity.
+    #[serde(rename = "metadataSet")]
+    MetadataSet {
+        #[schemars(length(min = 1, max = 65536))]
+        values: Vec<i32>,
+        exclude: bool,
+        nbt: bool,
+    },
+    /// Pinned logical getter; Item.meta remains the physical stack metadata.
+    #[serde(rename = "nativeItemMetadata")]
+    NativeItemMetadata {
+        callback: NativeItemMetadataCallback,
+        value: i32,
+        nbt: bool,
     },
     /// Compare only the named root tags with the choice; other tags are allowed.
     /// Presence checks ignore the tag's type and value, including false/zero.
@@ -210,6 +371,19 @@ pub enum Match {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum NativeZeroFluidPolicy {
+    /// GTRecipe's cost calculation ignores this entry. Machine lookup/validation is separate.
+    GregtechCost,
+    /// Industrial Rock Breaker checks fluid identity even when its amount is zero.
+    GregtechPresence,
+    /// Vat containsFluid requires the exact fluid and NBT; a zero-volume object is sufficient.
+    VatMatch,
+    /// Incubator still requires the exact fluid/NBT object, with a native zero drain cost.
+    BinnieIncubator,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MatchCase {
@@ -222,6 +396,8 @@ pub struct MatchCase {
 pub enum Consumption {
     Consume,
     Keep,
+    /// One native draw determines whether a unit is consumed.
+    Chance { chance: Chance },
     /// IC2 blast: amount is the stock gate; its process consumes a unit at each stage.
     Staged,
     /// Vat: presence of one item is sufficient; remove min(amount, available) at start.
@@ -234,8 +410,8 @@ pub enum Consumption {
     Wear,
     /// Consume the entire offered stack. `amount` is the minimum/example count.
     Stack,
-    /// Empty the selected internal fluid buffer at process start; amount is its minimum gate.
-    /// Only valid with a native process that defines the buffer and mode-dependent gate.
+    /// Internal fluid stock gate; the paired native process defines when and how it drains.
+    /// Some machines empty it at start; others repeatedly allow partial drains during work.
     Buffer,
     /// One item on each distinct pedestal. With Runic, amount is the sample
     /// multiplicity; the process defines the actual input-dependent count.
@@ -243,6 +419,43 @@ pub enum Consumption {
     Damage {
         points: u32,
     },
+    /// Installed GT container tool: native units, conditional energy use and wear.
+    /// Sample fields describe only the captured candidate, not arbitrary player NBT.
+    #[serde(rename = "gtTool")]
+    GtTool { cost: u32, owner: String, sample: GtToolSample },
+    /// Workbench calls the pinned callback on the actual offered stack after consuming one.
+    /// The result depends on wear/RNG or cosmetic NBT, never a fixed sample return.
+    #[serde(rename = "nativeContainer")]
+    NativeContainer { callback: NativeContainerCallback },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum NativeContainerCallback {
+    /// IC2 2.2.828: copy, attemptDamageItem(1, IC2.random), null on break.
+    Ic2Cutter,
+    /// Botania 1.12.28: deserialize cosmeticItem from the offered bauble NBT, or null.
+    BotaniaCosmetic,
+    /// Botania 1.12.28: copy the offered talisman, debit up to 64 blocks and reset active metadata.
+    BotaniaBlackHole,
+    /// Thaumic Bases 1.8.13: damage + 1, fresh tagless stack; absent when exhausted.
+    ThaumicMortar,
+    /// Railcraft 9.16.33: native random wear and enchantment-dependent breakage.
+    RailFirestone,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum NativeItemMetadataCallback {
+    BotaniaManaMirror,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GtToolSample {
+    pub electric: bool,
+    pub damage: String,
+    pub limit: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -260,7 +473,7 @@ pub struct Chance {
     pub denominator: String,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputRole {
     Result,
@@ -349,7 +562,17 @@ pub struct Property {
     pub value: PropertyValue,
 }
 
-/// Crafting arrangement is recipe data and remains available when no view is captured.
+/// Native explanatory text, bound to a stable field key and its reader source.
+/// Display text is not part of a recipe's semantic identity.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Note {
+    pub key: String,
+    pub source: String,
+    pub text: String,
+}
+
+/// Native crafting arrangement, independent of presentation.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Grid {
@@ -375,11 +598,15 @@ pub struct Recipe {
     pub energy: Option<String>,
     /// Namespaced properties with an explicit value type and unit.
     pub properties: BTreeMap<String, Property>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<Note>,
     pub grid: Option<Grid>,
     pub magic: Option<MagicRecipe>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub process: Option<Process>,
-    pub view: Option<String>,
+    /// GT native arrays and unresolved execution policy, separate from display projections.
+    #[serde(default, rename = "gtNative", skip_serializing_if = "Option::is_none")]
+    pub gt_native: Option<gt_probability::GtNative>,
     /// Native category-local position; branches can tie. Sort tied records by id.
     pub order: u32,
 }
@@ -392,9 +619,13 @@ pub struct Category {
     pub source: Origin,
     pub icon: Option<Reference>,
     pub machines: Vec<Reference>,
-    pub view: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<Note>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub program: Option<String>,
+    /// Independently transported native reference domain, not consuming recipes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference: Option<String>,
     pub order: u32,
 }
 
@@ -408,114 +639,6 @@ pub struct Group {
     pub representative: String,
     pub collapsed: bool,
     pub order: u32,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum Direction {
-    Input,
-    Output,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum Align {
-    Left,
-    Center,
-    Right,
-}
-
-/// A discrete native UI state. Areas reveal matching fractions of the texture and destination.
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Motion {
-    pub ticks: u32,
-    /// Non-overlapping [left, top, right, bottom] rectangles in [0,1], as finite float32 decimal strings.
-    /// An empty list hides the element for this state.
-    pub areas: Vec<[String; 4]>,
-}
-
-/// Shared clipping timeline, independent of the texture or recipe using it.
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Track {
-    pub id: String,
-    /// One repeating native UI cycle, compressed by consecutive equal states; never recipe duration.
-    pub frames: Vec<Motion>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
-pub enum Element {
-    Clip {
-        asset: String,
-        x: i32,
-        y: i32,
-        width: u32,
-        height: u32,
-        z: i32,
-        track: String,
-    },
-    Sprite {
-        asset: String,
-        x: i32,
-        y: i32,
-        width: u32,
-        height: u32,
-        z: i32,
-    },
-    Slot {
-        direction: Direction,
-        substance: Kind,
-        slot: u32,
-        x: i32,
-        y: i32,
-        width: u32,
-        height: u32,
-        z: i32,
-    },
-    Cost {
-        /// Index into the owning recipe's magic aspect costs, never an inventory item.
-        index: u32,
-        x: i32,
-        y: i32,
-        width: u32,
-        height: u32,
-        z: i32,
-    },
-    Text {
-        text: String,
-        x: i32,
-        y: i32,
-        color: u32,
-        align: Align,
-        z: i32,
-    },
-    Rectangle {
-        x: i32,
-        y: i32,
-        width: u32,
-        height: u32,
-        color: u32,
-        z: i32,
-    },
-    Tooltip {
-        x: i32,
-        y: i32,
-        width: u32,
-        height: u32,
-        lines: Vec<String>,
-        z: i32,
-    },
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct View {
-    pub id: String,
-    pub width: u32,
-    pub height: u32,
-    pub elements: Vec<Element>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -556,6 +679,9 @@ pub struct Asset {
     pub frames: Vec<Frame>,
     pub interpolate: bool,
     pub source: AssetOrigin,
+    /// Still preview plus a reviewed inventory program; never a recipe GUI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visual: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -569,14 +695,14 @@ pub struct Text {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Domain {
+    pub visuals: Vec<visual::Visual>,
+    pub references: Vec<references::GeneticReferenceRow>,
     pub programs: Vec<programs::ProgramChunk>,
     pub items: Vec<Item>,
     pub fluids: Vec<Fluid>,
     pub recipes: Vec<Recipe>,
     pub categories: Vec<Category>,
     pub groups: Vec<Group>,
-    pub views: Vec<View>,
-    pub tracks: Vec<Track>,
     pub assets: Vec<Asset>,
     pub strings: Vec<Text>,
     pub materials: Vec<Material>,
@@ -598,18 +724,25 @@ pub struct Domain {
 
 impl Domain {
     pub fn load(source: &Source) -> Result<Self> {
+        let result = Self::load_for_compile(source)?;
+        images::verify(source, &result.assets)?;
+        Ok(result)
+    }
+
+    /// Compilation verifies pixels as they enter the atlas, before publication.
+    pub(crate) fn load_for_compile(source: &Source) -> Result<Self> {
         source.environment()?;
         ensure!(source.manifest.scope.collections.iter().map(String::as_str).eq(CORE_COLLECTIONS.iter().copied()),
             "a catalog requires all domain collections; unsupported extensions or partial collections cannot be published");
         let result = Self {
+            visuals: read(source, "visuals")?,
+            references: read(source,"references")?,
             programs: read(source, "programs")?,
             items: read(source, "items")?,
             fluids: read(source, "fluids")?,
             recipes: read(source, "recipes")?,
             categories: read(source, "categories")?,
             groups: read(source, "groups")?,
-            views: read(source, "views")?,
-            tracks: read(source, "tracks")?,
             assets: read(source, "assets")?,
             strings: read(source, "strings")?,
             materials: read(source, "materials")?,
@@ -626,7 +759,7 @@ impl Domain {
             aspects: read(source, "aspects")?,
             research: read(source, "research")?,
         };
-        result.validate(source)?;
+        result.validate_records(source)?;
         Ok(result)
     }
 }
@@ -642,7 +775,7 @@ fn read<T: DeserializeOwned>(source: &Source, kind: &str) -> Result<Vec<T>> {
 }
 
 pub fn content_id(prefix: &str, record: &impl Serialize) -> Result<String> {
-    let mut value = serde_json::to_value(record)?;
+    let mut value = crate::canonical::value(record)?;
     value
         .as_object_mut()
         .context("record must be an object")?
@@ -694,7 +827,10 @@ pub fn recipe_id(recipe: &Recipe) -> Result<String> {
         "grid": recipe.grid, "magic": magic,
     });
     if let Some(process) = &recipe.process {
-        key["process"] = serde_json::to_value(process)?;
+        key["process"] = crate::canonical::value(process)?;
+    }
+    if let Some(native) = &recipe.gt_native {
+        key["gtNative"] = crate::canonical::value(native)?;
     }
     value_id("recipe", &key)
 }
@@ -702,7 +838,7 @@ pub fn recipe_id(recipe: &Recipe) -> Result<String> {
 fn value_id(prefix: &str, value: &Value) -> Result<String> {
     Ok(format!(
         "{prefix}_{:x}",
-        Sha256::digest(serde_json::to_vec(value)?)
+        Sha256::digest(crate::canonical::bytes(value)?)
     ))
 }
 

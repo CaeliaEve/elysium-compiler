@@ -15,6 +15,38 @@ pub struct Stack {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Edit {
+    #[serde(rename="nativePoolResult")]
+    NativePoolResult {},
+    #[serde(rename="matterManipulator")]
+    MatterManipulator {},
+    #[serde(rename = "ic2Advanced")]
+    Ic2Advanced {},
+    #[serde(rename = "gtCrafting")]
+    GtCrafting {},
+    /// Base result with the LAST tagged offered crafting cell's entire compound.
+    /// Samples are [untagged base, then each input choice projection in slot order].
+    #[serde(rename = "craftingNbt")]
+    CraftingNbt { base: Stack },
+    #[serde(rename="fmpResult")]
+    FmpResult {},
+    #[serde(rename="xuResult")]
+    XuResult {},
+    #[serde(rename="calImprint")]
+    CalImprint {imprint:u32},
+    #[serde(rename="bannerPattern")]
+    BannerPattern { pattern:String, color:u8 },
+    #[serde(rename = "chiselTool")]
+    ChiselTool { source: u32, mode: super::chisel::ChiselMode },
+    #[serde(rename = "gendustryGenome")]
+    GendustryGenome { operation: super::gendustry::Operation, slots: BTreeMap<String,u32> },
+    #[serde(rename = "gendustryGeneSample")]
+    GendustryGeneSample { operation: super::gendustry::Operation, slots: BTreeMap<String,u32> },
+    #[serde(rename = "gendustryGeneTemplate")]
+    GendustryGeneTemplate { operation: super::gendustry::Operation, slots: BTreeMap<String,u32> },
+    #[serde(rename = "gendustryReplication")]
+    GendustryReplication { operation: super::gendustry::Operation, slots: BTreeMap<String,u32> },
+    #[serde(rename = "gendustryMutation")]
+    GendustryMutation { operation: super::gendustry::Operation, slots: BTreeMap<String,u32> },
     /// Output of the process's ordered integration rule and a correlated input tuple.
     Integration,
     /// Fresh broken spawner: base registry, meta=0, count=1, only mobType string.
@@ -26,6 +58,9 @@ pub enum Edit {
     /// the paired process's explicit input domain, never silently coerced.
     #[serde(rename = "floatingFlower")]
     FloatingFlower { base: String },
+    /// Observed native getString coercion, including non-string NBT examples.
+    #[serde(rename = "nativeFloatingFlower")]
+    NativeFloatingFlower { base: String },
     /// Copy the offered map and tags, set count=1 and map_is_scaling byte=1.
     /// This is the result before ItemMap.onCreated allocates the final world ID.
     #[serde(rename = "mapScaling")]
@@ -33,6 +68,13 @@ pub enum Edit {
     /// Native Runic augmentation: copy the input and increment RS.HARDEN using
     /// Minecraft getByte coercion followed by signed-byte wrapping.
     Runic,
+    /// Copy the central input according to the paired native infusion effect.
+    #[serde(rename="nativeInfusion")]
+    NativeInfusion {},
+    #[serde(rename="nativeInfusionMerge")]
+    NativeInfusionMerge(super::infusion_merge::Merge),
+    #[serde(rename="disguiseInfusion")]
+    DisguiseInfusion {},
     /// Forestry 4.10.17 native member analysis. A previously analyzed stack is copied
     /// unchanged; otherwise serialize the individual into a fresh compound after analyze().
     /// Item, metadata and the entire offered count are retained. Samples are canonical
@@ -44,6 +86,10 @@ pub enum Edit {
         set: BTreeMap<String, Nbt>,
         limits: BTreeMap<String, i32>,
     },
+    /// Salis 1.1.33 copies wand state, patches component/charge tags, then resets
+    /// metadata to max(native crafting Vis cost, 0). Plain Patch retains metadata.
+    #[serde(rename="salisWand")]
+    SalisWand {set:BTreeMap<String,Nbt>,limits:BTreeMap<String,i32>,metadata:i32},
     /// TC4Tweaks inheritance: output scalars win, compounds merge and equal-type lists append.
     /// An untagged base instead inherits input metadata/count and the entire input compound.
     Merge {
@@ -80,7 +126,7 @@ pub struct Change {
     /// One native result per input choice, in matching order; excluded from recipe identity.
     pub samples: Vec<Stack>,
     /// One choice index (or an empty optional slot) per recipe input, per sample.
-    /// Only integration uses tuples. Excluded from recipe identity with samples.
+    /// Native correlated processes use tuples. Excluded from recipe identity with samples.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bindings: Option<Vec<Vec<Option<u32>>>>,
 }
@@ -93,12 +139,76 @@ pub(super) fn validate(
     let Some(change) = &output.change else {
         return Ok(());
     };
+    if matches!(change.action,Edit::NativePoolResult{}){
+        let Some(super::Process::NativeBotaniaPool(p))=&recipe.process else{bail!("Native pool result requires its ordered session");};
+        return super::botania_pool::validate(p,recipe,items);
+    }
+    if let Edit::NativeInfusionMerge(p)=&change.action{return super::infusion_merge::validate(p,recipe,output,items);}
+    if matches!(change.action,Edit::MatterManipulator{}){
+        let Some(super::Process::MatterManipulatorUpgrade(p))=&recipe.process else{bail!("Matter output requires its source-bound state law");};
+        return super::matter_manipulator::validate(p,recipe,items);
+    }
+    if matches!(change.action,Edit::NativeInfusion{}) {
+        let Some(super::Process::NativeInfusion(p))=&recipe.process else {bail!("native infusion edit requires its state law");};
+        return super::infusion::validate(p,recipe,items);
+    }
+    if matches!(change.action,Edit::DisguiseInfusion{}) {
+        let Some(super::Process::DisguiseInfusion(p))=&recipe.process else {bail!("disguise edit requires its invocation and tuple law");};
+        return super::infusion_disguise::validate(p,recipe,items);
+    }
+    if matches!(change.action, Edit::NativeFloatingFlower { .. }) {
+        let Some(super::Process::NativeFloatingFlowers(p))=&recipe.process else {bail!("native flower action requires native coercions");};
+        return super::floating::validate_native(p,recipe,items);
+    }
     if matches!(change.action, Edit::Integration) {
         return super::integration::validate_change(recipe, output, items);
     }
+    if matches!(change.action, Edit::GtCrafting {}) {
+        return super::gt_crafting::validate(recipe, items);
+    }
+    if matches!(change.action,Edit::Ic2Advanced{}){return super::ic2_advanced::validate(recipe,items);}
+    if matches!(change.action,Edit::XuResult{}){
+        let Some(super::Process::XuMicroblock(process))=&recipe.process else{bail!("XU native result requires its complete process");};
+        return super::xu_microblock::validate(process,recipe,items);
+    }
+    if matches!(change.action, Edit::CraftingNbt { .. }) {
+        return super::crafting_nbt::validate(recipe, items);
+    }
+    match &change.action {
+        Edit::FmpResult{} => {
+            let Some(super::Process::FmpMicroblock(p))=&recipe.process else {bail!("FMP result requires its procedural process");};
+            return super::fmp::validate(p,recipe,items);
+        }
+        Edit::CalImprint { .. } => {
+            let Some(super::Process::CalImprint(p))=&recipe.process else {bail!("CAL edit requires native imprint process");};
+            return super::cal_imprint::validate(p,recipe,items);
+        }
+        Edit::ChiselTool { .. } => return super::chisel::validate_change(recipe,output,items),
+        Edit::GendustryGenome{operation,slots} => {
+            ensure!(*operation==super::gendustry::Operation::Imprint,"Genome action has another operation");
+            return super::gendustry::validate_change(recipe,output,items,*operation,slots);
+        }
+        Edit::GendustryGeneSample{operation,slots} => {
+            ensure!(*operation==super::gendustry::Operation::Sample,"Sample action has another operation");
+            return super::gendustry::validate_change(recipe,output,items,*operation,slots);
+        }
+        Edit::GendustryGeneTemplate{operation,slots} => {
+            ensure!(matches!(operation,super::gendustry::Operation::Merge|super::gendustry::Operation::TransposeSample|super::gendustry::Operation::TransposeTemplate),"Template action has another operation");
+            return super::gendustry::validate_change(recipe,output,items,*operation,slots);
+        }
+        Edit::GendustryReplication{operation,slots} => {
+            ensure!(*operation==super::gendustry::Operation::Replicate,"Replication action has another operation");
+            return super::gendustry::validate_change(recipe,output,items,*operation,slots);
+        }
+        Edit::GendustryMutation{operation,slots} => {
+            ensure!(*operation==super::gendustry::Operation::Mutate,"Mutation action has another operation");
+            return super::gendustry::validate_change(recipe,output,items,*operation,slots);
+        }
+        _=>{}
+    }
     ensure!(
         change.bindings.is_none(),
-        "correlated bindings require an integration output"
+        "correlated bindings require a typed native tuple process"
     );
     ensure!(
         output.kind == Kind::Item,
@@ -114,7 +224,14 @@ pub(super) fn validate(
         "output change samples omit input choices"
     );
     match &change.action {
-        Edit::Integration => unreachable!("integration is validated as a tuple"),
+        Edit::NativePoolResult{} | Edit::NativeInfusionMerge(_) | Edit::MatterManipulator{} | Edit::DisguiseInfusion{} | Edit::NativeInfusion{} | Edit::NativeFloatingFlower { .. } | Edit::XuResult{} | Edit::Ic2Advanced{} | Edit::GtCrafting {} | Edit::CraftingNbt { .. } | Edit::FmpResult{} | Edit::Integration | Edit::CalImprint{..} | Edit::GendustryGenome{..} | Edit::GendustryGeneSample{..}
+        | Edit::ChiselTool { .. }
+        | Edit::GendustryGeneTemplate{..} | Edit::GendustryReplication{..} | Edit::GendustryMutation{..}
+            => unreachable!("correlated changes are validated as tuples"),
+        Edit::BannerPattern { pattern,color } => {
+            let Some(super::Process::BannerPattern(p))=&recipe.process else {bail!("Banner edit requires native process");};
+            ensure!(change.input==p.banner && p.color==*color && p.rules.get(p.pattern as usize).is_some_and(|r|&r.id==pattern),"Banner edit disagrees with process");
+        },
         Edit::FloatingFlower { base } => {
             let Some(super::Process::FloatingFlowers { special }) = &recipe.process else {
                 bail!("floating flower change requires its ordered process");
@@ -148,7 +265,7 @@ pub(super) fn validate(
             "pending map output requires its world process"
         ),
         Edit::Runic => ensure!(
-            matches!(recipe.process, Some(super::Process::Runic { .. })),
+            matches!(recipe.process, Some(super::Process::Runic { .. }|super::Process::NativeRunic(_))),
             "runic output requires its dynamic process"
         ),
         Edit::Analyze => {
@@ -199,7 +316,7 @@ pub(super) fn validate(
                 "invalid native analysis cost or chance"
             );
         }
-        Edit::Patch { set, limits } => {
+        Edit::Patch { set, limits } | Edit::SalisWand {set,limits,..} => {
             ensure!(!set.is_empty() || !limits.is_empty(), "empty output patch");
             ensure!(
                 set.len() + limits.len() <= 4096,
@@ -212,6 +329,15 @@ pub(super) fn validate(
                     .all(|key| key.len() <= 65535 && !set.contains_key(key)),
                 "output patch has an invalid or overlapping limit"
             );
+            if let Edit::SalisWand{metadata,..}=&change.action{
+                let magic=recipe.magic.as_ref().context("Salis wand edit requires arcane crafting")?;
+                ensure!(magic.kind==super::MagicKind::Arcane&&change.input==0&&change.bindings.is_none()
+                    &&matches!(&recipe.process,Some(super::Process::SalisReplacement(p)) if *metadata==p.cost.max(0))&&*metadata>=0
+                    &&if magic.aspects.is_empty(){*metadata==0}else{magic.aspects.iter().all(|a|a.amount==metadata.to_string())},
+                    "Salis result metadata differs from the native crafting cost");
+                ensure!(set.contains_key("rod")!=set.contains_key("cap"),"Salis edit must replace exactly one component");
+                for component in ["rod","cap"]{if let Some(tag)=set.get(component){ensure!(matches!(tag,Nbt::String{value} if !value.is_empty()),"invalid Salis component tag");}}
+            }
         }
         Edit::Merge { base, keys, .. } => {
             let base_item = items
@@ -328,7 +454,15 @@ fn apply(
     items: &BTreeMap<&str, &Item>,
 ) -> Result<Stack> {
     let (registry, meta, count, nbt) = match action {
-        Edit::Integration => bail!("integration cannot be evaluated from a single input"),
+        Edit::NativePoolResult{}=>bail!("Native pool result requires its ordered snapshot session"),
+        Edit::NativeFloatingFlower { .. } => bail!("native flower results require their source-bound coercion table"),
+        Edit::FmpResult {} | Edit::XuResult{} => bail!("Native microblock result requires correlated native tuples"),
+        Edit::NativeInfusionMerge(_) | Edit::MatterManipulator{} | Edit::DisguiseInfusion{} | Edit::NativeInfusion{} | Edit::Ic2Advanced{} | Edit::GtCrafting {} | Edit::CraftingNbt { .. } | Edit::Integration | Edit::GendustryGenome{..} | Edit::GendustryGeneSample{..}
+        | Edit::ChiselTool { .. }
+        | Edit::GendustryGeneTemplate{..} | Edit::GendustryReplication{..} | Edit::GendustryMutation{..}
+            => bail!("correlated changes cannot be evaluated from a single input"),
+        Edit::CalImprint { .. } => bail!("CAL edit requires correlated native inputs"),
+        Edit::BannerPattern { pattern,color } => return super::banner::append(input,pattern,*color),
         Edit::FloatingFlower { base } => {
             let template = items
                 .get(base.as_str())
@@ -416,7 +550,7 @@ fn apply(
                 Some(Nbt::Compound { value: tags }),
             )
         }
-        Edit::Patch { set, limits } => {
+        Edit::Patch { set, limits } | Edit::SalisWand {set,limits,..} => {
             let mut tags = compound(&input.nbt)?.cloned().unwrap_or_default();
             tags.extend(set.clone());
             for (key, limit) in limits {
@@ -430,7 +564,7 @@ fn apply(
             }
             (
                 &input.registry,
-                input.meta,
+                if let Edit::SalisWand{metadata,..}=action{*metadata}else{input.meta},
                 amount,
                 Some(Nbt::Compound { value: tags }),
             )
@@ -763,7 +897,7 @@ fn compound(nbt: &Option<Nbt>) -> Result<Option<&BTreeMap<String, Nbt>>> {
     }
 }
 
-fn merge(
+pub(super) fn merge(
     source: &BTreeMap<String, Nbt>,
     dest: &mut BTreeMap<String, Nbt>,
     keys: Option<&BTreeSet<&str>>,

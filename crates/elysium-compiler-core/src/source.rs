@@ -11,9 +11,10 @@ use std::collections::BTreeSet;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Component, Path, PathBuf};
+use std::sync::OnceLock;
 
 pub const SOURCE_FORMAT: &str = "elysium.source";
-pub const SOURCE_REVISION: u32 = 38;
+pub const SOURCE_REVISION: u32 = 41;
 pub const CORE_COLLECTIONS: &[&str] = &[
     "aspects",
     "assets",
@@ -31,13 +32,13 @@ pub const CORE_COLLECTIONS: &[&str] = &[
     "ore-members",
     "programs",
     "recipes",
+    "references",
     "research",
     "shapes",
     "species",
     "strings",
     "structures",
-    "tracks",
-    "views",
+    "visuals",
 ];
 pub(crate) const MANIFEST_LIMIT: u64 = 64 * 1024 * 1024;
 const RECORD_LIMIT: u64 = 1024 * 1024;
@@ -287,6 +288,7 @@ impl SourceManifest {
 pub struct Source {
     root: PathBuf,
     pub manifest: SourceManifest,
+    environment: OnceLock<Environment>,
 }
 
 impl Source {
@@ -308,14 +310,26 @@ impl Source {
         let manifest: SourceManifest =
             serde_json::from_slice(&bytes).context("decode source manifest")?;
         manifest.validate()?;
-        Ok(Self { root, manifest })
+        Ok(Self {
+            root,
+            manifest,
+            environment: OnceLock::new(),
+        })
     }
 
     pub fn root(&self) -> &Path {
         &self.root
     }
 
-    pub fn environment(&self) -> Result<Environment> {
+    pub fn environment(&self) -> Result<&Environment> {
+        if self.environment.get().is_none() {
+            let environment = self.read_environment()?;
+            let _ = self.environment.set(environment);
+        }
+        Ok(self.environment.get().expect("verified environment snapshot"))
+    }
+
+    fn read_environment(&self) -> Result<Environment> {
         let file = self
             .files("environment")
             .next()
@@ -323,7 +337,7 @@ impl Source {
         let bytes = self.read_file(file)?;
         let value: Value = serde_json::from_slice(&bytes)?;
         ensure!(
-            serde_json::to_vec(&value)? == bytes,
+            crate::canonical::bytes(&value)? == bytes,
             "environment must use canonical JSON"
         );
         let environment: Environment = serde_json::from_value(value)?;
@@ -456,7 +470,7 @@ impl Source {
                 );
                 let value: Value = serde_json::from_slice(&line)
                     .with_context(|| format!("decode {} row {}", descriptor.path, rows + 1))?;
-                ensure!(serde_json::to_vec(&value)? == line[..line.len() - 1],
+                ensure!(crate::canonical::bytes(&value)? == line[..line.len() - 1],
                     "record must use canonical JSON (unique ordered keys and exact numbers): {} row {}",
                     descriptor.path, rows + 1);
                 let id = value

@@ -1,0 +1,13 @@
+# InfernalMobs loaded pools
+
+`com.kuba6000.mobsinfo.nei.MobHandlerInfernal` is a read-only domain, not a crafting recipe. NESQL++ reads the installed InfernalMobs core's actual loaded lists and configuration getters rather than the NEI cached display permutations or its tooltip probability formula.
+
+The definition pins readiness, enabled state, the native client configuration scope, dimension exclusions and three explicit policies. Each enabled snapshot has elite, ultra and inferno tier definitions in that order, followed by the tier's ordinal pool entries. Duplicate item/NBT entries are separate selection weights; empty tiers are legal. Disabled configuration is one definition with zero tiers/entries and no dimension rules. Missing initialized core or unknown callbacks fail explicitly.
+
+The installed `InfernalMobs-1.10.3-GTNH` native `dropRandomEnchantedItems` selects one pool from the final modifier count: at most five uses elite, at most ten ultra, otherwise infernal. Uniform selection is repeated while remaining modifier count is positive; successful selection subtracts five, empty-pool selection subtracts one. This is not one uniform draw across every displayed tier. Requested configuration modifier ranges are not guaranteed final counts: unavailable, disallowed and incompatible modifiers can reduce the generated set.
+
+Rarity rolls are nested natural-generation gates, subject to class eligibility/forced status and the dimension blacklist. They are not global item probabilities. The current loaded stack quantity has already been sampled from the configuration at initialization; it is not a newly sampled quantity distribution per kill. Enchanted books invoke the native random-book generator and do not preserve the pool specimen's quantity/NBT as the result. Other items attempt native enchanting using remaining modifier count (bounded strength) and their enchantability. No world-state simulation or invented absolute chance is published.
+
+Compiler validates complete domains, tier/order/count/identity, strict policy enums, loaded quantity, native item closure and explicit disabled state. The shared query hydrates only the current pool page; the frontend labels per-entry pool weight and preserves duplicates. The online and offline workers use the same query.
+
+The Java fixture uses real getters from the installed remapped InfernalMobs class allocated without constructor/game startup; fields and Mobs Info configuration are controlled local specimens. It proves contract and getter behavior, not live server synchronization, full-pack readiness, resource textures, all modifier incompatibilities or final drops under a real world/player. Client configuration must not be claimed as authoritative server configuration.

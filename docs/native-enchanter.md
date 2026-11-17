@@ -1,0 +1,15 @@
+# EnderIO enchanter
+
+The production EnderIO 2.9.28 handler emits `enderioEnchanter`, `enchanterBook` and, where needed, `nativeMetadataKey`. These describe the installed machine and pickup behavior without NEI GUI assets. Compiler lookup uses source inspection because this checkout has no CodeGraph index.
+
+The first valid registered material predicate wins before quantity checks. The registration-time `stackSizePerLevel` is independent of later edits to the input prototype count. Each positive level has an explicit inclusive signed-count interval: `[divisor * level, divisor * (level + 1) - 1]`, with the capped maximum level extending to `Integer.MAX_VALUE`. A minimum above that bound is an evidenced exclusion. A GUI limit of 64 is not a proof of runtime unreachability: the installed inventory setter copies the supplied stack before clamping the caller's copy.
+
+Normal book-slot insertion accepts writable books, while runtime recipe lookup only requires a non-null stack there. Pickup clears that entire slot. Material pickup debits `divisor * actual level`, retaining positive remainder without container returns. XP follows native signed-int accumulation; creative players bypass its check and payment. Output is therefore a `potential` conditioned on the count-selected level and pickup. `allocated` is accepted only behind the complete typed family gate, never as an unrestricted consumption fallback.
+
+Ore predicates use Forge's baked `stackToId` index. A nonzero metadata code means `(metadata + 1) mod 65536 == code`; NBT is ignored. Code zero is represented by the native wildcard rule. Priority exclusions preserve this equivalence class: a literal metadata-zero predecessor does not also exclude metadata 65536. The transport specimen must satisfy its own unshadowed predicate.
+
+The output book's typed `StoredEnchantments` NBT must contain precisely the expected short ID and level. Book roles, notes, policies, inputs, count interval, signed XP, output quantity and native source are checked together. Unknown callbacks and malformed native states fail explicitly. Invalid native registrations remain counted as scoped exclusions rather than vanishing.
+
+Maximum-level getters are limited to audited vanilla owners and installed literal-constant getters from EnderIO, EnderZoo, Thaumcraft and CoFHCore, with exact mod versions for those owners. The mod getter is not executed. Unknown overrides are rejected before invocation. Source bindings cover manager/list order, record/input/stack/NBT identities, book roles, enchantment registrations, relevant baked ore lists and configuration. Per-row root checks are cheap; final sealing checks the complete observation, with a cumulative 32 MiB/node budget and owned close.
+
+Actual Java fixtures are checked for their original recipe identity before domain rebinding. A Chinese level-two fixture has the same recipe ID as its English counterpart. The legacy `enchanter` test shape is not accepted for this native production handler; it remains an explicit boundary for existing local fixture history.

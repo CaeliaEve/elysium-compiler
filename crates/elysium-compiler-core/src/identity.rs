@@ -23,6 +23,83 @@ pub enum Nbt {
 }
 
 impl Nbt {
+    /// Minecraft 1.7.10 hashCode for cache routing, never content identity.
+    /// Native equality and hashing even disagree on signed floating zero.
+    pub fn native_hash(&self) -> Result<i32> {
+        self.validate()?;
+        self.native_hash_node()
+    }
+
+    fn native_hash_node(&self) -> Result<i32> {
+        let text_hash = |text: &str| text.encode_utf16().fold(0i32, |hash, ch| hash.wrapping_mul(31).wrapping_add(ch as i32));
+        let long_hash = |bits: u64| (bits ^ (bits >> 32)) as i32;
+        Ok(match self {
+            Self::Byte {value} => 1 ^ value.parse::<i8>()? as i32,
+            Self::Short {value} => 2 ^ value.parse::<i16>()? as i32,
+            Self::Int {value} => 3 ^ value.parse::<i32>()?,
+            Self::Long {value} => 4 ^ long_hash(value.parse::<i64>()? as u64),
+            Self::Float {value} => {
+                let mut bits=u32::from_str_radix(value,16)?;
+                if bits & 0x7f800000 == 0x7f800000 && bits & 0x007fffff != 0 {bits=0x7fc00000;}
+                5 ^ bits as i32
+            }
+            Self::Double {value} => {
+                let mut bits=u64::from_str_radix(value,16)?;
+                if bits & 0x7ff0000000000000 == 0x7ff0000000000000 && bits & 0x000fffffffffffff != 0 {bits=0x7ff8000000000000;}
+                6 ^ long_hash(bits)
+            }
+            Self::ByteArray {value} => 7 ^ STANDARD.decode(value)?.iter().fold(1i32,|hash,byte|hash.wrapping_mul(31).wrapping_add(*byte as i8 as i32)),
+            Self::String {value} => 8 ^ text_hash(value),
+            Self::List {value,..} => {
+                let mut hash=1i32;
+                for cell in value {hash=hash.wrapping_mul(31).wrapping_add(cell.native_hash_node()?);}
+                9 ^ hash // Native list hashing omits the declared element type.
+            }
+            Self::Compound {value} => {
+                let mut hash=0i32;
+                for (key,cell) in value {hash=hash.wrapping_add(text_hash(key)^cell.native_hash_node()?);}
+                10 ^ hash
+            }
+            Self::IntArray {value} => {
+                let mut hash=1i32;
+                for integer in value {hash=hash.wrapping_mul(31).wrapping_add(integer.parse::<i32>()?);}
+                11 ^ hash
+            }
+        })
+    }
+
+    /// Minecraft's NBTBase.equals for DISTINCT owned trees, not content identity.
+    /// IEEE signed zeros compare equal, NaNs do not, and empty list element types matter.
+    /// Keep derived PartialEq and item_id lossless: native matching must not change hashes.
+    pub fn native_equal(&self, other: &Self) -> Result<bool> {
+        self.validate()?;
+        other.validate()?;
+        self.native_equal_node(other)
+    }
+
+    fn native_equal_node(&self, other: &Self) -> Result<bool> {
+        Ok(match (self, other) {
+            (Self::Float { value: a }, Self::Float { value: b }) =>
+                f32::from_bits(u32::from_str_radix(a, 16)?) == f32::from_bits(u32::from_str_radix(b, 16)?),
+            (Self::Double { value: a }, Self::Double { value: b }) =>
+                f64::from_bits(u64::from_str_radix(a, 16)?) == f64::from_bits(u64::from_str_radix(b, 16)?),
+            (Self::List { element: a_type, value: a }, Self::List { element: b_type, value: b }) => {
+                if a_type != b_type || a.len() != b.len() { return Ok(false); }
+                for (left, right) in a.iter().zip(b) { if !left.native_equal_node(right)? { return Ok(false); } }
+                true
+            }
+            (Self::Compound { value: a }, Self::Compound { value: b }) => {
+                if a.len() != b.len() { return Ok(false); }
+                for (key, left) in a {
+                    let Some(right) = b.get(key) else { return Ok(false); };
+                    if !left.native_equal_node(right)? { return Ok(false); }
+                }
+                true
+            }
+            _ => self == other,
+        })
+    }
+
     pub fn validate(&self) -> Result<()> {
         self.validate_node(0, &mut 0)?;
         ensure!(

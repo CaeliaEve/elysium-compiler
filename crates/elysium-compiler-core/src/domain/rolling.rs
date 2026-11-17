@@ -1,6 +1,6 @@
 //! Shared native crafting-grid contract for Railcraft, QED and GalaxySpace.
 //! Their power, repair and machine gates remain separate.
-use super::{Consumption, Grid, Item, Kind, Match, MatchCase, OutputRole, Recipe};
+use super::{Consumption, Edit, Grid, Item, Kind, Match, MatchCase, OutputRole, Process, Recipe};
 use anyhow::{ensure, Context, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -72,16 +72,28 @@ pub(super) fn validate(
         }
     }
     let output = &recipe.outputs[0];
+    let copy_nbt = matches!(recipe.process, Some(Process::Rolling { copy_nbt: true, .. } | Process::Qed { copy_nbt: true, .. }));
+    if copy_nbt {
+        let bound = match &recipe.process {
+            Some(Process::Rolling { .. }) => recipe.source.handler == "tonius.neiintegration.mods.railcraft.RecipeHandlerRollingMachineShaped",
+            Some(Process::Qed { .. }) => recipe.source.handler == "com.rwtema.extrautils.nei.EnderConstructorHandler",
+            _ => false,
+        };
+        ensure!(bound
+            && recipe.grid.is_some()
+            && output.change.as_ref().is_some_and(|change| matches!(change.action, Edit::CraftingNbt { .. })),
+            "Native machine tag transfer requires its shaped handler/grid and complete result projections");
+    }
     ensure!(
         output.slot == 0
             && output.kind == Kind::Item
             && output.amount.is_some()
             && output.quantity.is_none()
-            && output.change.is_none()
+            && (copy_nbt || output.change.is_none())
             && matches!(output.role, OutputRole::Result)
             && output.chance.numerator == "1"
             && output.chance.denominator == "1",
-        "native crafting result must be fixed and unconditional after selection"
+        "native crafting result must preserve its fixed or declared tag-transfer result"
     );
     let mut count = 0;
     for prior in earlier {
@@ -120,7 +132,7 @@ mod tests {
     fn rolling_does_not_invent_returns_or_lose_prior_grid() {
         let source = Source::open(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../contracts/fixtures/source"),
+                .join("../../contracts/fixtures/source-semantic-40"),
         )
         .unwrap();
         let domain = super::super::Domain::load(&source).unwrap();
